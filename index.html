@@ -20,6 +20,38 @@
 
 <!-- inline favicon: no extra request, no 404 -->
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230F766E' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpolygon points='16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76'/%3E%3C/svg%3E">
+
+<!-- structured data: lets search + AI answer engines parse what this is without scraping prose -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebSite",
+      "@id": "https://intuneatlas.com/#website",
+      "url": "https://intuneatlas.com/",
+      "name": "intuneatlas",
+      "description": "Open-source CLI and web UI that merges every Intune profile into one settings index, keyed on CSP path."
+    },
+    {
+      "@type": "SoftwareApplication",
+      "@id": "https://intuneatlas.com/#software",
+      "name": "intuneatlas",
+      "url": "https://intuneatlas.com/",
+      "codeRepository": "https://github.com/jgeselle/intuneatlas",
+      "description": "Flattens every Microsoft Intune profile into one settings index keyed on CSP path, surfacing conflicts, coverage gaps, and drift from CIS or Microsoft security baselines. Reads a tenant read-only via the Graph API.",
+      "applicationCategory": "DeveloperApplication",
+      "operatingSystem": "Windows, macOS, Linux",
+      "license": "https://opensource.org/licenses/MIT",
+      "isAccessibleForFree": true,
+      "author": {
+        "@type": "Organization",
+        "name": "intuneatlas contributors"
+      }
+    }
+  ]
+}
+</script>
 <style>
   :root{
     --ink:#0A2B28;
