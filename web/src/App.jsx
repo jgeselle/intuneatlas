@@ -687,7 +687,7 @@ function ConnectScreen({ onConnected }) {
       <div className="w-full max-w-sm rounded-lg border border-stone-200 bg-white p-6">
         <div className="flex items-center gap-2.5">
           <Compass className="h-6 w-6 shrink-0 text-teal-700" />
-          <div className="text-sm font-semibold">intuneatlas</div>
+          <div className="text-sm font-semibold">IntuneAtlas</div>
         </div>
         <h1 className="mt-4 text-lg font-semibold">Connect a tenant</h1>
         <p className="mt-1 text-sm text-stone-500">
@@ -784,7 +784,7 @@ export default function App({ initialReport }) {
         <div className="flex items-center gap-2.5 px-4 py-4">
           <Compass className="h-6 w-6 shrink-0 text-teal-300" />
           <div>
-            <div className="text-sm font-semibold leading-tight text-white">intuneatlas</div>
+            <div className="text-sm font-semibold leading-tight text-white">IntuneAtlas</div>
             <div className="text-xs leading-tight text-teal-300">
               {report.scannedAt ? new Date(report.scannedAt).toLocaleString() : "no scan loaded"}
             </div>

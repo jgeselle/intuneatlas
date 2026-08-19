@@ -1,11 +1,11 @@
-# intuneatlas
+# IntuneAtlas
 
 **[intuneatlas.com](https://intuneatlas.com)**
 
 Flatten every Intune profile into one settings index, keyed on the CSP path.
 
 The Intune portal is organised around policies. Devices apply a merged set of
-settings. intuneatlas is meant to read a tenant read-only, rebuild that merge,
+settings. IntuneAtlas is meant to read a tenant read-only, rebuild that merge,
 and serve it as something you can actually search: grouped by category, keyed
 by CSP path, with conflicts, coverage gaps, and baseline drift surfaced
 instead of buried in per-policy views.
@@ -70,7 +70,7 @@ rule doesn't require touching any code.
 
 ## License
 
-[MIT](./LICENSE) © 2026 intuneatlas contributors
+[MIT](./LICENSE) © 2026 IntuneAtlas contributors
 
 Not affiliated with, endorsed by, or supported by Microsoft. Intune and
 Microsoft Graph are Microsoft trademarks.
