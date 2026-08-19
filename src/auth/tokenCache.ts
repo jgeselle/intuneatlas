@@ -1,13 +1,13 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { isSea } from "node:sea";
 import {
   deserializeAuthenticationRecord,
   serializeAuthenticationRecord,
   useIdentityPlugin,
   type AuthenticationRecord,
 } from "@azure/identity";
-import { cachePersistencePlugin } from "@azure/identity-cache-persistence";
 
 const CACHE_NAME = "intuneatlas";
 const CACHE_DIR = join(homedir(), ".intuneatlas");
@@ -22,21 +22,35 @@ export const TOKEN_CACHE_OPTIONS = { enabled: true, name: CACHE_NAME };
 // not a catchable throw, so it crashes the whole process rather than
 // degrading gracefully. Safer to just never attempt it on Linux than to
 // try and rely on a try/catch that can't actually reach the failure.
-const CACHE_SUPPORTED = process.platform === "win32" || process.platform === "darwin";
+//
+// A packaged SEA .exe (see the packaging plan) can't load this at all,
+// working or not: @azure/identity-cache-persistence pulls in keytar, a
+// native addon, which needs real node_modules resolution — something a
+// self-contained sealed executable structurally doesn't have. Confirmed the
+// hard way: it doesn't degrade, it fails to even load the module graph.
+const CACHE_SUPPORTED = (process.platform === "win32" || process.platform === "darwin") && !isSea();
 
 let pluginRegistered = false;
 
 /**
  * Registers the OS-native secure-storage plugin backing persistent token
- * caching. Safe to call more than once per process. Throws synchronously
- * (catchable) on platforms where this isn't attempted at all — see
- * CACHE_SUPPORTED above for why Linux is excluded rather than best-effort.
+ * caching. Safe to call more than once per process. Rejects (catchable) on
+ * platforms/build modes where this isn't attempted at all — see
+ * CACHE_SUPPORTED above.
+ *
+ * The import of @azure/identity-cache-persistence is deliberately dynamic,
+ * not static — a static top-level import gets evaluated as part of module
+ * instantiation, before this function's own try/catch (or any caller's)
+ * ever runs, which is exactly what broke the packaged exe: the whole
+ * process crashed on load, not on first use. A dynamic import here defers
+ * evaluation to actual call time, inside a catchable async function.
  */
-export function registerCachePlugin(): void {
+export async function registerCachePlugin(): Promise<void> {
   if (!CACHE_SUPPORTED) {
     throw new Error("Persistent token cache is only supported on Windows and macOS for now.");
   }
   if (pluginRegistered) return;
+  const { cachePersistencePlugin } = await import("@azure/identity-cache-persistence");
   useIdentityPlugin(cachePersistencePlugin);
   pluginRegistered = true;
 }

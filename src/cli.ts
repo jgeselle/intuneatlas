@@ -33,8 +33,13 @@ function withErrorHandling<Opts>(action: (opts: Opts) => Promise<void>) {
     try {
       await action(opts);
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      console.error(`\nError: ${message}`);
+      if (process.env.INTUNEATLAS_DEBUG) {
+        console.error(err);
+      } else {
+        const message = err instanceof Error ? err.message : String(err);
+        console.error(`\nError: ${message}`);
+        console.error("(set INTUNEATLAS_DEBUG=1 for the full stack trace)");
+      }
       process.exitCode = 1;
     }
   };

@@ -48,7 +48,7 @@ async function getTokenWithCache(options: InteractiveOptions): Promise<string> {
   let cachingEnabled = false;
 
   try {
-    registerCachePlugin();
+    await registerCachePlugin();
     authenticationRecord = await loadAuthenticationRecord(options.tenantId, options.clientId);
     cachingEnabled = true;
   } catch {

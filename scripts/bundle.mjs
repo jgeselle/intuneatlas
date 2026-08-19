@@ -26,5 +26,17 @@ await build({
   // won't work in the packaged Windows exe until this is revisited —
   // documented, not a silent gap or a crash risk.
   external: ["keytar"],
+  // esbuild empties every `import.meta.url` reference under CJS output —
+  // confirmed the hard way: it broke a real file-path computation *inside
+  // the bundled `open` package itself* (ESM-only, computes its own
+  // __dirname from import.meta.url), not just our own code. Rather than
+  // track down every bundled dependency that might do the same thing,
+  // replace it globally with a real, correctly-computed file:// URL for
+  // the actual running file — __filename is reliably real in CJS,
+  // including once this runs inside a SEA-sealed executable.
+  banner: {
+    js: "const __intuneatlas_import_meta_url = require('node:url').pathToFileURL(__filename).href;",
+  },
+  define: { "import.meta.url": "__intuneatlas_import_meta_url" },
   logLevel: "info",
 });
