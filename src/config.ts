@@ -1,4 +1,8 @@
-export const GRAPH_BASE_URL = "https://graph.microsoft.com/v1.0";
+export const GRAPH_V1_BASE = "https://graph.microsoft.com/v1.0";
+
+// Only for the specific calls that have no v1.0 equivalent yet — see
+// src/scan/settingDefinitions.ts for the one place this is used and why.
+export const GRAPH_BETA_BASE = "https://graph.microsoft.com/beta";
 
 /**
  * Registered once as a shared, multi-tenant public client so users can
