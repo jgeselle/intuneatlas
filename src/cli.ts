@@ -2,6 +2,7 @@
 import { Command } from "commander";
 import { runLogin } from "./commands/login.js";
 import { runScan } from "./commands/scan.js";
+import { runUi } from "./commands/ui.js";
 
 const program = new Command();
 
@@ -13,6 +14,14 @@ program
 function withAuthOptions(command: Command): Command {
   return command
     .requiredOption("--tenant <id-or-domain>", "Tenant ID or domain, e.g. contoso.onmicrosoft.com")
+    .option("--client-id <id>", "Entra app (client) ID")
+    .option("--client-secret <secret>", "Client secret — selects the unattended client-credentials flow")
+    .option("--device-code", "Use device-code sign-in instead of the interactive browser flow", false);
+}
+
+function withOptionalAuthOptions(command: Command): Command {
+  return command
+    .option("--tenant <id-or-domain>", "Tenant ID or domain — runs a live scan instead of reading --report")
     .option("--client-id <id>", "Entra app (client) ID")
     .option("--client-secret <secret>", "Client secret — selects the unattended client-credentials flow")
     .option("--device-code", "Use device-code sign-in instead of the interactive browser flow", false);
@@ -54,6 +63,21 @@ withAuthOptions(program.command("scan"))
         clientSecret: opts.clientSecret,
         deviceCode: opts.deviceCode,
         out: opts.out,
+      }),
+    ),
+  );
+
+withOptionalAuthOptions(program.command("ui"))
+  .description("Open the local web UI, from a saved report or a live scan.")
+  .option("--report <path>", "Read a report from a prior `scan --out` instead of scanning live")
+  .action(
+    withErrorHandling((opts) =>
+      runUi({
+        tenant: opts.tenant,
+        clientId: opts.clientId,
+        clientSecret: opts.clientSecret,
+        deviceCode: opts.deviceCode,
+        report: opts.report,
       }),
     ),
   );
