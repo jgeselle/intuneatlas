@@ -1,11 +1,15 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { readFile } from "node:fs/promises";
 import { extname, join } from "node:path";
-import { fileURLToPath } from "node:url";
+import { resolveAppPath } from "../packagedPaths.js";
 
-// This file compiles to dist/server/staticServer.js — the Vite build output
-// lives at web/dist relative to the package root, two levels up from dist/server.
-const WEB_DIST = join(fileURLToPath(new URL("../../web/dist", import.meta.url)));
+// Lazy, not a top-level constant — cli.ts imports every command module
+// eagerly regardless of which command actually runs, so a top-level
+// resolveAppPath() call here would execute (and could throw) on every
+// invocation, even `--help`, whether or not the server is ever started.
+function webDist(): string {
+  return resolveAppPath("web/dist", import.meta.url);
+}
 
 const CONTENT_TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
@@ -127,14 +131,15 @@ export async function startServer(options: StartServerOptions): Promise<{ url: s
 }
 
 async function serveStatic(req: IncomingMessage, res: ServerResponse, getReport: () => unknown): Promise<void> {
+  const dist = webDist();
   const requestPath = (req.url ?? "/").split("?")[0];
   const filePath = requestPath === "/" ? "index.html" : requestPath.replace(/^\/+/, "");
-  const fullPath = join(WEB_DIST, filePath);
+  const fullPath = join(dist, filePath);
 
   // Not resolving deep client-side routes — this is a single-page app with
   // no router, so anything unrecognized just falls back to index.html.
   const isAsset = extname(filePath) !== "";
-  const targetPath = isAsset ? fullPath : join(WEB_DIST, "index.html");
+  const targetPath = isAsset ? fullPath : join(dist, "index.html");
 
   let body = await readFile(targetPath);
   const contentType = CONTENT_TYPES[extname(targetPath)] ?? "application/octet-stream";

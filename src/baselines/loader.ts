@@ -1,14 +1,11 @@
 import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { load } from "js-yaml";
+import { resolveAppPath } from "../packagedPaths.js";
 import type { BaselineRule } from "./types.js";
 
-// This file compiles to dist/baselines/loader.js — the bundled starter pack
-// lives at ./baselines relative to the package root, two levels up, same
-// pattern as web/dist in src/server/staticServer.ts.
 export function defaultBaselinesDir(): string {
-  return fileURLToPath(new URL("../../baselines", import.meta.url));
+  return resolveAppPath("baselines", import.meta.url);
 }
 
 const REQUIRED_FIELDS: Array<keyof BaselineRule> = [

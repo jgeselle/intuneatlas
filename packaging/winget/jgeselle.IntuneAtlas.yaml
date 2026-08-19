@@ -1,0 +1,6 @@
+# winget manifest — version file. Template, not submitted; see README.md.
+PackageIdentifier: jgeselle.IntuneAtlas
+PackageVersion: REPLACE_ME_VERSION
+DefaultLocale: en-US
+ManifestType: version
+ManifestVersion: 1.10.0

@@ -1,0 +1,60 @@
+name: Release (Windows)
+
+# Push a version tag (e.g. `v0.1.0`) to trigger — builds the standalone
+# Windows exe end to end and attaches a zip to a GitHub Release.
+#
+# This only runs on a real Windows runner because the SEA packaging step
+# (scripts/build-sea.mjs) patches a real Windows node.exe binary — that
+# can't be done from Linux. Nothing here has ever actually executed before
+# a human pushes the first tag; treat the first run as a real test, not a
+# rubber stamp.
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows-exe:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.15.0"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build (TypeScript + web UI)
+        run: npm run build
+
+      - name: Bundle to a single file
+        run: npm run bundle
+
+      - name: Package the standalone exe
+        run: node scripts/build-sea.mjs
+
+      # TODO: sign build/intuneatlas.exe once a certificate exists — see
+      # SignPath Foundation / a purchased IV/OV cert with cloud-HSM signing
+      # (project plan has the detail). Currently ships unsigned; Windows
+      # will show a SmartScreen warning on first run until this is added.
+
+      - name: Assemble the release folder
+        shell: pwsh
+        run: |
+          $dest = "release/intuneatlas"
+          New-Item -ItemType Directory -Force -Path $dest | Out-Null
+          Copy-Item build/intuneatlas.exe $dest/
+          Copy-Item -Recurse web/dist $dest/web/dist
+          Copy-Item -Recurse baselines $dest/baselines
+          Compress-Archive -Path $dest -DestinationPath "release/intuneatlas-windows.zip"
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/intuneatlas-windows.zip
+          generate_release_notes: true

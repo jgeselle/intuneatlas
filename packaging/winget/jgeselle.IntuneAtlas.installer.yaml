@@ -1,0 +1,15 @@
+# winget manifest — installer file. Template, not submitted; see README.md.
+PackageIdentifier: jgeselle.IntuneAtlas
+PackageVersion: REPLACE_ME_VERSION
+MinimumOSVersion: 10.0.17763.0
+InstallerType: zip
+NestedInstallerType: portable
+NestedInstallerFiles:
+  - RelativeFilePath: intuneatlas/intuneatlas.exe
+    PortableCommandAlias: intuneatlas
+Installers:
+  - Architecture: x64
+    InstallerUrl: REPLACE_ME_RELEASE_ZIP_URL
+    InstallerSha256: REPLACE_ME_SHA256
+ManifestType: installer
+ManifestVersion: 1.10.0

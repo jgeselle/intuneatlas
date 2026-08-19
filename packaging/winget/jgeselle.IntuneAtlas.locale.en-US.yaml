@@ -1,0 +1,24 @@
+# winget manifest — locale/metadata file. Template, not submitted; see README.md.
+PackageIdentifier: jgeselle.IntuneAtlas
+PackageVersion: REPLACE_ME_VERSION
+PackageLocale: en-US
+Publisher: intuneatlas contributors
+PackageName: IntuneAtlas
+License: MIT
+LicenseUrl: https://github.com/jgeselle/intuneatlas/blob/main/LICENSE
+ShortDescription: Flatten every Intune profile into one settings index, keyed on the CSP path.
+Description: >-
+  Open-source CLI and local web UI that merges every Microsoft Intune
+  configuration profile into one settings index, keyed on CSP path. Finds
+  conflicts between overlapping policies, coverage gaps, and drift from
+  Microsoft or CIS security baselines. Reads a tenant read-only via Microsoft
+  Graph and runs entirely on your machine.
+Moniker: intuneatlas
+Tags:
+  - intune
+  - microsoft-graph
+  - endpoint-management
+  - security-baseline
+PackageUrl: https://intuneatlas.com
+ManifestType: defaultLocale
+ManifestVersion: 1.10.0

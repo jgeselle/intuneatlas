@@ -13,6 +13,8 @@
   "scripts": {
     "build": "tsc && npm run build:ui",
     "build:ui": "cd web && npm install && npm run build",
+    "bundle": "node scripts/bundle.mjs",
+    "package:win": "node scripts/bundle.mjs && node scripts/build-sea.mjs",
     "dev": "tsx src/cli.ts",
     "start": "node dist/cli.js"
   },
@@ -26,6 +28,8 @@
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^22.15.0",
+    "esbuild": "^0.28.2",
+    "postject": "^1.0.0-alpha.6",
     "tsx": "^4.19.0",
     "typescript": "^5.9.0"
   }
