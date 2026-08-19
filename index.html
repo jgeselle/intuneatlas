@@ -123,12 +123,18 @@
   /* ------------------------------------------------------------ hero --- */
   .hero{padding:60px 0 20px}
   .hero h1{
-    font-family:var(--mono);font-size:clamp(2rem,5.5vw,3rem);
-    letter-spacing:-.04em;font-weight:600;
+    font-size:clamp(2.25rem,6vw,3.5rem);
+    letter-spacing:-.035em;font-weight:700;line-height:1.1;max-width:15em;
   }
-  .hero h1 .slash{color:var(--faint);font-weight:400}
-  .hero .tagline{margin-top:18px;font-size:clamp(1.125rem,2.4vw,1.375rem);max-width:30em;line-height:1.45;letter-spacing:-.015em}
-  .hero .sub{margin-top:16px;max-width:40em;color:var(--muted)}
+  .hero h1 .accent{font-family:var(--mono);color:var(--teal-2);letter-spacing:-.02em}
+  .tagline .highlight{
+    background:var(--line);border-radius:4px;padding:.05em .35em;
+    box-decoration-break:clone;-webkit-box-decoration-break:clone;
+  }
+  .hero .tagline{
+    margin-top:20px;font-size:clamp(1.0625rem,2.2vw,1.25rem);
+    max-width:34em;line-height:1.55;color:var(--muted);letter-spacing:-.01em;
+  }
 
   .badges{display:flex;flex-wrap:wrap;gap:7px;margin-top:22px}
   .badge{
@@ -311,7 +317,7 @@
         <circle cx="12" cy="12" r="10"></circle>
         <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon>
       </svg>
-      <span class="owner">intuneatlas&thinsp;/</span><b>intuneatlas</b>
+      <span class="owner">jgeselle&thinsp;/</span><b>IntuneAtlas</b>
     </a>
     <nav class="topnav">
       <a href="#scan">The scan</a>
@@ -332,13 +338,10 @@
   <!-- hero -->
   <section class="hero">
     <div class="wrap">
-      <h1><span class="slash">./</span>intuneatlas</h1>
-      <p class="tagline">Flatten every Intune profile into one settings index, keyed on the CSP path.</p>
-      <p class="sub">
-        The portal is organised around policies. Devices apply a merged set of settings. This reads your tenant
-        read-only and rebuilds that merge, a couple of thousand settings, then serves it as something you can
-        actually read: grouped, searchable by CSP path, with the conflicts and coverage gaps surfaced. Runs on your
-        machine. Headless when you want a file and an exit code instead.
+      <h1>Track every setting against its <span class="accent">baseline</span>.</h1>
+      <p class="tagline">
+        Merges every Intune policy into one searchable index, keyed on CSP path. Conflicts and drift surfaced,
+        not buried. <span class="highlight">Free and open source.</span>
       </p>
 
       <div class="badges">
