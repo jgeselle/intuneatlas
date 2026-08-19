@@ -35,13 +35,23 @@ export interface RawSimplePolicy {
   priority?: number;
 }
 
-export type SettingIndexState = "Conflict" | "Not deployed" | "Baseline";
+export type SettingIndexState = "Conflict" | "Not deployed" | "Below baseline" | "Baseline";
 
 export interface SettingIndexSource {
   policyId: string;
   policyName: string;
   value: string;
   deployed: boolean;
+}
+
+/** Attached by the baseline engine (src/baselines/evaluate.ts) when a matching rule fails. */
+export interface SettingRecommendation {
+  ruleId: string;
+  current: string;
+  recommended: string;
+  severity: "critical" | "high" | "medium" | "low";
+  why: string;
+  source: string;
 }
 
 export interface SettingIndexEntry {
@@ -54,4 +64,5 @@ export interface SettingIndexEntry {
   sources: SettingIndexSource[];
   conflict: boolean;
   state: SettingIndexState;
+  rec?: SettingRecommendation;
 }

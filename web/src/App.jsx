@@ -28,6 +28,13 @@ const STATE_STYLE = {
   Baseline: "bg-white text-stone-500 ring-stone-200",
 };
 
+const SEVERITY_STYLE = {
+  critical: { chip: "bg-red-50 text-red-700 ring-red-200", label: "Critical", rank: 0 },
+  high: { chip: "bg-amber-50 text-amber-800 ring-amber-200", label: "High", rank: 1 },
+  medium: { chip: "bg-stone-100 text-stone-700 ring-stone-300", label: "Medium", rank: 2 },
+  low: { chip: "bg-stone-50 text-stone-500 ring-stone-200", label: "Low", rank: 3 },
+};
+
 /* ------------------------------------------------------------ helpers --- */
 
 /**
@@ -225,7 +232,7 @@ function DrawerShell({ eyebrow, title, chips, onClose, children }) {
   );
 }
 
-function SettingDrawer({ entry, notes, onAddNote, onClose, onApply, onDismiss, onRevert }) {
+function SettingDrawer({ entry, notes, onAddNote, onClose }) {
   const rec = entry.rec;
 
   return (
@@ -276,52 +283,26 @@ function SettingDrawer({ entry, notes, onAddNote, onClose, onApply, onDismiss, o
 
       {entry.cspPath && <RefPath value={entry.cspPath} label={refLabel(entry.platform)} />}
 
-      {/* Baseline recommendations don't exist yet — these stay dormant until
-          entry.rec is populated by a future baseline evaluation pass. */}
-      {rec && !entry.isApplied && !entry.isDismissed && (
+      {rec && (
         <section className="rounded-md border border-stone-200 p-3">
           <div className="flex items-center gap-2">
             <WarningCircle className="h-4 w-4 shrink-0 text-amber-500" />
             <h3 className="text-sm font-semibold">Recommended change</h3>
+            <Chip className={"ml-auto " + SEVERITY_STYLE[rec.severity].chip}>{SEVERITY_STYLE[rec.severity].label}</Chip>
           </div>
           <div className="mt-3">
             <Diff from={rec.current} to={rec.recommended} />
           </div>
           <p className="mt-3 text-xs leading-relaxed text-stone-600">{rec.why}</p>
           <p className="mt-2 text-xs text-stone-400">Source: {rec.source}</p>
-          <div className="mt-3 flex gap-2">
-            <button
-              onClick={() => onApply(rec)}
-              className="rounded-md bg-teal-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-teal-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
-            >
-              Apply
-            </button>
-            <button
-              onClick={() => onDismiss(rec.id)}
-              className="rounded-md px-3 py-1.5 text-xs font-medium text-stone-600 ring-1 ring-inset ring-stone-300 hover:bg-stone-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
-            >
-              Dismiss
-            </button>
-          </div>
-        </section>
-      )}
-
-      {rec && entry.isApplied && (
-        <section className="rounded-md border border-teal-200 bg-teal-50 p-3">
-          <p className="text-xs text-teal-900">Change staged: {rec.recommended}</p>
-          <button
-            onClick={() => onRevert(rec.id)}
-            className="mt-2 rounded text-xs font-medium text-teal-700 hover:text-teal-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
-          >
-            Revert to {rec.current}
-          </button>
+          <p className="mt-3 text-xs text-stone-400">Applying this needs write-back, which isn't built yet.</p>
         </section>
       )}
 
       {!rec && !entry.conflict && (
         <p className="flex items-start gap-2 rounded-md border border-stone-200 bg-stone-50 p-3 text-xs leading-relaxed text-stone-600">
           <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-stone-400" />
-          No recommendation — baselines aren't wired up yet, so this just reflects what's actually deployed.
+          Matches the baseline. Nothing to change.
         </p>
       )}
 
@@ -382,9 +363,12 @@ function SimplePolicyDrawer({ item, kindLabel, notes, onAddNote, onClose }) {
 
 /* ---------------------------------------------------------- overview --- */
 
-function Overview({ settingIndex, compliancePolicies, enrollmentConfigurations, onGo }) {
+function Overview({ settingIndex, compliancePolicies, enrollmentConfigurations, onGo, onOpen }) {
   const conflicts = settingIndex.filter((e) => e.conflict).length;
   const undeployed = settingIndex.filter((e) => e.state === "Not deployed").length;
+  const recs = settingIndex
+    .filter((e) => e.rec)
+    .sort((a, b) => SEVERITY_STYLE[a.rec.severity].rank - SEVERITY_STYLE[b.rec.severity].rank);
   const complianceDeployed = compliancePolicies.filter((p) => p.deployed).length;
   const enrollmentDeployed = enrollmentConfigurations.filter((p) => p.deployed).length;
 
@@ -421,15 +405,35 @@ function Overview({ settingIndex, compliancePolicies, enrollmentConfigurations, 
               onClick={() => onGo("recommendations")}
               className="rounded text-xs font-medium text-teal-600 hover:text-teal-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
             >
-              Recommendations
+              {recs.length > 0 ? "See all " + recs.length : "Recommendations"}
             </button>
           </div>
-          <div className="p-4">
-            <NotAvailableYet title="Recommendations need baselines">
-              Baseline rules (Microsoft security baseline, CIS) aren't wired up yet — once they are, gaps show up here ranked by
-              severity.
-            </NotAvailableYet>
-          </div>
+          {recs.length === 0 ? (
+            <div className="px-4 py-10 text-center">
+              <CheckCircle className="mx-auto h-6 w-6 text-teal-500" />
+              <p className="mt-2 text-sm font-medium">Nothing outstanding</p>
+              <p className="mt-1 text-xs text-stone-500">Every scanned setting matches the baseline.</p>
+            </div>
+          ) : (
+            <ul className="divide-y divide-stone-100">
+              {recs.slice(0, 5).map((e) => (
+                <li key={e.key}>
+                  <button
+                    onClick={() => onOpen(e.key)}
+                    className="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-stone-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-teal-500"
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-sm font-medium">{e.name}</span>
+                      <span className="mt-0.5 block truncate text-xs text-stone-500">
+                        {platformLabel(e.platform)} · {e.category}
+                      </span>
+                    </span>
+                    <Chip className={SEVERITY_STYLE[e.rec.severity].chip}>{SEVERITY_STYLE[e.rec.severity].label}</Chip>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
         </section>
 
         <section className="space-y-4 lg:col-span-2">
@@ -449,6 +453,84 @@ function Overview({ settingIndex, compliancePolicies, enrollmentConfigurations, 
             </div>
           </div>
         </section>
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------ recommendations --- */
+
+function Recommendations({ settingIndex, onOpen }) {
+  const [filter, setFilter] = useState("All");
+  const recs = settingIndex
+    .filter((e) => e.rec)
+    .sort((a, b) => SEVERITY_STYLE[a.rec.severity].rank - SEVERITY_STYLE[b.rec.severity].rank);
+  const levels = ["All", "critical", "high", "medium", "low"];
+  const shown = filter === "All" ? recs : recs.filter((e) => e.rec.severity === filter);
+
+  return (
+    <div className="space-y-5">
+      <header>
+        <h1 className="text-xl font-semibold">Recommendations</h1>
+        <p className="mt-1 text-sm text-stone-500">
+          Settings that differ from the baseline, ranked by what they expose. Write-back doesn't exist yet, so these are
+          for review — nothing here changes the tenant.
+        </p>
+      </header>
+
+      <div className="flex gap-1 overflow-x-auto">
+        {levels.map((l) => (
+          <button
+            key={l}
+            onClick={() => setFilter(l)}
+            className={
+              "shrink-0 rounded-md px-3 py-1.5 text-xs font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 " +
+              (filter === l ? "bg-stone-900 text-white" : "bg-white text-stone-600 ring-1 ring-inset ring-stone-300 hover:bg-stone-50")
+            }
+          >
+            {l === "All" ? "All" : SEVERITY_STYLE[l].label}
+            <span className="ml-1.5 tabular-nums opacity-60">
+              {l === "All" ? recs.length : recs.filter((e) => e.rec.severity === l).length}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      <div className="space-y-3">
+        {shown.map((e) => (
+          <article key={e.key} className="rounded-lg border border-stone-200 bg-white p-4">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <Chip className={SEVERITY_STYLE[e.rec.severity].chip}>{SEVERITY_STYLE[e.rec.severity].label}</Chip>
+                  <span className="truncate text-xs text-stone-500">
+                    {platformLabel(e.platform)} · {e.category}
+                  </span>
+                </div>
+                <h3 className="mt-2 font-medium">{e.name}</h3>
+                <button
+                  onClick={() => onOpen(e.key)}
+                  className="mt-0.5 rounded text-xs text-stone-500 hover:text-teal-600 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+                >
+                  See where this is set
+                </button>
+              </div>
+            </div>
+            <div className="mt-3">
+              <Diff from={e.rec.current} to={e.rec.recommended} />
+            </div>
+            <p className="mt-3 text-sm leading-relaxed text-stone-600">{e.rec.why}</p>
+            <p className="mt-2 text-xs text-stone-400">Source: {e.rec.source}</p>
+          </article>
+        ))}
+
+        {shown.length === 0 && (
+          <div className="rounded-lg border border-dashed border-stone-300 bg-white px-4 py-16 text-center">
+            <CheckCircle className="mx-auto h-7 w-7 text-teal-500" />
+            <p className="mt-3 text-sm font-medium">No recommendations at this level</p>
+            <p className="mt-1 text-xs text-stone-500">Switch filters to review the rest.</p>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -770,7 +852,7 @@ export default function App({ initialReport }) {
     { id: "configuration", label: "Settings", icon: Sliders, count: settingIndex.length },
     { id: "compliance", label: "Compliance", icon: ShieldCheck, count: compliancePolicies.length },
     { id: "enrollment", label: "Enrollment", icon: DeviceMobile, count: enrollmentConfigurations.length },
-    { id: "recommendations", label: "Recommendations", icon: Lightbulb, count: 0 },
+    { id: "recommendations", label: "Recommendations", icon: Lightbulb, count: settingIndex.filter((e) => e.rec).length },
     { id: "changes", label: "Change log", icon: ListChecks, count: 0 },
   ];
 
@@ -827,6 +909,7 @@ export default function App({ initialReport }) {
               compliancePolicies={compliancePolicies}
               enrollmentConfigurations={enrollmentConfigurations}
               onGo={setView}
+              onOpen={(key) => setOpen({ type: "setting", key })}
             />
           )}
 
@@ -863,16 +946,7 @@ export default function App({ initialReport }) {
           )}
 
           {view === "recommendations" && (
-            <div className="space-y-5">
-              <header>
-                <h1 className="text-xl font-semibold">Recommendations</h1>
-                <p className="mt-1 text-sm text-stone-500">Needs baselines to compare settings against, which aren't wired up yet.</p>
-              </header>
-              <NotAvailableYet title="Not available yet">
-                This tab lights up once baseline rules (Microsoft security baseline, CIS) are implemented and evaluated against the
-                settings index.
-              </NotAvailableYet>
-            </div>
+            <Recommendations settingIndex={settingIndex} onOpen={(key) => setOpen({ type: "setting", key })} />
           )}
 
           {view === "changes" && (
@@ -896,9 +970,6 @@ export default function App({ initialReport }) {
           notes={notes[openSetting.key] || []}
           onAddNote={(text) => addNote(openSetting.key, text)}
           onClose={() => setOpen(null)}
-          onApply={() => {}}
-          onDismiss={() => {}}
-          onRevert={() => {}}
         />
       )}
       {openCompliance && (

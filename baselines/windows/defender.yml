@@ -1,0 +1,23 @@
+- id: defender.tamper-protection
+  name: Tamper protection
+  platform: windows
+  path: ./Device/Vendor/MSFT/Defender/Configuration/TamperProtection
+  expect: enabled
+  severity: critical
+  rationale: >
+    Any process running as SYSTEM can silently disable real-time
+    scanning while tamper protection is off.
+  source: Microsoft Defender for Endpoint hardening guidance
+
+- id: update.quality-deferral
+  name: Quality update deferral
+  platform: windows
+  path: ./Device/Vendor/MSFT/Policy/Config/Update/DeferQualityUpdatesPeriodInDays
+  expect:
+    max: 7
+  severity: high
+  source: CIS Microsoft Windows 11 Benchmark, L1
+  rationale: >
+    Deferring quality updates (which include security patches) much
+    beyond a week leaves known, actively-patched vulnerabilities
+    unaddressed for longer than necessary.

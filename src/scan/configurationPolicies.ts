@@ -1,6 +1,6 @@
 import { graphGetAll } from "../graph.js";
 import { mapAssignmentTargets } from "./assignments.js";
-import { resolveSettingDefinition } from "./settingDefinitions.js";
+import { resolveSettingDefinition, type ResolvedDefinition } from "./settingDefinitions.js";
 import type { RawPolicy, RawSetting } from "./types.js";
 
 interface GraphPolicy {
@@ -54,7 +54,7 @@ async function fetchPolicySettings(token: string, policyId: string): Promise<Raw
         name: definition.name,
         cspPath: definition.cspPath,
         category: definition.category,
-        value: extractValue(settingInstance),
+        value: extractValue(settingInstance, definition),
       };
     }),
   );
@@ -65,15 +65,22 @@ async function fetchPolicySettings(token: string, policyId: string): Promise<Raw
  * common cases). Group/collection settings nest further settingInstances —
  * full recursion into those is a future refinement, not needed for conflict
  * detection at the top level, so they show a placeholder value for now.
+ *
+ * Choice values come back from Graph as opaque `{definitionId}_{index}`
+ * strings, not human-readable text — resolved through the definition's
+ * options map when available, falling back to the raw id otherwise (never
+ * crashes on an unresolvable value; baseline rules just won't match it).
  */
-function extractValue(instance: GraphSettingInstance): string {
+function extractValue(instance: GraphSettingInstance, definition: ResolvedDefinition): string {
+  const resolveOption = (itemId: string) => definition.options?.get(itemId) ?? itemId;
+
   if (instance.simpleSettingValue) return String(instance.simpleSettingValue.value);
-  if (instance.choiceSettingValue) return instance.choiceSettingValue.value;
+  if (instance.choiceSettingValue) return resolveOption(instance.choiceSettingValue.value);
   if (instance.simpleSettingCollectionValue) {
     return instance.simpleSettingCollectionValue.map((v) => String(v.value)).join(", ");
   }
   if (instance.choiceSettingCollectionValue) {
-    return instance.choiceSettingCollectionValue.map((v) => v.value).join(", ");
+    return instance.choiceSettingCollectionValue.map((v) => resolveOption(v.value)).join(", ");
   }
   return "(group setting)";
 }

@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import open from "open";
 import { resolveAuth, type ResolveAuthOptions } from "../auth/index.js";
+import { defaultBaselinesDir, loadBaselines } from "../baselines/loader.js";
 import { buildReport, type ScanReport } from "../scan/report.js";
 import { startServer, type ScanRequestBody } from "../server/staticServer.js";
 import { addNote, getAllNotes, type Note } from "../storage/notes.js";
@@ -8,6 +9,7 @@ import { getLatestScan, recordScan } from "../storage/scans.js";
 
 export interface UiOptions extends ResolveAuthOptions {
   report?: string;
+  baseline?: string;
 }
 
 type ReportWithNotes = ScanReport & { notes: Record<string, Note[]> };
@@ -42,18 +44,19 @@ async function resolveReport(options: UiOptions): Promise<ScanReport | undefined
   return getLatestScan();
 }
 
-async function runLiveScan(options: ResolveAuthOptions): Promise<ScanReport> {
+async function runLiveScan(options: UiOptions): Promise<ScanReport> {
   const auth = resolveAuth(options);
   const token = await auth.getToken();
-  const report = await buildReport(token, auth.flow, auth.tenantId);
+  const baselineRules = await loadBaselines(options.baseline ?? defaultBaselinesDir());
+  const report = await buildReport(token, auth.flow, auth.tenantId, baselineRules);
   recordScan(report);
   return report;
 }
 
 /**
- * Backs the browser's "connect a tenant" screen. Only --client-id/--device-code
- * from the CLI invocation carry over — the form itself only asks for a tenant,
- * keeping advanced auth flags a CLI-only concern (see project plan).
+ * Backs the browser's "connect a tenant" screen. Only --client-id/--device-code/
+ * --baseline from the CLI invocation carry over — the form itself only asks
+ * for a tenant, keeping advanced flags a CLI-only concern (see project plan).
  */
 async function runBrowserTriggeredScan(options: UiOptions, body: ScanRequestBody): Promise<ScanReport> {
   return runLiveScan({
@@ -61,5 +64,6 @@ async function runBrowserTriggeredScan(options: UiOptions, body: ScanRequestBody
     clientId: options.clientId,
     clientSecret: options.clientSecret,
     deviceCode: body.deviceCode ?? options.deviceCode,
+    baseline: options.baseline,
   });
 }

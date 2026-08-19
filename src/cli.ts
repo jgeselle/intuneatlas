@@ -56,6 +56,7 @@ withAuthOptions(program.command("login"))
 withAuthOptions(program.command("scan"))
   .description("Pull Windows Settings Catalog policies and build the settings index.")
   .option("--out <path>", "Write JSON to a file instead of stdout")
+  .option("--baseline <path>", "Directory of baseline YAML rules (defaults to the bundled starter pack)")
   .action(
     withErrorHandling((opts) =>
       runScan({
@@ -64,6 +65,7 @@ withAuthOptions(program.command("scan"))
         clientSecret: opts.clientSecret,
         deviceCode: opts.deviceCode,
         out: opts.out,
+        baseline: opts.baseline,
       }),
     ),
   );
@@ -71,6 +73,7 @@ withAuthOptions(program.command("scan"))
 withOptionalAuthOptions(program.command("ui"))
   .description("Open the local web UI, from a saved report or a live scan.")
   .option("--report <path>", "Read a report from a prior `scan --out` instead of scanning live")
+  .option("--baseline <path>", "Directory of baseline YAML rules (defaults to the bundled starter pack)")
   .action(
     withErrorHandling((opts) =>
       runUi({
@@ -79,6 +82,7 @@ withOptionalAuthOptions(program.command("ui"))
         clientSecret: opts.clientSecret,
         deviceCode: opts.deviceCode,
         report: opts.report,
+        baseline: opts.baseline,
       }),
     ),
   );

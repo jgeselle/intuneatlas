@@ -20,6 +20,7 @@ interface SettingsSnapshotRow {
   conflict: number;
   values_json: string;
   sources_json: string;
+  rec_json: string | null;
 }
 
 interface PolicySnapshotRow {
@@ -43,8 +44,8 @@ export function recordScan(report: ScanReport): void {
     const scanId = scanResult.lastInsertRowid;
 
     const insertSetting = db.prepare(`
-      INSERT INTO settings_snapshot (scan_id, key, name, csp_path, category, platform, state, conflict, values_json, sources_json)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO settings_snapshot (scan_id, key, name, csp_path, category, platform, state, conflict, values_json, sources_json, rec_json)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     for (const e of report.settings) {
       insertSetting.run(
@@ -58,6 +59,7 @@ export function recordScan(report: ScanReport): void {
         e.conflict ? 1 : 0,
         JSON.stringify(e.values),
         JSON.stringify(e.sources),
+        e.rec ? JSON.stringify(e.rec) : null,
       );
     }
 
@@ -90,7 +92,7 @@ export function getLatestScan(tenant?: string): ScanReport | undefined {
   if (!scan) return undefined;
 
   const settingRows = db
-    .prepare(`SELECT key, name, csp_path, category, platform, state, conflict, values_json, sources_json FROM settings_snapshot WHERE scan_id = ?`)
+    .prepare(`SELECT key, name, csp_path, category, platform, state, conflict, values_json, sources_json, rec_json FROM settings_snapshot WHERE scan_id = ?`)
     .all(scan.id) as unknown as SettingsSnapshotRow[];
 
   const settings = settingRows.map((r) => ({
@@ -103,6 +105,7 @@ export function getLatestScan(tenant?: string): ScanReport | undefined {
     conflict: Boolean(r.conflict),
     values: JSON.parse(r.values_json),
     sources: JSON.parse(r.sources_json),
+    ...(r.rec_json ? { rec: JSON.parse(r.rec_json) } : {}),
   }));
 
   const policyRows = db
@@ -127,6 +130,7 @@ export function getLatestScan(tenant?: string): ScanReport | undefined {
     policyCount: scan.policy_count,
     settingCount: settings.length,
     conflictCount: settings.filter((s) => s.conflict).length,
+    belowBaselineCount: settings.filter((s) => s.state === "Below baseline").length,
     settings,
     compliancePolicies,
     enrollmentConfigurations,

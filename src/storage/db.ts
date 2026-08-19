@@ -40,7 +40,8 @@ export function getDb(): DatabaseSync {
       state TEXT NOT NULL,
       conflict INTEGER NOT NULL,
       values_json TEXT NOT NULL,
-      sources_json TEXT NOT NULL
+      sources_json TEXT NOT NULL,
+      rec_json TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_settings_snapshot_scan ON settings_snapshot(scan_id);
 
@@ -66,5 +67,22 @@ export function getDb(): DatabaseSync {
     CREATE INDEX IF NOT EXISTS idx_notes_target ON notes(target_key);
   `);
 
+  migrate(db);
   return db;
+}
+
+/**
+ * CREATE TABLE IF NOT EXISTS only handles brand-new databases — it doesn't
+ * retroactively add columns to a table that already exists on disk from a
+ * previous version. rec_json (baseline recommendations) was added after
+ * settings_snapshot was already shipping, so existing local databases need
+ * this once. Deliberately minimal (no migration framework, see project
+ * plan) — add another guarded ALTER here if the schema changes again before
+ * this graduates into something more formal.
+ */
+function migrate(db: DatabaseSync): void {
+  const columns = db.prepare(`PRAGMA table_info(settings_snapshot)`).all() as Array<{ name: string }>;
+  if (!columns.some((c) => c.name === "rec_json")) {
+    db.exec(`ALTER TABLE settings_snapshot ADD COLUMN rec_json TEXT`);
+  }
 }
