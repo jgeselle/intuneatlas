@@ -14,17 +14,28 @@ const CACHE_DIR = join(homedir(), ".intuneatlas");
 
 export const TOKEN_CACHE_OPTIONS = { enabled: true, name: CACHE_NAME };
 
+// Windows Credential Manager and macOS Keychain are reliably present.
+// Linux relies on a libsecret-backed keyring (gnome-keyring/kwallet or a
+// D-Bus secret service) that's frequently absent on headless boxes,
+// containers, and WSL — and @azure/identity-cache-persistence's failure
+// mode there is an *unhandled promise rejection deep in its own internals*,
+// not a catchable throw, so it crashes the whole process rather than
+// degrading gracefully. Safer to just never attempt it on Linux than to
+// try and rely on a try/catch that can't actually reach the failure.
+const CACHE_SUPPORTED = process.platform === "win32" || process.platform === "darwin";
+
 let pluginRegistered = false;
 
 /**
- * Registers the OS-native secure-storage plugin (Credential Manager / Keychain
- * / libsecret) backing persistent token caching. Safe to call more than once
- * per process. Some headless Linux environments (WSL, containers, CI) lack
- * the libsecret backend this needs — callers should treat this as best-effort
- * and fall back to a plain, non-cached credential if anything cache-related
- * throws, rather than assuming it always works.
+ * Registers the OS-native secure-storage plugin backing persistent token
+ * caching. Safe to call more than once per process. Throws synchronously
+ * (catchable) on platforms where this isn't attempted at all — see
+ * CACHE_SUPPORTED above for why Linux is excluded rather than best-effort.
  */
 export function registerCachePlugin(): void {
+  if (!CACHE_SUPPORTED) {
+    throw new Error("Persistent token cache is only supported on Windows and macOS for now.");
+  }
   if (pluginRegistered) return;
   useIdentityPlugin(cachePersistencePlugin);
   pluginRegistered = true;
