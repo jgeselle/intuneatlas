@@ -1,28 +1,28 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  LayoutDashboard,
+  SquaresFour,
   Sliders,
   ShieldCheck,
-  Smartphone,
+  DeviceMobile,
   Lightbulb,
   ListChecks,
-  Search,
+  MagnifyingGlass,
   X,
   Check,
-  ChevronRight,
-  AlertTriangle,
-  AlertCircle,
-  CheckCircle2,
+  CaretRight,
+  Warning,
+  WarningCircle,
+  CheckCircle,
   Clock,
-  RotateCcw,
-  Send,
+  ArrowCounterClockwise,
+  PaperPlaneTilt,
   Users,
   Compass,
-  MessageSquare,
+  ChatCircle,
   UserCheck,
-  Ban,
+  Prohibit,
   Copy,
-} from "lucide-react";
+} from "@phosphor-icons/react";
 
 /* ---------------------------------------------------------------- data --- */
 /* Configuration settings live inside policies, but the policy is just a
@@ -691,7 +691,7 @@ function Diff({ from, to }) {
   return (
     <div className="flex flex-wrap items-center gap-2 text-sm">
       <span className="rounded border border-stone-200 bg-stone-50 px-2 py-1 text-stone-500 line-through decoration-stone-300">{from}</span>
-      <ChevronRight className="h-4 w-4 shrink-0 text-stone-400" />
+      <CaretRight className="h-4 w-4 shrink-0 text-stone-400" />
       <span className="rounded border border-teal-200 bg-teal-50 px-2 py-1 font-medium text-teal-800">{to}</span>
     </div>
   );
@@ -918,10 +918,10 @@ export default function App() {
   }
 
   const nav = [
-    { id: "overview", label: "Overview", icon: LayoutDashboard },
+    { id: "overview", label: "Overview", icon: SquaresFour },
     { id: "configuration", label: "Settings", icon: Sliders, count: settingIndex.length },
     { id: "compliance", label: "Compliance", icon: ShieldCheck, count: items.filter((i) => i.kind === "compliance").length },
-    { id: "enrollment", label: "Enrollment", icon: Smartphone, count: items.filter((i) => i.kind === "enrollment").length },
+    { id: "enrollment", label: "Enrollment", icon: DeviceMobile, count: items.filter((i) => i.kind === "enrollment").length },
     { id: "recommendations", label: "Recommendations", icon: Lightbulb, count: recs.length },
     { id: "changes", label: "Change log", icon: ListChecks, count: staged.length },
   ];
@@ -1070,7 +1070,7 @@ function Overview({ items, recs, totals, settingIndex, changes, onOpen, onGo }) 
       </header>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat label="Devices" value={totals.devices.toLocaleString()} sub="Enrolled and checking in" icon={Smartphone} />
+        <Stat label="Devices" value={totals.devices.toLocaleString()} sub="Enrolled and checking in" icon={DeviceMobile} />
         <Stat
           label="Settings managed"
           value={totals.settings}
@@ -1119,7 +1119,7 @@ function Overview({ items, recs, totals, settingIndex, changes, onOpen, onGo }) 
             ))}
             {recs.length === 0 && (
               <li className="px-4 py-10 text-center">
-                <CheckCircle2 className="mx-auto h-6 w-6 text-teal-500" />
+                <CheckCircle className="mx-auto h-6 w-6 text-teal-500" />
                 <p className="mt-2 text-sm font-medium">Nothing outstanding</p>
                 <p className="mt-1 text-xs text-stone-500">Every recommendation has been applied or dismissed.</p>
               </li>
@@ -1207,14 +1207,14 @@ function SettingsView({ entries, notes = {}, query, setQuery, platform, setPlatf
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <Stat label="Managed" value={entries.length} icon={Sliders} />
-        <Stat label="Below baseline" value={count("Below baseline")} tone={count("Below baseline") ? "amber" : "neutral"} icon={AlertCircle} />
-        <Stat label="Conflicting" value={count("Conflict")} tone={count("Conflict") ? "alert" : "neutral"} icon={AlertTriangle} />
-        <Stat label="Not deployed" value={count("Not deployed")} icon={Ban} />
+        <Stat label="Below baseline" value={count("Below baseline")} tone={count("Below baseline") ? "amber" : "neutral"} icon={WarningCircle} />
+        <Stat label="Conflicting" value={count("Conflict")} tone={count("Conflict") ? "alert" : "neutral"} icon={Warning} />
+        <Stat label="Not deployed" value={count("Not deployed")} icon={Prohibit} />
       </div>
 
       <div className="flex flex-col gap-3">
         <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-stone-400" />
+          <MagnifyingGlass className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-stone-400" />
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -1273,7 +1273,7 @@ function SettingsView({ entries, notes = {}, query, setQuery, platform, setPlatf
                               className="inline-flex shrink-0 items-center gap-0.5 text-xs text-stone-400"
                               title={(notes[e.key] || []).length + " notes"}
                             >
-                              <MessageSquare className="h-3.5 w-3.5" />
+                              <ChatCircle className="h-3.5 w-3.5" />
                               <span className="tabular-nums">{(notes[e.key] || []).length}</span>
                             </span>
                           )}
@@ -1323,7 +1323,7 @@ function PolicyList({ kind, items, applied, query, setQuery, onOpen }) {
       </header>
 
       <div className="relative">
-        <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-stone-400" />
+        <MagnifyingGlass className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-stone-400" />
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -1484,7 +1484,7 @@ function Recommendations({ recs, onApply, onDismiss, onOpen }) {
 
         {shown.length === 0 && (
           <div className="rounded-lg border border-dashed border-stone-300 bg-white px-4 py-16 text-center">
-            <CheckCircle2 className="mx-auto h-7 w-7 text-teal-500" />
+            <CheckCircle className="mx-auto h-7 w-7 text-teal-500" />
             <p className="mt-3 text-sm font-medium">No recommendations at this level</p>
             <p className="mt-1 text-xs text-stone-500">Switch filters to review the rest, or check the change log.</p>
           </div>
@@ -1519,7 +1519,7 @@ function ChangeLog({ changes, staged, onRevert, onDeploy, onReason, onToggleRevi
           disabled={!canDeploy}
           className="inline-flex items-center gap-2 rounded-md bg-teal-800 px-3.5 py-2 text-sm font-medium text-white hover:bg-teal-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-400"
         >
-          <Send className="h-4 w-4" />
+          <PaperPlaneTilt className="h-4 w-4" />
           Deploy {staged.length > 0 ? staged.length + " changes" : "changes"}
         </button>
       </header>
@@ -1557,7 +1557,7 @@ function ChangeLog({ changes, staged, onRevert, onDeploy, onReason, onToggleRevi
                       onClick={() => onRevert(c.id)}
                       className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-stone-600 ring-1 ring-inset ring-stone-300 hover:bg-stone-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
                     >
-                      <RotateCcw className="h-3.5 w-3.5" />
+                      <ArrowCounterClockwise className="h-3.5 w-3.5" />
                       Revert
                     </button>
                   )}
@@ -1680,7 +1680,7 @@ function SettingDrawer({ entry, notes, onAddNote, onClose, onApply, onDismiss, o
         {entry.conflict ? (
           <div className="mt-2 rounded-md border border-red-200 bg-red-50 p-3">
             <div className="flex gap-2">
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
+              <Warning className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
               <p className="text-xs leading-relaxed text-red-800">
                 Two policies set this differently on overlapping groups. Devices apply whichever processes last, so the result is not
                 predictable.
@@ -1716,7 +1716,7 @@ function SettingDrawer({ entry, notes, onAddNote, onClose, onApply, onDismiss, o
       {rec && !entry.isApplied && !entry.isDismissed && (
         <section className="rounded-md border border-stone-200 p-3">
           <div className="flex items-center gap-2">
-            <AlertCircle className="h-4 w-4 shrink-0 text-amber-500" />
+            <WarningCircle className="h-4 w-4 shrink-0 text-amber-500" />
             <h3 className="text-sm font-semibold">Recommended change</h3>
             <Chip className={"ml-auto " + SEVERITY[rec.severity].chip}>{SEVERITY[rec.severity].label}</Chip>
           </div>
@@ -1762,7 +1762,7 @@ function SettingDrawer({ entry, notes, onAddNote, onClose, onApply, onDismiss, o
 
       {!rec && !entry.conflict && (
         <p className="flex items-start gap-2 rounded-md border border-stone-200 bg-stone-50 p-3 text-xs leading-relaxed text-stone-600">
-          <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-stone-400" />
+          <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-stone-400" />
           Matches the baseline. Nothing to change.
         </p>
       )}
@@ -1855,9 +1855,9 @@ function PolicyDrawer({ item, applied, dismissed, notes, onAddNote, onClose, onA
               <li key={s.id} className="rounded-md border border-stone-200 p-3">
                 <div className="flex items-start gap-2">
                   {hasRec && !isApplied && !isDismissed ? (
-                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+                    <WarningCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
                   ) : (
-                    <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-stone-300" />
+                    <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-stone-300" />
                   )}
                   <div className="min-w-0 flex-1">
                     <div className="text-sm font-medium">{s.name}</div>
