@@ -65,6 +65,20 @@ export function getDb(): DatabaseSync {
       text TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_notes_target ON notes(target_key);
+
+    CREATE TABLE IF NOT EXISTS staged_changes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      target_key TEXT NOT NULL,
+      target_name TEXT NOT NULL,
+      rule_id TEXT NOT NULL,
+      from_value TEXT NOT NULL,
+      to_value TEXT NOT NULL,
+      reason TEXT NOT NULL DEFAULT '',
+      reviewed_by TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_staged_changes_target ON staged_changes(target_key);
   `);
 
   migrate(db);

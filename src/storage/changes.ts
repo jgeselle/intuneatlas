@@ -1,0 +1,114 @@
+import { getDb } from "./db.js";
+
+export interface StagedChange {
+  id: number;
+  targetKey: string;
+  targetName: string;
+  ruleId: string;
+  from: string;
+  to: string;
+  reason: string;
+  reviewedBy: string;
+  createdAt: string;
+  updatedAt: string;
+  /** Derived, not stored — true once both a reason and a named reviewer are present. */
+  ready: boolean;
+}
+
+interface ChangeRow {
+  id: number;
+  target_key: string;
+  target_name: string;
+  rule_id: string;
+  from_value: string;
+  to_value: string;
+  reason: string;
+  reviewed_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+function toStagedChange(r: ChangeRow): StagedChange {
+  return {
+    id: r.id,
+    targetKey: r.target_key,
+    targetName: r.target_name,
+    ruleId: r.rule_id,
+    from: r.from_value,
+    to: r.to_value,
+    reason: r.reason,
+    reviewedBy: r.reviewed_by,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+    ready: Boolean(r.reason.trim() && r.reviewed_by.trim()),
+  };
+}
+
+export interface StageChangeInput {
+  targetKey: string;
+  targetName: string;
+  ruleId: string;
+  from: string;
+  to: string;
+}
+
+/** Only ever originates from an existing baseline recommendation — no freeform change creation. Replaces any existing staged change for the same key. */
+export function stageChange(input: StageChangeInput): StagedChange {
+  const db = getDb();
+  const now = new Date().toISOString();
+
+  db.prepare(
+    `
+    INSERT INTO staged_changes (target_key, target_name, rule_id, from_value, to_value, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(target_key) DO UPDATE SET
+      target_name = excluded.target_name,
+      rule_id = excluded.rule_id,
+      from_value = excluded.from_value,
+      to_value = excluded.to_value,
+      reason = '',
+      reviewed_by = '',
+      updated_at = excluded.updated_at
+  `,
+  ).run(input.targetKey, input.targetName, input.ruleId, input.from, input.to, now, now);
+
+  const row = db.prepare(`SELECT * FROM staged_changes WHERE target_key = ?`).get(input.targetKey) as unknown as ChangeRow;
+  return toStagedChange(row);
+}
+
+export function updateReason(id: number, reason: string): StagedChange {
+  return updateField(id, "reason", reason);
+}
+
+export function updateReviewer(id: number, reviewedBy: string): StagedChange {
+  return updateField(id, "reviewed_by", reviewedBy);
+}
+
+function updateField(id: number, column: "reason" | "reviewed_by", value: string): StagedChange {
+  const db = getDb();
+  db.prepare(`UPDATE staged_changes SET ${column} = ?, updated_at = ? WHERE id = ?`).run(
+    value,
+    new Date().toISOString(),
+    id,
+  );
+  const row = db.prepare(`SELECT * FROM staged_changes WHERE id = ?`).get(id) as unknown as ChangeRow | undefined;
+  if (!row) throw new Error(`No staged change with id ${id}.`);
+  return toStagedChange(row);
+}
+
+/** Returns the target key that was reverted, so callers can update any in-memory copy of the report — undefined if there was no such change. */
+export function revertChange(id: number): string | undefined {
+  const db = getDb();
+  const row = db.prepare(`SELECT target_key FROM staged_changes WHERE id = ?`).get(id) as { target_key: string } | undefined;
+  if (!row) return undefined;
+  db.prepare(`DELETE FROM staged_changes WHERE id = ?`).run(id);
+  return row.target_key;
+}
+
+/** All staged changes, keyed by target — merged into a served report the same way notes are. */
+export function getAllChanges(): Record<string, StagedChange> {
+  const rows = getDb().prepare(`SELECT * FROM staged_changes`).all() as unknown as ChangeRow[];
+  const result: Record<string, StagedChange> = {};
+  for (const row of rows) result[row.target_key] = toStagedChange(row);
+  return result;
+}

@@ -17,6 +17,9 @@ import {
   Copy,
   ChatCircle,
   Compass,
+  ArrowCounterClockwise,
+  PaperPlaneTilt,
+  Clock,
 } from "@phosphor-icons/react";
 
 /* ------------------------------------------------------------- styles --- */
@@ -232,7 +235,7 @@ function DrawerShell({ eyebrow, title, chips, onClose, children }) {
   );
 }
 
-function SettingDrawer({ entry, notes, onAddNote, onClose }) {
+function SettingDrawer({ entry, notes, onAddNote, onClose, change, onStage, onRevert }) {
   const rec = entry.rec;
 
   return (
@@ -283,7 +286,27 @@ function SettingDrawer({ entry, notes, onAddNote, onClose }) {
 
       {entry.cspPath && <RefPath value={entry.cspPath} label={refLabel(entry.platform)} />}
 
-      {rec && (
+      {rec && change && (
+        <section className="rounded-md border border-teal-200 bg-teal-50 p-3">
+          <div className="flex items-center gap-2">
+            <Chip className="bg-white text-teal-700 ring-teal-200">{change.ready ? "Ready" : "Staged"}</Chip>
+            {!change.ready && <span className="text-xs text-teal-800">Needs a reason and reviewer</span>}
+          </div>
+          <div className="mt-3">
+            <Diff from={change.from} to={change.to} />
+          </div>
+          <p className="mt-2 text-xs text-teal-700">Edit the reason and reviewer from the Change log tab.</p>
+          <button
+            onClick={() => onRevert(change.id)}
+            className="mt-3 inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-stone-600 ring-1 ring-inset ring-stone-300 hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+          >
+            <ArrowCounterClockwise className="h-3.5 w-3.5" />
+            Revert
+          </button>
+        </section>
+      )}
+
+      {rec && !change && (
         <section className="rounded-md border border-stone-200 p-3">
           <div className="flex items-center gap-2">
             <WarningCircle className="h-4 w-4 shrink-0 text-amber-500" />
@@ -295,7 +318,15 @@ function SettingDrawer({ entry, notes, onAddNote, onClose }) {
           </div>
           <p className="mt-3 text-xs leading-relaxed text-stone-600">{rec.why}</p>
           <p className="mt-2 text-xs text-stone-400">Source: {rec.source}</p>
-          <p className="mt-3 text-xs text-stone-400">Applying this needs write-back, which isn't built yet.</p>
+          <button
+            onClick={onStage}
+            className="mt-3 rounded-md bg-teal-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-teal-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+          >
+            Stage this change
+          </button>
+          <p className="mt-2 text-xs text-stone-400">
+            Staging doesn't touch the tenant — it just queues this for review. Deploying needs write-back, which isn't built yet.
+          </p>
         </section>
       )}
 
@@ -363,7 +394,7 @@ function SimplePolicyDrawer({ item, kindLabel, notes, onAddNote, onClose }) {
 
 /* ---------------------------------------------------------- overview --- */
 
-function Overview({ settingIndex, compliancePolicies, enrollmentConfigurations, onGo, onOpen }) {
+function Overview({ settingIndex, compliancePolicies, enrollmentConfigurations, changes, onGo, onOpen }) {
   const conflicts = settingIndex.filter((e) => e.conflict).length;
   const undeployed = settingIndex.filter((e) => e.state === "Not deployed").length;
   const recs = settingIndex
@@ -371,6 +402,7 @@ function Overview({ settingIndex, compliancePolicies, enrollmentConfigurations, 
     .sort((a, b) => SEVERITY_STYLE[a.rec.severity].rank - SEVERITY_STYLE[b.rec.severity].rank);
   const complianceDeployed = compliancePolicies.filter((p) => p.deployed).length;
   const enrollmentDeployed = enrollmentConfigurations.filter((p) => p.deployed).length;
+  const changeList = Object.values(changes).sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
 
   return (
     <div className="space-y-6">
@@ -446,11 +478,25 @@ function Overview({ settingIndex, compliancePolicies, enrollmentConfigurations, 
 
           <div className="rounded-lg border border-stone-200 bg-white p-4">
             <h2 className="text-sm font-semibold">Recent changes</h2>
-            <div className="mt-3">
-              <NotAvailableYet title="Needs write-back">
-                Staged and deployed changes will show up here once write-back exists.
-              </NotAvailableYet>
-            </div>
+            {changeList.length === 0 ? (
+              <p className="mt-2 text-xs text-stone-500">
+                No changes yet. Staging a recommendation lands it here before anything reaches the tenant.
+              </p>
+            ) : (
+              <ul className="mt-3 space-y-2">
+                {changeList.slice(0, 4).map((c) => (
+                  <li key={c.id} className="flex items-center gap-2 text-xs">
+                    {c.ready ? (
+                      <Check className="h-3.5 w-3.5 shrink-0 text-teal-600" />
+                    ) : (
+                      <Clock className="h-3.5 w-3.5 shrink-0 text-amber-500" />
+                    )}
+                    <span className="truncate text-stone-700">{c.targetName}</span>
+                    <span className="ml-auto shrink-0 text-stone-400">{c.ready ? "ready" : "needs review"}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </section>
       </div>
@@ -532,6 +578,107 @@ function Recommendations({ settingIndex, onOpen }) {
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+/* ---------------------------------------------------------- change log --- */
+
+function ChangeCard({ change, onUpdateField, onRevert }) {
+  const [reason, setReason] = useState(change.reason);
+  const [reviewedBy, setReviewedBy] = useState(change.reviewedBy);
+
+  return (
+    <li className="rounded-lg border border-stone-200 bg-white p-4">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <Chip className={change.ready ? "bg-teal-50 text-teal-700 ring-teal-200" : "bg-amber-50 text-amber-800 ring-amber-200"}>
+              {change.ready ? "Ready" : "Needs review"}
+            </Chip>
+          </div>
+          <h3 className="mt-2 text-sm font-medium">{change.targetName}</h3>
+        </div>
+        <button
+          onClick={() => onRevert(change.id, change.targetKey)}
+          className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-stone-600 ring-1 ring-inset ring-stone-300 hover:bg-stone-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+        >
+          <ArrowCounterClockwise className="h-3.5 w-3.5" />
+          Revert
+        </button>
+      </div>
+
+      <div className="mt-3">
+        <Diff from={change.from} to={change.to} />
+      </div>
+
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <label className="block">
+          <span className="text-xs font-medium text-stone-500">Reason</span>
+          <textarea
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            onBlur={() => reason !== change.reason && onUpdateField(change.id, "reason", reason)}
+            rows={2}
+            placeholder="Why is this change needed?"
+            className="mt-1 w-full resize-none rounded-md border border-stone-300 bg-white p-2 text-xs placeholder-stone-400 focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600"
+          />
+        </label>
+        <label className="block">
+          <span className="text-xs font-medium text-stone-500">Reviewed by</span>
+          <input
+            value={reviewedBy}
+            onChange={(e) => setReviewedBy(e.target.value)}
+            onBlur={() => reviewedBy !== change.reviewedBy && onUpdateField(change.id, "reviewedBy", reviewedBy)}
+            placeholder="Name of the second pair of eyes"
+            className="mt-1 w-full rounded-md border border-stone-300 bg-white p-2 text-xs placeholder-stone-400 focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600"
+          />
+        </label>
+      </div>
+    </li>
+  );
+}
+
+function ChangeLog({ changes, onUpdateField, onRevert }) {
+  const list = Object.values(changes).sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+  const ready = list.filter((c) => c.ready).length;
+
+  return (
+    <div className="space-y-5">
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold">Change log</h1>
+          <p className="mt-1 text-sm text-stone-500">
+            {list.length === 0
+              ? "Nothing staged yet. Apply a recommendation and it lands here for review."
+              : ready + " of " + list.length + " ready. Reason and a reviewer are required before deploying."}
+          </p>
+        </div>
+        <button
+          disabled
+          title="Deploying to the tenant needs write-back, which isn't built yet."
+          className="inline-flex cursor-not-allowed items-center gap-2 rounded-md bg-stone-200 px-3.5 py-2 text-sm font-medium text-stone-400"
+        >
+          <PaperPlaneTilt className="h-4 w-4" />
+          Deploy
+        </button>
+      </header>
+
+      {list.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-stone-300 bg-white px-4 py-16 text-center">
+          <Clock className="mx-auto h-6 w-6 text-stone-400" />
+          <p className="mt-3 text-sm font-medium">Nothing staged</p>
+          <p className="mx-auto mt-1 max-w-sm text-xs text-stone-500">
+            Open a recommendation and click "Stage this change" — it'll show up here for review.
+          </p>
+        </div>
+      ) : (
+        <ul className="space-y-3">
+          {list.map((c) => (
+            <ChangeCard key={c.id} change={c} onUpdateField={onUpdateField} onRevert={onRevert} />
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
@@ -809,13 +956,16 @@ export default function App({ initialReport }) {
   const [query, setQuery] = useState("");
   const [platform, setPlatform] = useState("All");
   const [notes, setNotes] = useState(initialReport?.notes ?? {});
+  const [changes, setChanges] = useState(initialReport?.changes ?? {});
   const [open, setOpen] = useState(null);
   const [toast, setToast] = useState(null);
 
-  // Notes are persisted server-side and aren't scan-specific — resync
-  // whenever a fresh report comes in (e.g. after connecting a tenant).
+  // Notes and staged changes are persisted server-side and aren't
+  // scan-specific — resync whenever a fresh report comes in (e.g. after
+  // connecting a tenant).
   useEffect(() => {
     if (report?.notes) setNotes(report.notes);
+    if (report?.changes) setChanges(report.changes);
   }, [report]);
 
   if (!report) {
@@ -847,13 +997,66 @@ export default function App({ initialReport }) {
     }
   }
 
+  async function stageEntryChange(entry) {
+    try {
+      const res = await fetch("/api/changes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          targetKey: entry.key,
+          targetName: entry.name,
+          ruleId: entry.rec.ruleId,
+          from: entry.rec.current,
+          to: entry.rec.recommended,
+        }),
+      });
+      const change = await res.json();
+      if (!res.ok) throw new Error(change.error || "Couldn't stage the change");
+      setChanges((c) => ({ ...c, [entry.key]: change }));
+      flash("Change staged. Add a reason and reviewer before it's ready.");
+    } catch (err) {
+      flash(err.message);
+    }
+  }
+
+  async function updateChangeField(id, field, value) {
+    try {
+      const res = await fetch("/api/changes/" + id, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [field]: value }),
+      });
+      const change = await res.json();
+      if (!res.ok) throw new Error(change.error || "Couldn't update the change");
+      setChanges((c) => ({ ...c, [change.targetKey]: change }));
+    } catch (err) {
+      flash(err.message);
+    }
+  }
+
+  async function revertEntryChange(id, targetKey) {
+    try {
+      const res = await fetch("/api/changes/" + id, { method: "DELETE" });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || "Couldn't revert the change");
+      setChanges((c) => {
+        const next = { ...c };
+        delete next[targetKey];
+        return next;
+      });
+      flash("Change reverted");
+    } catch (err) {
+      flash(err.message);
+    }
+  }
+
   const nav = [
     { id: "overview", label: "Overview", icon: SquaresFour },
     { id: "configuration", label: "Settings", icon: Sliders, count: settingIndex.length },
     { id: "compliance", label: "Compliance", icon: ShieldCheck, count: compliancePolicies.length },
     { id: "enrollment", label: "Enrollment", icon: DeviceMobile, count: enrollmentConfigurations.length },
     { id: "recommendations", label: "Recommendations", icon: Lightbulb, count: settingIndex.filter((e) => e.rec).length },
-    { id: "changes", label: "Change log", icon: ListChecks, count: 0 },
+    { id: "changes", label: "Change log", icon: ListChecks, count: Object.keys(changes).length },
   ];
 
   const openSetting = open?.type === "setting" ? settingIndex.find((e) => e.key === open.key) : null;
@@ -908,6 +1111,7 @@ export default function App({ initialReport }) {
               settingIndex={settingIndex}
               compliancePolicies={compliancePolicies}
               enrollmentConfigurations={enrollmentConfigurations}
+              changes={changes}
               onGo={setView}
               onOpen={(key) => setOpen({ type: "setting", key })}
             />
@@ -950,16 +1154,7 @@ export default function App({ initialReport }) {
           )}
 
           {view === "changes" && (
-            <div className="space-y-5">
-              <header>
-                <h1 className="text-xl font-semibold">Change log</h1>
-                <p className="mt-1 text-sm text-stone-500">Needs review-gated write-back, which isn't built yet.</p>
-              </header>
-              <NotAvailableYet title="Not available yet">
-                Applying a recommendation will stage a change here, with a required reason and reviewer before it deploys to the
-                tenant.
-              </NotAvailableYet>
-            </div>
+            <ChangeLog changes={changes} onUpdateField={updateChangeField} onRevert={revertEntryChange} />
           )}
         </div>
       </main>
@@ -970,6 +1165,9 @@ export default function App({ initialReport }) {
           notes={notes[openSetting.key] || []}
           onAddNote={(text) => addNote(openSetting.key, text)}
           onClose={() => setOpen(null)}
+          change={changes[openSetting.key]}
+          onStage={() => stageEntryChange(openSetting)}
+          onRevert={(id) => revertEntryChange(id, openSetting.key)}
         />
       )}
       {openCompliance && (

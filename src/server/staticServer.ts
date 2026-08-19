@@ -27,6 +27,23 @@ export interface NoteRequestBody {
   text: string;
 }
 
+export interface StageChangeRequestBody {
+  targetKey: string;
+  targetName: string;
+  ruleId: string;
+  from: string;
+  to: string;
+}
+
+export interface UpdateChangeRequestBody {
+  reason?: string;
+  reviewedBy?: string;
+}
+
+interface WithTargetKey {
+  targetKey: string;
+}
+
 export interface StartServerOptions {
   /** null means "nothing scanned yet" — the UI shows its connect screen. */
   report: unknown | null;
@@ -35,10 +52,31 @@ export interface StartServerOptions {
   onScanRequest?: (body: ScanRequestBody) => Promise<unknown>;
   /** Backs the note-adding UI; returns the updated note list for that key. */
   onNoteRequest?: (body: NoteRequestBody) => unknown[];
+  /** Stages a change; must return the created record including its targetKey. */
+  onStageChange?: (body: StageChangeRequestBody) => WithTargetKey;
+  /** Updates reason/reviewer on a staged change; must return the updated record including its targetKey. */
+  onUpdateChange?: (id: number, body: UpdateChangeRequestBody) => WithTargetKey;
+  /** Reverts a staged change; returns the targetKey that was removed, or undefined if it didn't exist. */
+  onRevertChange?: (id: number) => string | undefined;
 }
 
 export async function startServer(options: StartServerOptions): Promise<{ url: string; server: Server }> {
   let currentReport = options.report;
+
+  function setChange(targetKey: string, change: unknown): void {
+    if (!currentReport || typeof currentReport !== "object") return;
+    const existing = currentReport as Record<string, unknown>;
+    const existingChanges = (existing.changes as Record<string, unknown> | undefined) ?? {};
+    currentReport = { ...existing, changes: { ...existingChanges, [targetKey]: change } };
+  }
+
+  function removeChange(targetKey: string): void {
+    if (!currentReport || typeof currentReport !== "object") return;
+    const existing = currentReport as Record<string, unknown>;
+    const existingChanges = { ...((existing.changes as Record<string, unknown> | undefined) ?? {}) };
+    delete existingChanges[targetKey];
+    currentReport = { ...existing, changes: existingChanges };
+  }
 
   const server = createServer(async (req, res) => {
     try {
@@ -57,6 +95,23 @@ export async function startServer(options: StartServerOptions): Promise<{ url: s
             currentReport = { ...existing, notes: { ...existingNotes, [targetKey]: notes } };
           }
         });
+        return;
+      }
+
+      if (req.method === "POST" && req.url === "/api/changes") {
+        await handleStageChange(req, res, options.onStageChange, (change) => setChange(change.targetKey, change));
+        return;
+      }
+
+      const changeIdMatch = req.url?.match(/^\/api\/changes\/(\d+)$/);
+      if (changeIdMatch && req.method === "PATCH") {
+        await handleUpdateChange(req, res, Number(changeIdMatch[1]), options.onUpdateChange, (change) =>
+          setChange(change.targetKey, change),
+        );
+        return;
+      }
+      if (changeIdMatch && req.method === "DELETE") {
+        await handleRevertChange(res, Number(changeIdMatch[1]), options.onRevertChange, removeChange);
         return;
       }
 
@@ -148,6 +203,93 @@ async function handleNoteRequest(
     onSaved(body.targetKey, notes);
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify(notes));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.writeHead(500, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: message }));
+  }
+}
+
+async function handleStageChange(
+  req: IncomingMessage,
+  res: ServerResponse,
+  onStageChange: StartServerOptions["onStageChange"],
+  onSaved: (change: WithTargetKey) => void,
+): Promise<void> {
+  if (!onStageChange) {
+    res.writeHead(501, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Staging changes isn't available from this session." }));
+    return;
+  }
+
+  try {
+    const body = JSON.parse(await readRequestBody(req)) as StageChangeRequestBody;
+    if (!body.targetKey || !body.targetName || !body.ruleId || body.from === undefined || body.to === undefined) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "targetKey, targetName, ruleId, from, and to are required" }));
+      return;
+    }
+
+    const change = onStageChange(body);
+    onSaved(change);
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify(change));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.writeHead(500, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: message }));
+  }
+}
+
+async function handleUpdateChange(
+  req: IncomingMessage,
+  res: ServerResponse,
+  id: number,
+  onUpdateChange: StartServerOptions["onUpdateChange"],
+  onSaved: (change: WithTargetKey) => void,
+): Promise<void> {
+  if (!onUpdateChange) {
+    res.writeHead(501, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Updating changes isn't available from this session." }));
+    return;
+  }
+
+  try {
+    const body = JSON.parse(await readRequestBody(req)) as UpdateChangeRequestBody;
+    if (body.reason === undefined && body.reviewedBy === undefined) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "reason or reviewedBy is required" }));
+      return;
+    }
+
+    const change = onUpdateChange(id, body);
+    onSaved(change);
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify(change));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.writeHead(500, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: message }));
+  }
+}
+
+async function handleRevertChange(
+  res: ServerResponse,
+  id: number,
+  onRevertChange: StartServerOptions["onRevertChange"],
+  onReverted: (targetKey: string) => void,
+): Promise<void> {
+  if (!onRevertChange) {
+    res.writeHead(501, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Reverting changes isn't available from this session." }));
+    return;
+  }
+
+  try {
+    const targetKey = onRevertChange(id);
+    if (targetKey) onReverted(targetKey);
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ reverted: Boolean(targetKey) }));
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     res.writeHead(500, { "Content-Type": "application/json" });

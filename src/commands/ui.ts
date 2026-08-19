@@ -3,32 +3,45 @@ import open from "open";
 import { resolveAuth, type ResolveAuthOptions } from "../auth/index.js";
 import { defaultBaselinesDir, loadBaselines } from "../baselines/loader.js";
 import { buildReport, type ScanReport } from "../scan/report.js";
-import { startServer, type ScanRequestBody } from "../server/staticServer.js";
+import {
+  startServer,
+  type ScanRequestBody,
+  type StageChangeRequestBody,
+  type UpdateChangeRequestBody,
+} from "../server/staticServer.js";
 import { addNote, getAllNotes, type Note } from "../storage/notes.js";
 import { getLatestScan, recordScan } from "../storage/scans.js";
+import { getAllChanges, revertChange, stageChange, updateReason, updateReviewer, type StagedChange } from "../storage/changes.js";
 
 export interface UiOptions extends ResolveAuthOptions {
   report?: string;
   baseline?: string;
 }
 
-type ReportWithNotes = ScanReport & { notes: Record<string, Note[]> };
+type EnrichedReport = ScanReport & { notes: Record<string, Note[]>; changes: Record<string, StagedChange> };
 
 export async function runUi(options: UiOptions): Promise<void> {
   const report = await resolveReport(options);
 
   const { url } = await startServer({
-    report: report ? withNotes(report) : null,
-    onScanRequest: async (body) => withNotes(await runBrowserTriggeredScan(options, body)),
+    report: report ? enrichReport(report) : null,
+    onScanRequest: async (body) => enrichReport(await runBrowserTriggeredScan(options, body)),
     onNoteRequest: (body) => addNote(body.targetKey, "You", body.text),
+    onStageChange: (body: StageChangeRequestBody) => stageChange(body),
+    onUpdateChange: (id: number, body: UpdateChangeRequestBody) => {
+      if (body.reason !== undefined) return updateReason(id, body.reason);
+      if (body.reviewedBy !== undefined) return updateReviewer(id, body.reviewedBy);
+      throw new Error("reason or reviewedBy is required");
+    },
+    onRevertChange: (id: number) => revertChange(id),
   });
   console.log(`intuneatlas ui — ${url}`);
   if (!report) console.log("No report yet — connect a tenant from the page that just opened.");
   await open(url);
 }
 
-function withNotes(report: ScanReport): ReportWithNotes {
-  return { ...report, notes: getAllNotes() };
+function enrichReport(report: ScanReport): EnrichedReport {
+  return { ...report, notes: getAllNotes(), changes: getAllChanges() };
 }
 
 async function resolveReport(options: UiOptions): Promise<ScanReport | undefined> {
