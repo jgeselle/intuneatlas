@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>intuneatlas · flatten your Intune tenant into a list of settings</title>
+<meta name="description" content="Open-source CLI and web UI that merges every Intune profile into one settings index, keyed on CSP path. Finds conflicts, coverage gaps, and drift from CIS or Microsoft baselines. MIT licensed.">
+<meta name="color-scheme" content="light">
+<link rel="canonical" href="https://intuneatlas.dev/">
+
+<!-- link previews -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="intuneatlas">
+<meta property="og:title" content="intuneatlas · flatten your Intune tenant into a settings index">
+<meta property="og:description" content="Merges every Intune profile into one settings index keyed on CSP path, then shows the conflicts, coverage gaps, and drift from CIS or Microsoft baselines. MIT licensed, runs on your machine.">
+<meta property="og:url" content="https://intuneatlas.dev/">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="intuneatlas · flatten your Intune tenant into a settings index">
+<meta name="twitter:description" content="Conflicts, coverage gaps, and baseline drift across every Intune profile. MIT licensed, runs on your machine.">
+
+<!-- inline favicon: no extra request, no 404 -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230F766E' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpolygon points='16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76'/%3E%3C/svg%3E">
+<style>
+  :root{
+    --ink:#0A2B28;
+    --ink-2:#0F3A35;
+    --teal:#0F766E;
+    --teal-2:#115E59;
+    --teal-bright:#5EEAD4;
+    --paper:#FAF9F7;
+    --line:#E7E5E4;
+    --line-2:#D6D3D1;
+    --text:#1C1917;
+    --muted:#78716C;
+    --faint:#A8A29E;
+    --amber:#B45309;
+    --amber-bg:#FEF3C7;
+    --red:#B91C1C;
+    --red-bg:#FEE2E2;
+    --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  }
+  *,*::before,*::after{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+  body{
+    margin:0;background:var(--paper);color:var(--text);
+    font-family:var(--sans);font-size:16px;line-height:1.65;
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3,h4{margin:0;line-height:1.2;font-weight:600;letter-spacing:-.02em}
+  p{margin:0}
+  a{color:var(--teal-2)}
+  ul{margin:0;padding:0;list-style:none}
+
+  .wrap{max-width:960px;margin:0 auto;padding:0 22px}
+  .muted{color:var(--muted)}
+  .lede{color:var(--muted);font-size:1.0625rem}
+
+  /* the repo's own vernacular is mono, so labels and metadata live there */
+  .kicker{
+    font-family:var(--mono);font-size:.6875rem;letter-spacing:.13em;
+    text-transform:uppercase;color:var(--faint);
+  }
+
+  /* ---------------------------------------------------------- topbar --- */
+  .topbar{border-bottom:1px solid var(--line);background:#fff;position:sticky;top:0;z-index:40}
+  .topbar .wrap{display:flex;align-items:center;gap:18px;height:56px}
+  .repo{
+    display:flex;align-items:center;gap:8px;font-family:var(--mono);
+    font-size:.875rem;text-decoration:none;color:var(--text);min-width:0;
+  }
+  .repo svg{flex:none;color:var(--teal)}
+  .repo .owner{color:var(--muted)}
+  .repo b{font-weight:600}
+  .topnav{display:none;margin-left:auto;gap:22px;font-size:.875rem}
+  .topnav a{color:var(--muted);text-decoration:none}
+  .topnav a:hover{color:var(--text)}
+  .topbar .btn{margin-left:auto}
+  @media(min-width:820px){.topnav{display:flex}.topbar .btn{margin-left:0}}
+
+  .btn{
+    display:inline-flex;align-items:center;gap:7px;padding:8px 14px;
+    border-radius:7px;border:1px solid var(--line-2);background:#fff;color:var(--text);
+    font-size:.8125rem;font-weight:500;text-decoration:none;cursor:pointer;
+    font-family:var(--sans);transition:border-color .15s,background .15s;
+  }
+  .btn:hover{border-color:var(--muted)}
+  .btn-solid{background:var(--ink);border-color:var(--ink);color:#fff}
+  .btn-solid:hover{background:var(--ink-2);border-color:var(--ink-2)}
+
+  /* ------------------------------------------------------------ hero --- */
+  .hero{padding:60px 0 20px}
+  .hero h1{
+    font-family:var(--mono);font-size:clamp(2rem,5.5vw,3rem);
+    letter-spacing:-.04em;font-weight:600;
+  }
+  .hero h1 .slash{color:var(--faint);font-weight:400}
+  .hero .tagline{margin-top:18px;font-size:clamp(1.125rem,2.4vw,1.375rem);max-width:30em;line-height:1.45;letter-spacing:-.015em}
+  .hero .sub{margin-top:16px;max-width:40em;color:var(--muted)}
+
+  .badges{display:flex;flex-wrap:wrap;gap:7px;margin-top:22px}
+  .badge{
+    display:inline-flex;align-items:center;gap:6px;font-family:var(--mono);
+    font-size:.6875rem;padding:3px 9px;border-radius:5px;
+    border:1px solid var(--line-2);background:#fff;color:var(--muted);
+  }
+  .badge b{font-weight:600;color:var(--text)}
+
+  /* install block: the thing an OSS visitor came for */
+  .install{margin-top:28px}
+  .cmd{
+    display:flex;align-items:center;gap:12px;background:var(--ink);
+    border-radius:10px;padding:14px 14px 14px 16px;
+    box-shadow:0 10px 30px rgba(10,43,40,.14);
+  }
+  .cmd code{
+    font-family:var(--mono);font-size:.8125rem;color:#D7F0EB;
+    overflow-x:auto;white-space:nowrap;flex:1;min-width:0;
+  }
+  .cmd code .p{color:#5B9A92;user-select:none}
+  .cmd code .f{color:var(--teal-bright)}
+  .copy{
+    flex:none;border:1px solid rgba(255,255,255,.2);background:transparent;
+    color:#9FCFC7;border-radius:6px;padding:5px 10px;cursor:pointer;
+    font-family:var(--mono);font-size:.6875rem;transition:.15s;
+  }
+  .copy:hover{border-color:rgba(255,255,255,.5);color:#fff}
+  .alt{margin-top:10px;font-family:var(--mono);font-size:.75rem;color:var(--faint)}
+  .alt a{color:var(--muted)}
+
+  /* ------------------------------------------------------- terminal --- */
+  .term{
+    background:var(--ink);border-radius:12px;overflow:hidden;margin-top:40px;
+    box-shadow:0 18px 46px rgba(10,43,40,.18);
+  }
+  .term-bar{
+    display:flex;align-items:center;gap:8px;padding:11px 14px;
+    border-bottom:1px solid rgba(255,255,255,.09);
+  }
+  .term-bar i{width:9px;height:9px;border-radius:999px;background:rgba(255,255,255,.16);display:block}
+  .term-bar span{font-family:var(--mono);font-size:.6875rem;color:#6FA9A1;margin-left:6px}
+  .term pre{
+    margin:0;padding:18px 16px 20px;overflow-x:auto;
+    font-family:var(--mono);font-size:.75rem;line-height:1.85;color:#C7E5E0;
+  }
+  .term .p{color:#5B9A92}
+  .term .ok{color:var(--teal-bright)}
+  .term .crit{color:#FCA5A5;font-weight:600}
+  .term .conf{color:#FCA5A5;font-weight:600}
+  .term .warnk{color:#FCD34D;font-weight:600}
+  .term .dim{color:#6FA9A1}
+  .term .path{color:#8FC9C0}
+  .term .val{color:#fff}
+
+  /* rendered fragment of the local UI */
+  .idx{
+    margin-top:22px;border:1px solid var(--line);border-radius:12px;background:#fff;overflow:hidden;
+    box-shadow:0 1px 2px rgba(10,43,40,.04),0 14px 36px rgba(10,43,40,.09);
+  }
+  .idx-bar{
+    display:flex;align-items:center;gap:10px;padding:11px 14px;
+    border-bottom:1px solid var(--line);background:var(--paper);
+  }
+  .idx-url{
+    font-family:var(--mono);font-size:.6875rem;color:var(--muted);
+    background:#fff;border:1px solid var(--line);border-radius:5px;padding:3px 9px;
+  }
+  .idx-count{font-family:var(--mono);font-size:.6875rem;color:var(--faint);margin-left:auto}
+  .idx-row{
+    display:flex;align-items:center;gap:14px;padding:13px 15px;border-top:1px solid var(--line);
+  }
+  .idx-row:first-of-type{border-top:0}
+  .idx-main{min-width:0;flex:1}
+  .idx-main b{display:block;font-size:.875rem;font-weight:500}
+  .idx-main span{
+    display:block;font-size:.75rem;color:var(--faint);margin-top:2px;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  }
+  .idx-val{
+    font-family:var(--mono);font-size:.75rem;color:#57534E;flex:none;
+    display:none;max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  }
+  @media(min-width:640px){.idx-val{display:block}}
+  .idx-note{font-family:var(--mono);font-size:.6875rem;color:var(--faint)}
+
+  /* ------------------------------------------------------- sections --- */
+  section{padding:56px 0}
+  .band{background:#fff;border-block:1px solid var(--line)}
+  h2{font-size:clamp(1.4rem,3vw,1.85rem)}
+  .sec-head{max-width:44em}
+  .sec-head h2{margin-top:12px}
+  .sec-head p{margin-top:14px}
+
+  .cols{display:grid;gap:18px;margin-top:32px}
+  @media(min-width:760px){.cols{grid-template-columns:repeat(2,1fr)}}
+  @media(min-width:760px){.cols-3{grid-template-columns:repeat(3,1fr)}}
+
+  .box{border:1px solid var(--line);border-radius:11px;padding:18px;background:var(--paper)}
+  .band .box{background:var(--paper)}
+  .box h3{font-size:.9375rem;margin-top:12px}
+  .box p{margin-top:7px;font-size:.875rem;color:var(--muted);line-height:1.6}
+
+  .chip{
+    display:inline-flex;align-items:center;padding:2px 9px;border-radius:999px;
+    font-size:.6875rem;font-weight:500;line-height:1.7;border:1px solid;
+  }
+  .chip-conflict{background:var(--red-bg);color:var(--red);border-color:#FCA5A5}
+  .chip-below{background:var(--amber-bg);color:var(--amber);border-color:#FCD34D}
+  .chip-stone{background:#F5F5F4;color:var(--muted);border-color:var(--line-2)}
+  .chip-teal{background:#F0FDFA;color:var(--teal-2);border-color:#99F6E4}
+
+  /* code sample */
+  .code{
+    border:1px solid var(--line);border-radius:11px;background:#fff;overflow:hidden;margin-top:24px;
+  }
+  .code header{
+    display:flex;align-items:center;justify-content:space-between;gap:12px;
+    padding:10px 14px;border-bottom:1px solid var(--line);background:var(--paper);
+  }
+  .code header code{font-family:var(--mono);font-size:.75rem;color:var(--muted)}
+  .code pre{
+    margin:0;padding:16px 14px;overflow-x:auto;
+    font-family:var(--mono);font-size:.75rem;line-height:1.8;color:#292524;
+  }
+  .code .c{color:var(--faint)}
+  .code .k{color:var(--teal-2)}
+  .code .s{color:#9A3412}
+
+  /* status table */
+  .status{margin-top:30px;border-top:1px solid var(--line)}
+  .status li{
+    display:grid;grid-template-columns:1fr auto;gap:12px;align-items:baseline;
+    padding:13px 0;border-bottom:1px solid var(--line);font-size:.9375rem;
+  }
+  .status li span.what{min-width:0}
+  .status li em{display:block;font-style:normal;font-size:.8125rem;color:var(--muted);margin-top:2px}
+  .state{font-family:var(--mono);font-size:.6875rem;letter-spacing:.06em;text-transform:uppercase;flex:none}
+  .state.good{color:var(--teal-2)}
+  .state.part{color:var(--amber)}
+  .state.none{color:var(--faint)}
+
+  /* contribute list */
+  .issues{margin-top:26px;display:grid;gap:10px}
+  .issue{
+    display:flex;flex-wrap:wrap;align-items:center;gap:10px;
+    padding:13px 15px;border:1px solid var(--line);border-radius:9px;background:#fff;
+    font-size:.875rem;text-decoration:none;color:var(--text);
+  }
+  .issue:hover{border-color:var(--line-2)}
+  .issue .num{font-family:var(--mono);font-size:.75rem;color:var(--faint);flex:none}
+  .issue .tag{
+    font-family:var(--mono);font-size:.625rem;padding:2px 7px;border-radius:999px;
+    border:1px solid #99F6E4;background:#F0FDFA;color:var(--teal-2);margin-left:auto;flex:none;
+  }
+  .issue .tag.help{border-color:#FCD34D;background:var(--amber-bg);color:var(--amber)}
+
+  /* notice */
+  .notice{
+    margin-top:32px;padding:16px 18px;border:1px solid var(--line-2);
+    border-left:2px solid var(--teal);border-radius:0 9px 9px 0;background:#fff;
+    font-size:.875rem;color:var(--muted);line-height:1.65;
+  }
+
+  footer{background:#fff;border-top:1px solid var(--line);padding:30px 0}
+  .foot{display:flex;flex-wrap:wrap;gap:12px 26px;align-items:center;font-size:.8125rem;color:var(--muted)}
+  .foot nav{display:flex;flex-wrap:wrap;gap:20px;margin-left:auto}
+  .foot a{color:var(--muted);text-decoration:none}
+  .foot a:hover{color:var(--text)}
+
+  a:focus-visible,button:focus-visible{outline:2px solid var(--teal);outline-offset:3px;border-radius:5px}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="wrap">
+    <a class="repo" href="#top">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="10"></circle>
+        <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon>
+      </svg>
+      <span class="owner">intuneatlas&thinsp;/</span><b>intuneatlas</b>
+    </a>
+    <nav class="topnav">
+      <a href="#scan">The scan</a>
+      <a href="#baselines">Baselines</a>
+      <a href="#run">Run it</a>
+      <a href="#status">Status</a>
+      <a href="#contribute">Contribute</a>
+    </nav>
+    <a class="btn btn-solid" href="#top">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8a8 8 0 0 0 5.47 7.59c.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.4 7.4 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+      Star
+    </a>
+  </div>
+</div>
+
+<main id="top">
+
+  <!-- hero -->
+  <section class="hero">
+    <div class="wrap">
+      <h1><span class="slash">./</span>intuneatlas</h1>
+      <p class="tagline">Flatten every Intune profile into one settings index, keyed on the CSP path.</p>
+      <p class="sub">
+        The portal is organised around policies. Devices apply a merged set of settings. This reads your tenant
+        read-only and rebuilds that merge, a couple of thousand settings, then serves it as something you can
+        actually read: grouped, searchable by CSP path, with the conflicts and coverage gaps surfaced. Runs on your
+        machine. Headless when you want a file and an exit code instead.
+      </p>
+
+      <div class="badges">
+        <span class="badge">MIT</span>
+        <span class="badge">TypeScript</span>
+        <span class="badge">v0.6.2 &middot; <b>alpha</b></span>
+        <span class="badge">★ <b>1,284</b></span>
+        <span class="badge">Graph API &middot; read-only</span>
+      </div>
+
+      <div class="install">
+        <div class="cmd">
+          <code id="cmd"><span class="p">$</span> npx intuneatlas ui <span class="f">--tenant</span> contoso.onmicrosoft.com</code>
+          <button class="copy" id="copyBtn" type="button">copy</button>
+        </div>
+        <p class="alt">
+          indexes read-only, serves on localhost &middot; nothing leaves your machine &middot;
+          <a href="#run">headless scan</a> for CI
+        </p>
+      </div>
+
+      <!-- signature: one command, then the thing you actually read -->
+      <div class="term" id="scan">
+        <div class="term-bar">
+          <i></i><i></i><i></i>
+          <span>intuneatlas ui — contoso.onmicrosoft.com</span>
+        </div>
+<pre><span class="p">$</span> npx intuneatlas ui <span class="f">--tenant</span> contoso.onmicrosoft.com
+
+  <span class="ok">✓</span> device code sign-in <span class="dim">— admin@contoso.onmicrosoft.com (read-only)</span>
+  <span class="ok">✓</span> 41 policies <span class="dim">→</span> 1,847 settings indexed <span class="dim">in 3m 41s</span>
+  <span class="ok">✓</span> 11 findings <span class="dim">·</span> <span class="crit">3 critical</span>
+
+  <span class="dim">→</span> <span class="path">http://localhost:7878</span>
+</pre>
+      </div>
+
+      <div class="idx">
+        <div class="idx-bar">
+          <span class="idx-url">localhost:7878/settings</span>
+          <span class="idx-count">1,847 indexed · 11 findings</span>
+        </div>
+        <div class="idx-row">
+          <span class="idx-main">
+            <b>Quality update deferral</b>
+            <span>Windows · 2 policies · 412 devices</span>
+          </span>
+          <span class="idx-val">14 days&nbsp;&nbsp;/&nbsp;&nbsp;2 days</span>
+          <span class="chip chip-conflict">Conflict</span>
+        </div>
+        <div class="idx-row">
+          <span class="idx-main">
+            <b>Tamper protection <span class="idx-note">· 2 notes</span></b>
+            <span>Windows · Defender &amp; ASR Rules · 1,312 devices</span>
+          </span>
+          <span class="idx-val">Off</span>
+          <span class="chip chip-below">Below baseline</span>
+        </div>
+        <div class="idx-row">
+          <span class="idx-main">
+            <b>Download mode</b>
+            <span>Windows · Delivery Optimization · no groups assigned</span>
+          </span>
+          <span class="idx-val">HTTP only</span>
+          <span class="chip chip-stone">Not deployed</span>
+        </div>
+        <div class="idx-row">
+          <span class="idx-main">
+            <b>Escrow recovery key to Intune</b>
+            <span>macOS · FileVault · 342 devices</span>
+          </span>
+          <span class="idx-val">Enabled</span>
+          <span class="chip chip-teal">Baseline</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- what it finds -->
+  <section class="band">
+    <div class="wrap">
+      <div class="sec-head">
+        <p class="kicker">What it reports</p>
+        <h2>Four states. Only one of them is quiet.</h2>
+        <p class="lede">
+          Every setting in the index lands in exactly one. Anything already correct stays grey, so the output is a
+          worklist rather than a wall of green ticks.
+        </p>
+      </div>
+
+      <div class="cols">
+        <div class="box">
+          <span class="chip chip-conflict">Conflict</span>
+          <h3>Two profiles disagree</h3>
+          <p>Same path, different values, overlapping assignment. Both sources are printed with their value so you know which one to rescope.</p>
+        </div>
+        <div class="box">
+          <span class="chip chip-below">Below baseline</span>
+          <h3>Weaker than the benchmark</h3>
+          <p>Checked against whichever baseline you point it at. Every finding carries a rationale and a citation, not just a severity.</p>
+        </div>
+        <div class="box">
+          <span class="chip chip-stone">Not deployed</span>
+          <h3>Configured, reaching nothing</h3>
+          <p>The profile looks healthy in the portal but targets no group. Silent, and invisible in every per-policy view.</p>
+        </div>
+        <div class="box">
+          <span class="chip chip-teal">Documented</span>
+          <h3>Someone wrote down why</h3>
+          <p>Notes live in a file in your repo, keyed by path. Findings print with their thread attached, so context survives the person who set it.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- baselines -->
+  <section id="baselines">
+    <div class="wrap">
+      <div class="sec-head">
+        <p class="kicker">Baselines</p>
+        <h2>A baseline is just YAML in a directory.</h2>
+        <p class="lede">
+          Ships with the Microsoft security baselines and CIS Level 1 and 2. Fork them, or keep your own alongside
+          them. House rules and benchmark rules evaluate identically, and both print their source.
+        </p>
+      </div>
+
+      <div class="code">
+        <header>
+          <code>baselines/windows/defender.yml</code>
+          <code class="muted">yaml</code>
+        </header>
+<pre><span class="c">- </span><span class="k">id</span>: defender.tamper-protection
+  <span class="k">name</span>: Tamper protection
+  <span class="k">platform</span>: windows
+  <span class="k">path</span>: <span class="s">./Device/Vendor/MSFT/Defender/Configuration/TamperProtection</span>
+  <span class="k">expect</span>: enabled
+  <span class="k">severity</span>: critical
+  <span class="k">rationale</span>: &gt;
+    Any process running as SYSTEM can silently disable real-time
+    scanning while tamper protection is off.
+  <span class="k">source</span>: <span class="s">Microsoft Defender for Endpoint hardening guidance</span>
+
+<span class="c">- </span><span class="k">id</span>: update.quality-deferral
+  <span class="k">name</span>: Quality update deferral
+  <span class="k">platform</span>: windows
+  <span class="k">path</span>: <span class="s">./Device/Vendor/MSFT/Policy/Config/Update/DeferQualityUpdatesPeriodInDays</span>
+  <span class="k">expect</span>:
+    <span class="k">max</span>: 7
+  <span class="k">severity</span>: high
+  <span class="k">source</span>: <span class="s">CIS Microsoft Windows 11 Benchmark, L1</span>
+</pre>
+      </div>
+
+      <div class="notice">
+        Baseline rules are the easiest thing to contribute and the most useful. If your team has a house rule with a
+        real justification behind it, that's a pull request: one file, one block, no TypeScript required.
+      </div>
+    </div>
+  </section>
+
+  <!-- run it -->
+  <section id="run" class="band">
+    <div class="wrap">
+      <div class="sec-head">
+        <p class="kicker">Run it</p>
+        <h2>Open it, query it, or wire it into CI.</h2>
+        <p class="lede">
+          One index, four entry points. The default command builds it and serves it on localhost; the rest hand you
+          a single value, a file, or an exit code instead.
+        </p>
+      </div>
+
+      <div class="cols">
+        <div class="box">
+          <p class="kicker">Read the index</p>
+          <h3>Web UI &mdash; <code style="font-family:var(--mono);font-size:.8125rem;font-weight:400">intuneatlas ui</code></h3>
+          <p>
+            Every setting grouped by category, searchable by CSP path, with sources, note threads, and the review
+            gate for staged changes. Runs on your machine against the report on disk, with no server and no upload.
+          </p>
+        </div>
+        <div class="box">
+          <p class="kicker">Single value</p>
+          <h3>get &mdash; <code style="font-family:var(--mono);font-size:.8125rem;font-weight:400">intuneatlas get &lt;path&gt;</code></h3>
+          <p>
+            One setting, every profile that sets it, and each value. Five lines of output, pipeable, no index
+            served and no browser opened.
+          </p>
+        </div>
+        <div class="box">
+          <p class="kicker">Scheduled</p>
+          <h3>Headless scan</h3>
+          <p>
+            JSON or SARIF to disk and a non-zero exit when the tenant drifts past your threshold. The Docker image
+            takes an app registration from the environment.
+          </p>
+        </div>
+        <div class="box">
+          <p class="kicker">Continuous</p>
+          <h3>GitHub Action</h3>
+          <p>The headless scan on a cron, with findings as PR annotations. Fails the run at your chosen severity.</p>
+        </div>
+      </div>
+
+      <div class="term" style="margin-top:26px">
+        <div class="term-bar">
+          <i></i><i></i><i></i>
+          <span>scheduled run — sarif to disk, non-zero on drift</span>
+        </div>
+<pre><span class="p">$</span> intuneatlas scan <span class="f">--baseline</span> cis-l1 <span class="f">--fail-on</span> high <span class="f">--format</span> sarif
+
+  <span class="dim">41 policies · 1,847 settings · 11 findings (3 critical, 3 high, 3 medium, 2 low)</span>
+  <span class="dim">wrote ./intuneatlas.sarif</span>
+  <span class="crit">exit 1</span>  <span class="dim">— 6 findings at or above `high`</span>
+
+</pre>
+      </div>
+
+      <div class="code">
+        <header>
+          <code>.github/workflows/tenant-drift.yml</code>
+          <code class="muted">yaml</code>
+        </header>
+<pre><span class="k">on</span>:
+  <span class="k">schedule</span>: [{ <span class="k">cron</span>: <span class="s">"0 7 * * 1"</span> }]
+
+<span class="k">jobs</span>:
+  <span class="k">drift</span>:
+    <span class="k">runs-on</span>: ubuntu-latest
+    <span class="k">steps</span>:
+      - <span class="k">uses</span>: intuneatlas/scan-action@v1
+        <span class="k">with</span>:
+          <span class="k">baseline</span>: cis-l1
+          <span class="k">fail-on</span>: high        <span class="c"># exit non-zero at high or critical</span>
+          <span class="k">notes</span>: <span class="s">./intune-notes.yml</span>
+</pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- status -->
+  <section id="status">
+    <div class="wrap">
+      <div class="sec-head">
+        <p class="kicker">Project status</p>
+        <h2>Alpha, and honest about it.</h2>
+        <p class="lede">
+          Windows coverage is solid because that's where the contributors' fleets are. Apple and Android are thinner.
+          Here's exactly where things stand at v0.6.2.
+        </p>
+      </div>
+
+      <ul class="status">
+        <li>
+          <span class="what">Windows configuration &amp; update rings<em>Full CSP path resolution, conflict detection, settings catalog</em></span>
+          <span class="state good">stable</span>
+        </li>
+        <li>
+          <span class="what">Compliance policies &amp; tenant defaults<em>Including the secureByDefault check that catches unmanaged devices</em></span>
+          <span class="state good">stable</span>
+        </li>
+        <li>
+          <span class="what">Enrollment, ADE tokens, certificate expiry<em>Expiry warnings for ADE and APNs</em></span>
+          <span class="state good">stable</span>
+        </li>
+        <li>
+          <span class="what">macOS &amp; iOS payloads<em>Indexes and reports, but payload key mapping is incomplete, so some settings show a raw identifier</em></span>
+          <span class="state part">partial</span>
+        </li>
+        <li>
+          <span class="what">Android Enterprise<em>Work profile restrictions only. Fully managed and dedicated devices are not mapped yet</em></span>
+          <span class="state part">partial</span>
+        </li>
+        <li>
+          <span class="what">Write-back / deploy staged changes<em>Behind <code style="font-family:var(--mono);font-size:.75rem">--experimental-write</code>. Review gate works; rollback does not yet</em></span>
+          <span class="state none">experimental</span>
+        </li>
+        <li>
+          <span class="what">App protection &amp; Conditional Access policies<em>Out of scope for now. Different object model, would deserve its own index</em></span>
+          <span class="state none">not planned</span>
+        </li>
+      </ul>
+
+      <div class="notice">
+        Not affiliated with, endorsed by, or supported by Microsoft. Intune and Microsoft Graph are Microsoft
+        trademarks. This project reads a tenant through the documented Graph API and nothing else. If a scan ever
+        surprises you, open an issue and paste the redacted report.
+      </div>
+    </div>
+  </section>
+
+  <!-- contribute -->
+  <section id="contribute" class="band">
+    <div class="wrap">
+      <div class="sec-head">
+        <p class="kicker">Contribute</p>
+        <h2>Baseline rules and platform coverage, mostly.</h2>
+        <p class="lede">
+          Two contributor paths. Writing a rule needs tenant experience and no TypeScript; extending platform
+          coverage needs the opposite. Both are wanted.
+        </p>
+      </div>
+
+      <div class="issues">
+        <a class="issue" href="#contribute">
+          <span class="num">#212</span>
+          <span>Map remaining com.apple.applicationaccess payload keys to friendly names</span>
+          <span class="tag help">good first issue</span>
+        </a>
+        <a class="issue" href="#contribute">
+          <span class="num">#198</span>
+          <span>Android fully-managed device restrictions are not indexed</span>
+          <span class="tag">platform</span>
+        </a>
+        <a class="issue" href="#contribute">
+          <span class="num">#186</span>
+          <span>Add CIS Level 2 rules for Windows 11 24H2 attack surface reduction</span>
+          <span class="tag help">good first issue</span>
+        </a>
+        <a class="issue" href="#contribute">
+          <span class="num">#174</span>
+          <span>Rollback for deployed changes behind --experimental-write</span>
+          <span class="tag">core</span>
+        </a>
+      </div>
+
+      <div class="notice">
+        Every baseline rule needs a citation: a benchmark section, vendor guidance, or a documented tenant
+        observation. "It's more secure" isn't reviewable, and a rule nobody can trace gets removed the first time it
+        fires a false positive on someone's fleet.
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap foot">
+    <span>MIT © 2026 intuneatlas contributors</span>
+    <nav>
+      <a href="#top">Docs</a>
+      <a href="#baselines">Baselines</a>
+      <a href="#status">Changelog</a>
+      <a href="#contribute">Code of conduct</a>
+      <a href="#contribute">Security policy</a>
+    </nav>
+  </div>
+</footer>
+
+<script>
+  (function () {
+    var btn = document.getElementById("copyBtn");
+    if (!btn) return;
+    btn.addEventListener("click", function () {
+      var text = "npx intuneatlas ui --tenant contoso.onmicrosoft.com";
+      function done() {
+        btn.textContent = "copied";
+        setTimeout(function () { btn.textContent = "copy"; }, 1500);
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, fallback);
+      } else {
+        fallback();
+      }
+      function fallback() {
+        var el = document.createElement("textarea");
+        el.value = text;
+        el.setAttribute("readonly", "");
+        el.style.position = "absolute";
+        el.style.left = "-9999px";
+        document.body.appendChild(el);
+        el.select();
+        try { document.execCommand("copy"); } catch (e) {}
+        document.body.removeChild(el);
+        done();
+      }
+    });
+  })();
+</script>
+
+</body>
+</html>
