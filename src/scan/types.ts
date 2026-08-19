@@ -20,6 +20,21 @@ export interface RawPolicy {
   settings: RawSetting[];
 }
 
+/**
+ * Compliance policies and enrollment configurations: flat, typed-per-kind
+ * Graph resources (no nested settingInstance model like Settings Catalog),
+ * so there's nothing to merge into the settings index — just identity and
+ * deployment status.
+ */
+export interface RawSimplePolicy {
+  id: string;
+  name: string;
+  platform: string;
+  deployed: boolean;
+  /** Enrollment configurations only — lower value wins when multiple target the same user. */
+  priority?: number;
+}
+
 export type SettingIndexState = "Conflict" | "Not deployed" | "Baseline";
 
 export interface SettingIndexSource {

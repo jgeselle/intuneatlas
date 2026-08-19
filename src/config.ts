@@ -16,6 +16,9 @@ export const DELEGATED_SCOPES = [
   "https://graph.microsoft.com/DeviceManagementConfiguration.Read.All",
   "https://graph.microsoft.com/DeviceManagementManagedDevices.Read.All",
   "https://graph.microsoft.com/Organization.Read.All",
+  // deviceEnrollmentConfigurations reads need this specifically — it's not
+  // covered by DeviceManagementConfiguration.Read.All above.
+  "https://graph.microsoft.com/DeviceManagementServiceConfig.Read.All",
 ];
 
 // App-only (client-credentials) tokens are scoped by whatever application

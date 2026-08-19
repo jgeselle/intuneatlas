@@ -1,3 +1,4 @@
+import { isDeployed } from "./assignments.js";
 import type { RawPolicy, SettingIndexEntry, SettingIndexSource, SettingIndexState } from "./types.js";
 
 interface IndexBucket {
@@ -19,7 +20,7 @@ export function buildSettingIndex(policies: RawPolicy[]): SettingIndexEntry[] {
   const buckets = new Map<string, IndexBucket>();
 
   for (const policy of policies) {
-    const deployed = isPolicyDeployed(policy);
+    const deployed = isDeployed(policy.assignments);
 
     for (const setting of policy.settings) {
       const key = `${setting.name}::${policy.platform}`;
@@ -64,9 +65,4 @@ export function buildSettingIndex(policies: RawPolicy[]): SettingIndexEntry[] {
       };
     })
     .sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name));
-}
-
-/** A policy counts as deployed if it targets anything beyond pure exclusions. */
-function isPolicyDeployed(policy: RawPolicy): boolean {
-  return policy.assignments.some((a) => a.kind !== "group" || !a.excluded);
 }
