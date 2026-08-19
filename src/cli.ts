@@ -10,7 +10,9 @@ const program = new Command();
 program
   .name("intuneatlas")
   .description("Flatten every Intune profile into one settings index, keyed on the CSP path.")
-  .version("0.0.1");
+  // Keep in sync with package.json's "version" — not read dynamically
+  // because the packaged exe doesn't ship package.json alongside it.
+  .version("0.0.2");
 
 function withAuthOptions(command: Command): Command {
   return command
