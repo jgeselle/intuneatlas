@@ -136,7 +136,7 @@ function NoteThread({ notes = [], onAdd }) {
             <li key={n.id} className="rounded-md border border-stone-200 bg-stone-50 p-3">
               <div className="flex items-baseline justify-between gap-2 text-xs">
                 <span className="font-medium text-stone-700">{n.author}</span>
-                <span className="shrink-0 text-stone-400">{n.date}</span>
+                <span className="shrink-0 text-stone-400">{new Date(n.createdAt).toLocaleDateString()}</span>
               </div>
               <p className="mt-1.5 text-xs leading-relaxed text-stone-600">{n.text}</p>
             </li>
@@ -655,15 +655,90 @@ function SimplePolicyList({ kindLabel, items, query, setQuery, onOpen }) {
   );
 }
 
+/* -------------------------------------------------------- connect screen --- */
+
+function ConnectScreen({ onConnected }) {
+  const [tenant, setTenant] = useState("");
+  const [scanning, setScanning] = useState(false);
+  const [error, setError] = useState(null);
+
+  async function submit(e) {
+    e.preventDefault();
+    if (!tenant.trim() || scanning) return;
+    setScanning(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/scan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tenant: tenant.trim() }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || "Scan failed");
+      onConnected(body);
+    } catch (err) {
+      setError(err.message);
+      setScanning(false);
+    }
+  }
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-stone-50 px-4">
+      <div className="w-full max-w-sm rounded-lg border border-stone-200 bg-white p-6">
+        <div className="flex items-center gap-2.5">
+          <Compass className="h-6 w-6 shrink-0 text-teal-700" />
+          <div className="text-sm font-semibold">intuneatlas</div>
+        </div>
+        <h1 className="mt-4 text-lg font-semibold">Connect a tenant</h1>
+        <p className="mt-1 text-sm text-stone-500">
+          Nothing's been scanned yet. Sign in to a tenant to build the settings index — this opens an interactive sign-in in your
+          browser.
+        </p>
+        <form onSubmit={submit} className="mt-4 space-y-3">
+          <input
+            value={tenant}
+            onChange={(e) => setTenant(e.target.value)}
+            placeholder="contoso.onmicrosoft.com"
+            autoFocus
+            className="w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm placeholder-stone-400 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+          />
+          <button
+            type="submit"
+            disabled={!tenant.trim() || scanning}
+            className="w-full rounded-md bg-teal-800 px-3.5 py-2 text-sm font-medium text-white hover:bg-teal-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-400"
+          >
+            {scanning ? "Scanning…" : "Sign in & scan"}
+          </button>
+        </form>
+        {error && <p className="mt-3 text-xs text-red-700">{error}</p>}
+        <p className="mt-4 text-xs text-stone-400">
+          Advanced auth (device code, client credentials) is CLI-only — run <code className="font-mono">intuneatlas ui --help</code>.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 /* ----------------------------------------------------------------- app --- */
 
-export default function App({ report }) {
+export default function App({ initialReport }) {
+  const [report, setReport] = useState(initialReport);
   const [view, setView] = useState("overview");
   const [query, setQuery] = useState("");
   const [platform, setPlatform] = useState("All");
-  const [notes, setNotes] = useState({});
+  const [notes, setNotes] = useState(initialReport?.notes ?? {});
   const [open, setOpen] = useState(null);
   const [toast, setToast] = useState(null);
+
+  // Notes are persisted server-side and aren't scan-specific — resync
+  // whenever a fresh report comes in (e.g. after connecting a tenant).
+  useEffect(() => {
+    if (report?.notes) setNotes(report.notes);
+  }, [report]);
+
+  if (!report) {
+    return <ConnectScreen onConnected={setReport} />;
+  }
 
   const settingIndex = report.settings ?? [];
   const compliancePolicies = report.compliancePolicies ?? [];
@@ -674,12 +749,20 @@ export default function App({ report }) {
     window.setTimeout(() => setToast(null), 2600);
   };
 
-  function addNote(key, text) {
-    setNotes((n) => ({
-      ...n,
-      [key]: [...(n[key] || []), { id: key + "-" + Date.now(), author: "You", date: new Date().toLocaleDateString(), text }],
-    }));
-    flash("Note added");
+  async function addNote(key, text) {
+    try {
+      const res = await fetch("/api/notes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetKey: key, text }),
+      });
+      const updated = await res.json();
+      if (!res.ok) throw new Error(updated.error || "Couldn't save the note");
+      setNotes((n) => ({ ...n, [key]: updated }));
+      flash("Note added");
+    } catch (err) {
+      flash(err.message);
+    }
   }
 
   const nav = [

@@ -1,5 +1,6 @@
-#!/usr/bin/env node
+#!/usr/bin/env -S node --no-warnings
 import { Command } from "commander";
+import { runExport } from "./commands/export.js";
 import { runLogin } from "./commands/login.js";
 import { runScan } from "./commands/scan.js";
 import { runUi } from "./commands/ui.js";
@@ -78,6 +79,24 @@ withOptionalAuthOptions(program.command("ui"))
         clientSecret: opts.clientSecret,
         deviceCode: opts.deviceCode,
         report: opts.report,
+      }),
+    ),
+  );
+
+program
+  .command("export")
+  .description("Export the last scan from local storage — never re-scans the tenant.")
+  .option("--tenant <id-or-domain>", "Only export the latest scan for this tenant")
+  .option("--kind <kind>", "settings (default), compliance, or enrollment", "settings")
+  .option("--format <format>", "csv (default; only format available for now)", "csv")
+  .option("--out <path>", "Write to a file instead of stdout")
+  .action(
+    withErrorHandling((opts) =>
+      runExport({
+        tenant: opts.tenant,
+        kind: opts.kind,
+        format: opts.format,
+        out: opts.out,
       }),
     ),
   );

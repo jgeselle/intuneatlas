@@ -31,6 +31,7 @@ export function createInteractiveAuth(options: InteractiveOptions): AuthProvider
 
   return {
     flow,
+    tenantId: options.tenantId,
     async getToken() {
       try {
         return await getTokenWithCache(options);

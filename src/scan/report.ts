@@ -6,6 +6,7 @@ import { buildSettingIndex } from "./index.js";
 export interface ScanReport {
   scannedAt: string;
   flow: string;
+  tenant: string;
   policyCount: number;
   settingCount: number;
   conflictCount: number;
@@ -14,7 +15,7 @@ export interface ScanReport {
   enrollmentConfigurations: Awaited<ReturnType<typeof fetchEnrollmentConfigurations>>;
 }
 
-export async function buildReport(token: string, flow: string): Promise<ScanReport> {
+export async function buildReport(token: string, flow: string, tenant: string): Promise<ScanReport> {
   const [policies, compliancePolicies, enrollmentConfigurations] = await Promise.all([
     fetchConfigurationPolicies(token),
     fetchCompliancePolicies(token),
@@ -25,6 +26,7 @@ export async function buildReport(token: string, flow: string): Promise<ScanRepo
   return {
     scannedAt: new Date().toISOString(),
     flow,
+    tenant,
     policyCount: policies.length,
     settingCount: settingIndex.length,
     conflictCount: settingIndex.filter((e) => e.conflict).length,

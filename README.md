@@ -20,15 +20,17 @@ coverage beyond Windows don't exist yet — see the roadmap below.
 ```
 npm install
 npm run build
-node dist/cli.js login --tenant contoso.onmicrosoft.com
-node dist/cli.js scan --tenant contoso.onmicrosoft.com --out report.json
-node dist/cli.js ui --report report.json
+node dist/cli.js ui
 ```
 
-`login`/`scan` also take `--device-code` (interactive fallback) or
-`--client-id`/`--client-secret` (unattended, client-credentials flow).
-`ui` can run a live scan itself via `--tenant` instead of reading a
-saved report.
+`ui` with no flags opens the local web UI and, the first time, shows a
+"connect a tenant" screen right there — no CLI flags needed to get started.
+It also remembers your last successful scan, so reopening it later just
+shows what you already have. `--report <file>` reads a saved report instead,
+and `--tenant <domain>` runs a scan up front rather than through the browser.
+`login`/`scan` (headless) also exist directly, and both `--device-code`
+(interactive fallback) and `--client-id`/`--client-secret` (unattended,
+client-credentials flow) are available as CLI flags throughout.
 
 ## What's in this repo
 

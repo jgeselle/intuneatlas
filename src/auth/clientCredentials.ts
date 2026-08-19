@@ -18,6 +18,7 @@ export function createClientCredentialsAuth(options: ClientCredentialsOptions): 
 
   return {
     flow: "client-credentials",
+    tenantId: options.tenantId,
     async getToken() {
       const result = await credential.getToken(APPLICATION_SCOPE);
       if (!result) {

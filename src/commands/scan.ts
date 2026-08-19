@@ -1,6 +1,7 @@
 import { writeFile } from "node:fs/promises";
 import { resolveAuth, type ResolveAuthOptions } from "../auth/index.js";
 import { buildReport } from "../scan/report.js";
+import { recordScan } from "../storage/scans.js";
 
 export interface ScanOptions extends ResolveAuthOptions {
   out?: string;
@@ -10,7 +11,8 @@ export async function runScan(options: ScanOptions): Promise<void> {
   const auth = resolveAuth(options);
   const token = await auth.getToken();
 
-  const report = await buildReport(token, auth.flow);
+  const report = await buildReport(token, auth.flow, auth.tenantId);
+  recordScan(report);
   const json = JSON.stringify(report, null, 2);
 
   if (options.out) {
