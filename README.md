@@ -1,5 +1,7 @@
 # intuneatlas
 
+**[intuneatlas.com](https://intuneatlas.com)**
+
 Flatten every Intune profile into one settings index, keyed on the CSP path.
 
 The Intune portal is organised around policies. Devices apply a merged set of
