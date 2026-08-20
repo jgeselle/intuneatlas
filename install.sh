@@ -11,7 +11,7 @@
 
 set -euo pipefail
 
-REPO_URL="https://github.com/jgeselle/intuneatlas.git"
+API_URL="https://api.github.com/repos/jgeselle/intuneatlas/releases/latest"
 INSTALL_DIR="$HOME/.local/share/intuneatlas"
 BIN_DIR="$HOME/.local/bin"
 
@@ -21,24 +21,31 @@ if ! command -v node >/dev/null 2>&1; then
   exit 1
 fi
 
-if ! command -v git >/dev/null 2>&1; then
-  echo "git is required but wasn't found on PATH." >&2
+if ! command -v tar >/dev/null 2>&1; then
+  echo "tar is required but wasn't found on PATH." >&2
   exit 1
 fi
 
-echo "Cloning..."
-rm -rf "$INSTALL_DIR"
-git clone --quiet "$REPO_URL" "$INSTALL_DIR"
-
-cd "$INSTALL_DIR"
-# Build whatever the latest tagged release actually is, not whatever's
-# newest on main (which can be ahead of it — landing page changes, etc.,
-# land on main without a release).
-LATEST_TAG="$(git tag --list 'v*' --sort=-v:refname | head -n1)"
-if [ -n "$LATEST_TAG" ]; then
-  git checkout --quiet "$LATEST_TAG"
+echo "Fetching the latest release..."
+RELEASE_JSON="$(curl -fsSL "$API_URL")"
+TARBALL_URL="$(printf '%s' "$RELEASE_JSON" | grep -o '"tarball_url": *"[^"]*"' | head -n1 | cut -d'"' -f4)"
+TAG_NAME="$(printf '%s' "$RELEASE_JSON" | grep -o '"tag_name": *"[^"]*"' | head -n1 | cut -d'"' -f4)"
+if [ -z "$TARBALL_URL" ]; then
+  echo "Couldn't find a tarball on the latest release." >&2
+  exit 1
 fi
 
+echo "Downloading $TAG_NAME source..."
+rm -rf "$INSTALL_DIR"
+mkdir -p "$INSTALL_DIR"
+# No git dependency: a plain source tarball from GitHub's own release API,
+# fetched with curl (already required to get this far) and extracted with
+# tar (near-universal, unlike git — this bit a real run on a minimal
+# Debian box). --strip-components drops the "owner-repo-sha/" wrapper
+# directory GitHub's tarballs are packaged with.
+curl -fsSL "$TARBALL_URL" | tar -xz -C "$INSTALL_DIR" --strip-components=1
+
+cd "$INSTALL_DIR"
 echo "Installing dependencies and building (this can take a minute)..."
 npm install --no-audit --no-fund --silent
 npm run build --silent
