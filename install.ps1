@@ -57,9 +57,15 @@ Write-Host ""
 $tenant = Read-Host "Tenant to sign in to (e.g. contoso.onmicrosoft.com) — leave blank to skip for now"
 Write-Host ""
 Write-Host "First run will show a Windows SmartScreen warning (unsigned binary) — click 'More info' then 'Run anyway'."
+Write-Host ""
+Write-Host "Starting the app now. To start it again later (new terminal, no need to reinstall): intuneatlas ui"
+Write-Host "Close this window, or Ctrl+C, whenever you're done — that stops the local server."
 
 if ($tenant) {
     & "$exeDir\intuneatlas.exe" ui --tenant $tenant
 } else {
     & "$exeDir\intuneatlas.exe" ui
 }
+
+Write-Host ""
+Write-Host "Stopped. Start it again anytime with: intuneatlas ui"
