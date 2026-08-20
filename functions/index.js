@@ -68,16 +68,31 @@ async function fetchLatestVersion(fallback) {
   }
 }
 
+function withSecurityHeaders(response) {
+  const withHeaders = new Response(response.body, response);
+  for (const [name, value] of Object.entries(RESPONSE_HEADERS)) {
+    withHeaders.headers.set(name, value);
+  }
+  return withHeaders;
+}
+
 export async function onRequest(context) {
-  const { request, env } = context;
   const cache = caches.default;
   // Fixed synthetic key, not the real request URL — keeps the cache
   // insulated from any query-string variance on the incoming request.
-  const cacheKey = new Request("https://intuneatlas-landing-cache.internal/home", request);
+  const cacheKey = new Request("https://intuneatlas-landing-cache.internal/home", context.request);
 
-  let html = await cache.match(cacheKey);
-  if (!html) {
-    const assetResponse = await env.ASSETS.fetch(request);
+  const cached = await cache.match(cacheKey);
+  if (cached) return withSecurityHeaders(cached);
+
+  // context.next() falls through to the static asset server (there's no
+  // other Function this route could match) — called exactly once, and a
+  // clone of its result is always the safe fallback below, so a failure
+  // anywhere past this point can never throw a broken page at a visitor.
+  const assetResponse = await context.next();
+  const fallback = assetResponse.clone();
+
+  try {
     const [version, stars] = await Promise.all([fetchLatestVersion("v0.0.3"), fetchStarCount("1,284")]);
 
     const rewritten = new HTMLRewriter()
@@ -86,14 +101,12 @@ export async function onRequest(context) {
       .on("#live-stars", new TextReplacer(stars))
       .transform(assetResponse);
 
-    html = new Response(rewritten.body, rewritten);
+    const html = new Response(rewritten.body, rewritten);
     html.headers.set("Cache-Control", `public, max-age=${EDGE_CACHE_SECONDS}`);
     context.waitUntil(cache.put(cacheKey, html.clone()));
-  }
 
-  const response = new Response(html.body, html);
-  for (const [name, value] of Object.entries(RESPONSE_HEADERS)) {
-    response.headers.set(name, value);
+    return withSecurityHeaders(html);
+  } catch {
+    return withSecurityHeaders(fallback);
   }
-  return response;
 }
