@@ -51,7 +51,8 @@ async function fetchStarCount(fallback) {
   try {
     const data = await fetchGitHub(`/repos/${REPO}`);
     return typeof data.stargazers_count === "number" ? data.stargazers_count.toLocaleString("en-US") : fallback;
-  } catch {
+  } catch (err) {
+    console.error("fetchStarCount failed, using fallback:", err);
     return fallback;
   }
 }
@@ -60,7 +61,8 @@ async function fetchLatestVersion(fallback) {
   try {
     const data = await fetchGitHub(`/repos/${REPO}/releases/latest`);
     return data.tag_name || fallback;
-  } catch {
+  } catch (err) {
+    console.error("fetchLatestVersion failed, using fallback:", err);
     return fallback;
   }
 }
