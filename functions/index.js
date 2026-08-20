@@ -2,6 +2,12 @@
 // hardcoded version/star placeholders for live GitHub data, entirely at the
 // edge. No client-side fetch, no CSP loosening: the browser gets the same
 // plain static HTML it always did, just with real numbers baked in.
+//
+// Deliberately buffers the HTML to a string and does plain string
+// replacement instead of streaming it through HTMLRewriter — the page is a
+// few dozen KB, buffering it costs nothing, and it avoids any interaction
+// between HTMLRewriter and the cloned fallback response that isn't worth
+// re-litigating without real production logs to debug it against.
 
 const REPO = "jgeselle/intuneatlas";
 
@@ -26,15 +32,6 @@ const RESPONSE_HEADERS = {
   // stale star count for 15 minutes on its own.
   "Cache-Control": "public, max-age=0, must-revalidate",
 };
-
-class TextReplacer {
-  constructor(text) {
-    this.text = text;
-  }
-  element(element) {
-    element.setInnerContent(this.text);
-  }
-}
 
 async function fetchGitHub(path) {
   const res = await fetch(`https://api.github.com${path}`, {
@@ -68,6 +65,15 @@ async function fetchLatestVersion(fallback) {
   }
 }
 
+function escapeHtml(text) {
+  return String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function replaceElementText(html, id, tag, text) {
+  const pattern = new RegExp(`(<${tag} id="${id}">)[^<]*(</${tag}>)`);
+  return html.replace(pattern, `$1${escapeHtml(text)}$2`);
+}
+
 function withSecurityHeaders(response) {
   const withHeaders = new Response(response.body, response);
   for (const [name, value] of Object.entries(RESPONSE_HEADERS)) {
@@ -86,27 +92,27 @@ export async function onRequest(context) {
   if (cached) return withSecurityHeaders(cached);
 
   // context.next() falls through to the static asset server (there's no
-  // other Function this route could match) — called exactly once, and a
-  // clone of its result is always the safe fallback below, so a failure
-  // anywhere past this point can never throw a broken page at a visitor.
+  // other Function this route could match) — called exactly once.
   const assetResponse = await context.next();
-  const fallback = assetResponse.clone();
+  const originalHtml = await assetResponse.text();
 
   try {
     const [version, stars] = await Promise.all([fetchLatestVersion("v0.0.3"), fetchStarCount("1,284")]);
 
-    const rewritten = new HTMLRewriter()
-      .on("#live-version", new TextReplacer(version))
-      .on("#live-version-2", new TextReplacer(version))
-      .on("#live-stars", new TextReplacer(stars))
-      .transform(assetResponse);
+    let rewrittenHtml = replaceElementText(originalHtml, "live-version", "span", version);
+    rewrittenHtml = replaceElementText(rewrittenHtml, "live-version-2", "span", version);
+    rewrittenHtml = replaceElementText(rewrittenHtml, "live-stars", "b", stars);
 
-    const html = new Response(rewritten.body, rewritten);
+    const html = new Response(rewrittenHtml, assetResponse);
     html.headers.set("Cache-Control", `public, max-age=${EDGE_CACHE_SECONDS}`);
     context.waitUntil(cache.put(cacheKey, html.clone()));
 
     return withSecurityHeaders(html);
-  } catch {
-    return withSecurityHeaders(fallback);
+  } catch (err) {
+    // Never let this surface as a broken page — but silently falling back
+    // with no trace makes a real bug indistinguishable from "GitHub had a
+    // hiccup." Log it so it's visible in Workers Logs.
+    console.error("Landing page live-data render failed, serving static fallback:", err);
+    return withSecurityHeaders(new Response(originalHtml, assetResponse));
   }
 }
