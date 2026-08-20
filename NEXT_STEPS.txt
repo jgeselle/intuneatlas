@@ -1,0 +1,94 @@
+intuneatlas — shared/team ui: what's left for you to do
+=========================================================
+
+The code is done, typechecked, and tested as far as this environment allows.
+One manual step is blocking real sign-in from working at all, plus a couple
+of optional follow-ups.
+
+1. REQUIRED — register the redirect URI in Entra (blocks everything)
+----------------------------------------------------------------------
+The web sign-in flow (src/auth/webSession.ts) uses the existing shared app
+registration (client ID d0a404f2-0421-40bc-ad8b-866a5a2115b1), but it needs
+its own callback URL added — nothing works until this is done.
+
+  - Go to portal.azure.com > Microsoft Entra ID > App registrations
+  - Open the app with client ID d0a404f2-0421-40bc-ad8b-866a5a2115b1
+  - Authentication > Add a platform > Mobile and desktop applications
+    (Settled here after two wrong guesses, both confirmed wrong by real
+    errors: "Web" demands a client secret [AADSTS7000218] — no good, we
+    don't have one and don't want one. "Single-page application" allows no
+    secret, but Entra then requires the token be redeemed via an actual
+    browser CORS request [AADSTS9002327] — no good either, our exchange
+    happens server-side in Node, not in browser JS. "Mobile and desktop
+    applications" is the one platform that's both secretless AND redeemable
+    via a plain server-to-server POST — it's what the OLD desktop sign-in
+    flow already used, for exactly this reason: our code, despite being a
+    web server, behaves like a native app to Entra — a trusted local
+    process making a direct HTTPS call to the token endpoint.)
+  - Add this as a Custom redirect URI (not one of the predefined options):
+      http://localhost:7878/auth/callback
+    (Same https-or-localhost-only restriction applies, so 127.0.0.1 still
+    won't work — not needed anyway, the code always advertises "localhost".
+    Remove the URI from Web and/or SPA if you added it there first — it
+    only needs to live under this one platform.)
+  - Save
+
+2. Test it locally
+-------------------
+  npm run build
+  node dist/cli.js ui --tenant <your-tenant>.onmicrosoft.com
+
+First run: browser opens straight to a Microsoft sign-in screen (not the old
+desktop popup — it's now the same web flow shared mode uses). After signing
+in once, closing and reopening `ui` should skip the prompt (silent, cached
+sign-in) on Windows/macOS. On Linux it'll prompt every time — expected,
+same limitation the desktop flow already had.
+
+3. Shared/team mode needs HTTPS on a real hostname — plain --host 0.0.0.0
+     over HTTP will NOT work
+----------------------------------------------------------------------------
+The "localhost" redirect URI above only covers your own browser on your own
+machine. A teammate's browser never sees "localhost" — it connects to
+whatever address the server is actually reachable at, and the code builds
+the OAuth redirect_uri from that real request, not a fixed value. So a
+teammate at http://192.168.1.50:7878 would need
+http://192.168.1.50:7878/auth/callback registered instead — and Entra
+rejects that at registration time too, for the same reason 127.0.0.1 was
+rejected: redirect URIs must be https:// or exactly "http://localhost". A
+raw IP over plain HTTP is a non-starter, not just a config oversight.
+
+So testing/deploying shared mode for real needs a TLS-fronted address:
+  - A reverse proxy with a real cert (Caddy or nginx + Let's Encrypt, or a
+    Cloudflare Tunnel) on a real hostname, e.g. https://intuneatlas.yourco.com
+  - Or a host that hands you HTTPS for free on a stable hostname — Azure App
+    Service is the natural fit; the code already honors the
+    x-forwarded-proto header it sends, so it'll compute the right
+    https:// redirect_uri automatically once deployed there.
+
+Once you have that real address, register https://<hostname>/auth/callback
+as its own Custom redirect URI under the same "Mobile and desktop
+applications" platform as the localhost one — separate entry, alongside it.
+Either the same shared app registration (if you're willing to add every
+deployment's callback there) or, better for a real deployment, that team's
+own Entra app via --client-id.
+
+4. Keeping a shared instance up across reboots
+--------------------------------------------------
+install-service.ps1 registers `ui` as a Scheduled Task (starts at boot, no
+login needed, restarts itself on failure) — for a dedicated machine/VM
+running a real shared instance, not solo use. Run as Administrator:
+
+  .\install-service.ps1 -Tenant <your-tenant>.onmicrosoft.com
+
+Same redirect-URI requirement as above still applies — this only changes
+how the process survives, not how sign-in works. UNTESTED, same as
+everything else in this file that needs a real Windows machine.
+
+5. Nice-to-have, not blocking
+--------------------------------
+- No automated test suite exercises this end-to-end against a real tenant —
+  only structural checks against a mocked session (this sandbox has no real
+  Entra tenant to sign into).
+- Consider whether the "assignment required" toggle on the app registration
+  should be turned on, to restrict who can sign in at all (zero code needed,
+  it's an Entra setting) — currently anyone in the tenant can sign in.
