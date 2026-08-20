@@ -20,6 +20,17 @@ roadmap below.
 
 ## Using it
 
+Windows (no Node.js required — downloads a standalone binary):
+```
+irm https://intuneatlas.com/install.ps1 | iex
+```
+
+Linux (builds from source — needs Node.js 22+ already installed):
+```
+curl -fsSL https://intuneatlas.com/install.sh | bash
+```
+
+Or from a clone, on any platform:
 ```
 npm install
 npm run build
