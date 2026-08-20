@@ -354,7 +354,7 @@
 
       <div class="install">
         <div class="cmd">
-          <code id="cmd"><span class="p">$</span> npx intuneatlas ui <span class="f">--tenant</span> contoso.onmicrosoft.com</code>
+          <code id="cmd"><span class="p">PS&gt;</span> irm https://intuneatlas.com/install.ps1 | iex</code>
           <button class="copy" id="copyBtn" type="button">copy</button>
         </div>
         <p class="alt">
@@ -369,9 +369,9 @@
           <i></i><i></i><i></i>
           <span>intuneatlas ui — contoso.onmicrosoft.com</span>
         </div>
-<pre><span class="p">$</span> npx intuneatlas ui <span class="f">--tenant</span> contoso.onmicrosoft.com
+<pre><span class="p">PS&gt;</span> irm https://intuneatlas.com/install.ps1 | iex
 
-  <span class="ok">✓</span> device code sign-in <span class="dim">— admin@contoso.onmicrosoft.com (read-only)</span>
+  <span class="ok">✓</span> signed in <span class="dim">— admin@contoso.onmicrosoft.com (read-only)</span>
   <span class="ok">✓</span> 41 policies <span class="dim">→</span> 1,847 settings indexed <span class="dim">in 3m 41s</span>
   <span class="ok">✓</span> 11 findings <span class="dim">·</span> <span class="crit">3 critical</span>
 
@@ -697,7 +697,7 @@
     var btn = document.getElementById("copyBtn");
     if (!btn) return;
     btn.addEventListener("click", function () {
-      var text = "npx intuneatlas ui --tenant contoso.onmicrosoft.com";
+      var text = "irm https://intuneatlas.com/install.ps1 | iex";
       function done() {
         btn.textContent = "copied";
         setTimeout(function () { btn.textContent = "copy"; }, 1500);

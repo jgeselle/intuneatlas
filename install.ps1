@@ -1,8 +1,8 @@
-# intuneatlas installer — downloads the latest standalone Windows release
-# and puts it on your PATH. No Node.js required.
+# intuneatlas installer — downloads the latest standalone Windows release,
+# puts it on your PATH, then prompts for a tenant and launches `ui`. No
+# Node.js required.
 #
 # Usage:  irm https://intuneatlas.com/install.ps1 | iex
-# (until that's actually hosted, run this file directly: .\install.ps1)
 #
 # UNTESTED — this needs a real Windows machine to verify; written carefully
 # but treat the first run as the first real test, same as the release
@@ -49,5 +49,12 @@ Write-Host "Installed. Verifying..."
 & "$exeDir\intuneatlas.exe" --version
 
 Write-Host ""
-Write-Host "Done. Open a new terminal (so the PATH change takes effect there too), then run: intuneatlas ui"
+$tenant = Read-Host "Tenant to sign in to (e.g. contoso.onmicrosoft.com) — leave blank to skip for now"
+Write-Host ""
 Write-Host "First run will show a Windows SmartScreen warning (unsigned binary) — click 'More info' then 'Run anyway'."
+
+if ($tenant) {
+    & "$exeDir\intuneatlas.exe" ui --tenant $tenant
+} else {
+    & "$exeDir\intuneatlas.exe" ui
+}
