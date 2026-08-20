@@ -135,12 +135,8 @@ export async function onRequest(context) {
   // refresh below already keeps data fresh on its own, independent of
   // deploys — that's the mechanism that should own freshness, not deploys.
   const cacheKey = new Request("https://intuneatlas-landing-cache.internal/home", context.request);
-  // Manual bypass for testing a real change to this file — append ?fresh=1
-  // to force a genuine live render instead of guessing whether a response
-  // reflects the current deploy or a still-valid older cache entry.
-  const forceFresh = new URL(context.request.url).searchParams.has("fresh");
 
-  const cached = forceFresh ? null : await cache.match(cacheKey);
+  const cached = await cache.match(cacheKey);
   if (cached) {
     const cachedAt = Number(cached.headers.get("X-Cached-At") ?? 0);
     const ageSeconds = (Date.now() - cachedAt) / 1000;
@@ -155,9 +151,9 @@ export async function onRequest(context) {
     return withSecurityHeaders(cached);
   }
 
-  // True cold start (nothing cached at all yet) or a manual ?fresh=1 —
-  // either way, someone has to pay for a live fetch here, bounded to a
-  // few seconds by GITHUB_FETCH_TIMEOUT_MS.
+  // True cold start: nothing cached yet at all. Someone has to pay for the
+  // first live fetch — bounded to a few seconds by GITHUB_FETCH_TIMEOUT_MS
+  // — and everyone after this is instant.
   const assetResponse = await context.next();
   const baseHtml = await assetResponse.text();
   const html = await renderAndStore(baseHtml, assetResponse, cache, cacheKey);
