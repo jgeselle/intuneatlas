@@ -92,7 +92,6 @@ rule doesn't require touching any code.
 - [ ] winget submission (template exists, not filed) and a real code-signing certificate (exe ships unsigned today)
 - [ ] Azure-hosted deployment (Bicep, scheduled scans) — the auth this needs is now built, the infra-as-code isn't
 - [ ] GitHub Action for scheduled drift scanning
-- [ ] macOS / iOS / Android coverage
 
 ## License
 
