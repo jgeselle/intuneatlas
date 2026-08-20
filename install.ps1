@@ -9,6 +9,11 @@
 # workflow that builds what this installs.
 
 $ErrorActionPreference = "Stop"
+# Invoke-WebRequest's default progress-bar rendering is dramatically slower
+# for anything but tiny files — a well-known PowerShell issue, especially
+# on Windows PowerShell 5.1. The release zip bundles a full Node binary
+# (tens of MB), squarely in the range where this bites hard.
+$ProgressPreference = "SilentlyContinue"
 
 $repo = "jgeselle/intuneatlas"
 $installDir = "$env:LOCALAPPDATA\Programs\intuneatlas"
