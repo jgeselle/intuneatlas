@@ -1,6 +1,5 @@
-# intuneatlas installer — downloads the latest standalone Windows release,
-# puts it on your PATH, then prompts for a tenant and launches `ui`. No
-# Node.js required.
+# intuneatlas installer — downloads the latest standalone Windows release
+# and puts it on your PATH. No Node.js required.
 #
 # Usage:  irm https://intuneatlas.com/install.ps1 | iex
 #
@@ -49,24 +48,23 @@ if ($userPath -notlike "*$exeDir*") {
     $env:Path = "$env:Path;$exeDir"
 }
 
-Write-Host ""
-Write-Host "Installed. Verifying..."
-& "$exeDir\intuneatlas.exe" --version
+$version = (& "$exeDir\intuneatlas.exe" --version).Trim()
 
 Write-Host ""
-$tenant = Read-Host "Tenant to sign in to (e.g. contoso.onmicrosoft.com) — leave blank to skip for now"
+Write-Host "  IntuneAtlas" -ForegroundColor White -NoNewline
+Write-Host "  v$version" -ForegroundColor DarkGray
+Write-Host "  ―――――――――――――――――――――――――――――――" -ForegroundColor DarkGray
+Write-Host "  Installed to " -ForegroundColor Gray -NoNewline
+Write-Host "$exeDir" -ForegroundColor White
 Write-Host ""
-Write-Host "First run will show a Windows SmartScreen warning (unsigned binary) — click 'More info' then 'Run anyway'."
+Write-Host "  Next:" -ForegroundColor White
+Write-Host "    intuneatlas ui --tenant <your-tenant>.onmicrosoft.com" -ForegroundColor Gray
 Write-Host ""
-Write-Host "Starting the app now. To start it again later (new terminal, no need to reinstall): intuneatlas ui"
-Write-Host "Close this window, or Ctrl+C, whenever you're done — that stops the local server."
-
-if ($tenant) {
-    & "$exeDir\intuneatlas.exe" ui --tenant $tenant
-} else {
-    & "$exeDir\intuneatlas.exe" ui
-}
-
+Write-Host "  Shared instance that survives reboots (elevated terminal):" -ForegroundColor Gray
+Write-Host "    intuneatlas ui --persist --host 0.0.0.0 --tenant <your-tenant>.onmicrosoft.com" -ForegroundColor Gray
+Write-Host "    intuneatlas ui --stop" -ForegroundColor Gray -NoNewline
+Write-Host "   (to remove it)" -ForegroundColor DarkGray
 Write-Host ""
-Write-Host "Stopped. Start it again anytime with: intuneatlas ui"
-Write-Host "Want it to survive reboots and run in the background (e.g. a shared team instance)? intuneatlas ui --persist --host 0.0.0.0 --tenant <tenant> (needs an elevated terminal). Stop it later with: intuneatlas ui --stop"
+Write-Host "  First run shows a Windows SmartScreen warning (unsigned binary) —" -ForegroundColor DarkGray
+Write-Host "  click 'More info' then 'Run anyway'." -ForegroundColor DarkGray
+Write-Host ""
