@@ -23,7 +23,10 @@ import {
   Clock,
   SignOut,
   CaretDown,
+  CaretDoubleLeft,
 } from "@phosphor-icons/react";
+
+const RAIL_COLLAPSE_KEY = "intuneatlas.rail-collapsed";
 
 /* --------------------------------------------------------------- utils --- */
 
@@ -971,7 +974,7 @@ function ConnectScreen({ onConnected, session }) {
 
 /* ----------------------------------------------------- sync & identity --- */
 
-function SyncControl({ syncing, syncedAgo, onSync, compact = false }) {
+function SyncControl({ syncing, syncedAgo, onSync, compact = false, textClassName = "" }) {
   const dot = syncing ? "bg-teal-300" : syncedAgo >= 60 ? "bg-amber-400" : "bg-teal-400";
 
   if (compact) {
@@ -990,9 +993,11 @@ function SyncControl({ syncing, syncedAgo, onSync, compact = false }) {
 
   return (
     <div>
+      {/* The dot stays put (it's the icon-strip's "status at a glance"),
+          only the label text fades in the collapsed rail. */}
       <div className="flex items-center gap-2 px-1">
         <span className={"h-1.5 w-1.5 shrink-0 rounded-full " + dot} />
-        <span className="min-w-0 truncate text-xs text-teal-300">
+        <span className={"min-w-0 truncate text-xs text-teal-300 transition-opacity duration-150 " + textClassName}>
           {syncing ? "Reading tenant…" : "Synced " + sinceLabel(syncedAgo)}
         </span>
       </div>
@@ -1001,15 +1006,22 @@ function SyncControl({ syncing, syncedAgo, onSync, compact = false }) {
         disabled={syncing}
         className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-teal-50 ring-1 ring-inset ring-teal-700 hover:bg-teal-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300 disabled:cursor-not-allowed disabled:text-teal-400"
       >
-        <ArrowsClockwise className={"h-3.5 w-3.5 " + (syncing ? "animate-spin" : "")} />
-        {syncing ? "Syncing" : "Sync now"}
+        <ArrowsClockwise className={"h-3.5 w-3.5 shrink-0 " + (syncing ? "animate-spin" : "")} />
+        <span className={"transition-opacity duration-150 " + textClassName}>{syncing ? "Syncing" : "Sync now"}</span>
       </button>
     </div>
   );
 }
 
-function AccountMenu({ session, tenant, up = false, full = false }) {
+function AccountMenu({ session, tenant, up = false, full = false, textClassName = "", onOpenChange }) {
   const [open, setOpen] = useState(false);
+
+  // Lets a parent rail pin itself open while the popover is up (see
+  // `menuPinned` in App) — needed only for the collapsible-sidebar
+  // placement, harmless everywhere else since the callback is optional.
+  useEffect(() => {
+    onOpenChange?.(open);
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!open) return;
@@ -1028,67 +1040,74 @@ function AccountMenu({ session, tenant, up = false, full = false }) {
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="true"
         aria-expanded={open}
-        className={
-          "flex items-center gap-2 rounded-md py-1 pl-1 pr-1.5 hover:bg-teal-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300 " +
-          (full ? "w-full" : "")
-        }
+        title={textClassName ? session.name : undefined}
+        className={"flex items-center gap-2 rounded-md py-1 pl-1 pr-1.5 hover:bg-teal-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300 " + (full ? "w-full" : "")}
       >
+        {/* The avatar is the "icon" here — like a nav icon it stays fully
+            visible in the collapsed rail; only the surrounding text fades. */}
         <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-teal-700 text-xs font-semibold text-white">
           {initials}
         </span>
         {full ? (
-          <span className="min-w-0 flex-1 text-left">
+          <span className={"min-w-0 flex-1 text-left transition-opacity duration-150 " + textClassName}>
             <span className="block truncate text-sm text-white">{session.name}</span>
             <span className="block truncate text-xs text-teal-300">{session.email}</span>
           </span>
         ) : (
           <span className="hidden text-sm text-teal-50 sm:block">{session.name}</span>
         )}
-        <CaretDown className="h-3.5 w-3.5 shrink-0 text-teal-300" />
+        <CaretDown
+          className={
+            "h-3.5 w-3.5 shrink-0 text-teal-300 transition-[transform,opacity] duration-150 " +
+            (open ? "rotate-180 " : "") +
+            textClassName
+          }
+        />
       </button>
 
-      {open && (
-        <>
-          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
-          <div
-            className={
-              "absolute z-40 rounded-lg border border-stone-200 bg-white p-3 shadow-xl " +
-              // "up" opens from the sidebar footer, which is narrower than a
-              // fixed width — stretch to match the rail instead of
-              // overflowing past its edge. The other placement has open
-              // room to its left, so a fixed width there is fine.
-              (up ? "bottom-full left-0 right-0 mb-2" : "right-0 mt-2 w-64")
-            }
-          >
-            <div className="flex items-center gap-2.5">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-teal-800 text-xs font-semibold text-white">
-                {initials}
-              </span>
-              <div className="min-w-0">
-                <div className="truncate text-sm font-medium">{session.name}</div>
-                <div className="truncate text-xs text-stone-500">{session.email}</div>
-              </div>
-            </div>
-
-            {tenant && (
-              <dl className="mt-3 space-y-1.5 border-t border-stone-100 pt-3 text-xs">
-                <div className="flex items-baseline justify-between gap-3">
-                  <dt className="text-stone-500">Tenant</dt>
-                  <dd className="truncate text-right text-stone-700">{tenant}</dd>
-                </div>
-              </dl>
-            )}
-
-            <a
-              href="/auth/logout"
-              className="mt-3 flex w-full items-center gap-2 rounded-md border-t border-stone-200 px-2 pt-3 pb-1.5 text-xs font-medium text-stone-600 hover:bg-stone-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
-            >
-              <SignOut className="h-3.5 w-3.5" />
-              Sign out
-            </a>
+      {open && <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />}
+      {/* Always mounted (not `{open && ...}`) so the close transition below
+          can actually play instead of the panel just vanishing. */}
+      <div
+        className={
+          "absolute z-40 rounded-lg border border-stone-200 bg-white p-3 shadow-xl transition duration-150 ease-out " +
+          // "up" opens from the sidebar footer, which is narrower than a
+          // fixed width — stretch to match the rail instead of
+          // overflowing past its edge. The other placement has open
+          // room to its left, so a fixed width there is fine.
+          (up ? "bottom-full left-0 right-0 mb-2 origin-bottom " : "right-0 mt-2 w-64 origin-top-right ") +
+          (open
+            ? "translate-y-0 scale-100 opacity-100"
+            : "pointer-events-none scale-95 opacity-0 " + (up ? "translate-y-1.5" : "-translate-y-1.5"))
+        }
+      >
+        <div className="flex items-center gap-2.5">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-teal-800 text-xs font-semibold text-white">
+            {initials}
+          </span>
+          <div className="min-w-0">
+            <div className="truncate text-sm font-medium">{session.name}</div>
+            <div className="truncate text-xs text-stone-500">{session.email}</div>
           </div>
-        </>
-      )}
+        </div>
+
+        {tenant && (
+          <dl className="mt-3 space-y-1.5 border-t border-stone-100 pt-3 text-xs">
+            <div className="flex items-baseline justify-between gap-3">
+              <dt className="text-stone-500">Tenant</dt>
+              <dd className="truncate text-right text-stone-700">{tenant}</dd>
+            </div>
+          </dl>
+        )}
+
+        <a
+          href="/auth/logout"
+          className="mt-3 flex w-full items-center gap-2 rounded-md border-t border-stone-200 px-2 pt-3 pb-1.5 text-xs font-medium text-stone-600 hover:bg-stone-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+        >
+          <SignOut className="h-3.5 w-3.5" />
+          Sign out
+        </a>
+      </div>
     </div>
   );
 }
@@ -1106,6 +1125,36 @@ export default function App({ initialReport, session }) {
   const [toast, setToast] = useState(null);
   const [syncing, setSyncing] = useState(false);
   const [, forceTick] = useState(0);
+
+  // Desktop-only: collapse the rail to an icon-only strip, pinned across
+  // reloads. The hover-to-flyout expansion itself is plain CSS
+  // (`lg:hover:w-60` / `lg:group-hover:opacity-100` below) rather than
+  // JS-tracked mouseenter/mouseleave state — real `:hover` is simply more
+  // reliable than reimplementing it, and it's exactly how the ported
+  // Seresphere original does it too. JS only needs to know about
+  // `menuPinned`: opening the account menu while collapsed should force the
+  // rail open even if the pointer isn't over it (e.g. it was opened via
+  // keyboard), and keep it open through the close animation instead of
+  // letting a CSS-only rail snap shut mid-transition.
+  const [railCollapsed, setRailCollapsed] = useState(
+    () => typeof window !== "undefined" && window.localStorage.getItem(RAIL_COLLAPSE_KEY) === "1",
+  );
+  const [menuPinned, setMenuPinned] = useState(false);
+
+  // Opacity classes for text that should hide in the icon-only strip but
+  // reveal on hover (CSS) or while the account menu is pinned open (JS).
+  function railDim(extra = "") {
+    if (!railCollapsed) return extra;
+    return extra + (menuPinned ? " lg:opacity-100" : " lg:opacity-0 lg:group-hover:opacity-100");
+  }
+
+  function toggleRailCollapsed() {
+    setRailCollapsed((collapsed) => {
+      const next = !collapsed;
+      window.localStorage.setItem(RAIL_COLLAPSE_KEY, next ? "1" : "0");
+      return next;
+    });
+  }
 
   // Notes and staged changes are persisted server-side and aren't
   // scan-specific — resync whenever a fresh report comes in (e.g. after
@@ -1237,10 +1286,23 @@ export default function App({ initialReport, session }) {
 
   return (
     <div className="flex min-h-screen w-full flex-col bg-stone-50 text-stone-900 lg:flex-row">
-      <aside className="flex shrink-0 flex-col bg-teal-900 lg:w-60">
+      {/* Reserves the icon-strip's width in the flex flow while the rail
+          itself goes `lg:fixed` below — the hover/pinned flyout then
+          overlays this gap instead of reflowing `main`. */}
+      {railCollapsed && <div className="hidden shrink-0 lg:block lg:w-16" aria-hidden="true" />}
+
+      <aside
+        className={
+          "group flex shrink-0 flex-col bg-teal-900 transition-[width] duration-200 ease-out " +
+          (railCollapsed
+            ? "overflow-hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-40 " +
+              (menuPinned ? "lg:w-60 lg:shadow-2xl" : "lg:w-16 lg:hover:w-60 lg:hover:shadow-2xl")
+            : "lg:w-60")
+        }
+      >
         <div className="flex items-center gap-2.5 px-4 py-4">
           <Compass className="h-6 w-6 shrink-0 text-teal-300" />
-          <div className="min-w-0">
+          <div className={"min-w-0 transition-opacity duration-150 " + railDim()}>
             <div className="truncate text-sm font-semibold leading-tight text-white">IntuneAtlas</div>
             <div className="truncate text-xs leading-tight text-teal-300" title={report.tenant}>
               {report.tenantName || report.tenant || "no tenant"}
@@ -1254,6 +1316,15 @@ export default function App({ initialReport, session }) {
               <AccountMenu session={session} tenant={report.tenantName || report.tenant} />
             </div>
           )}
+
+          <button
+            onClick={toggleRailCollapsed}
+            title={railCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            aria-label={railCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+            className={"ml-auto hidden shrink-0 rounded-md p-1.5 text-teal-300 transition-opacity duration-150 hover:bg-teal-800 hover:text-teal-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300 lg:block " + railDim()}
+          >
+            <CaretDoubleLeft className={"h-4 w-4 transition-transform duration-200 " + (railCollapsed ? "rotate-180" : "")} />
+          </button>
         </div>
 
         <nav className="flex gap-1 overflow-x-auto px-2 pb-3 lg:flex-col lg:overflow-visible lg:pb-4">
@@ -1270,11 +1341,13 @@ export default function App({ initialReport, session }) {
                 }
               >
                 <Icon className="h-4 w-4 shrink-0" />
-                <span className="whitespace-nowrap">{n.label}</span>
+                <span className={"whitespace-nowrap transition-opacity duration-150 " + railDim()}>{n.label}</span>
                 <span
                   className={
-                    "ml-auto rounded px-1.5 py-0.5 text-xs tabular-nums " +
-                    (active ? "bg-teal-700 text-teal-50" : "bg-teal-800 text-teal-200")
+                    "ml-auto rounded px-1.5 py-0.5 text-xs tabular-nums transition-opacity duration-150 " +
+                    (active ? "bg-teal-700 text-teal-50" : "bg-teal-800 text-teal-200") +
+                    " " +
+                    railDim()
                   }
                 >
                   {n.count}
@@ -1286,10 +1359,23 @@ export default function App({ initialReport, session }) {
 
         {/* wide layouts: sync and identity settle at the foot of the rail */}
         <div className="mt-auto hidden border-t border-teal-800 px-3 py-3 lg:block">
-          <SyncControl syncing={syncing} syncedAgo={syncedAgo} onSync={resync} />
+          <SyncControl syncing={syncing} syncedAgo={syncedAgo} onSync={resync} textClassName={railDim()} />
           {session && (
             <div className="mt-3 border-t border-teal-800 pt-3">
-              <AccountMenu session={session} tenant={report.tenantName || report.tenant} up full />
+              <AccountMenu
+                session={session}
+                tenant={report.tenantName || report.tenant}
+                up
+                full
+                textClassName={railDim()}
+                onOpenChange={(isOpen) => {
+                  if (isOpen) {
+                    setMenuPinned(true);
+                  } else {
+                    window.setTimeout(() => setMenuPinned(false), 180);
+                  }
+                }}
+              />
             </div>
           )}
         </div>
