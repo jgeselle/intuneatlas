@@ -36,9 +36,13 @@ report instead of the last scan. `--host <address>` (default `127.0.0.1`,
 this machine only) turns it into a shared instance a whole team can point a
 browser at — everyone signs in with their own account, and viewing an
 already-scanned report never needs any Intune permission, only triggering a
-new scan does. `login`/`scan` (headless) also exist directly, with
-`--device-code` (interactive fallback) and `--client-id`/`--client-secret`
-(unattended, client-credentials flow) available there for scripted/CI use.
+new scan does. `--persist` registers that exact command to run in the
+background — a Scheduled Task on Windows, a systemd service on Linux —
+starting at boot and restarting itself on failure, for a shared instance on
+a dedicated machine (needs an elevated/root shell); `--stop` undoes it.
+`login`/`scan` (headless) also exist directly, with `--device-code`
+(interactive fallback) and `--client-id`/`--client-secret` (unattended,
+client-credentials flow) available there for scripted/CI use.
 
 ## What's in this repo
 
@@ -71,6 +75,7 @@ rule doesn't require touching any code.
 - [x] Baseline rule engine (YAML) with a real starter pack
 - [x] Review-gated change log (stage a recommendation, require a reason and a signed-in reviewer)
 - [x] Packaging: standalone Windows binary (SEA), PowerShell installer, winget manifest template
+- [x] `ui --persist` / `--stop` — a shared instance that survives reboots (Scheduled Task on Windows, systemd on Linux)
 - [ ] Actually deploying a staged change back to the tenant (write-back) — deliberately deferred; the review gate above exists, the write doesn't yet
 - [ ] `intuneatlas get <path>` headless command
 - [ ] winget submission (template exists, not filed) and a real code-signing certificate (exe ships unsigned today)

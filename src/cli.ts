@@ -2,6 +2,7 @@
 import { Command } from "commander";
 import { runExport } from "./commands/export.js";
 import { runLogin } from "./commands/login.js";
+import { installPersistent, uninstallPersistent } from "./commands/persist.js";
 import { runScan } from "./commands/scan.js";
 import { runUi } from "./commands/ui.js";
 
@@ -80,16 +81,31 @@ program
     "--host <address>",
     "Interface to bind to (default: 127.0.0.1, this machine only). Anything else — e.g. 0.0.0.0 — shares it with a team; each teammate signs in with their own Microsoft account.",
   )
+  .option(
+    "--persist",
+    "Register this exact command to run in the background, starting at boot and restarting on failure (Windows: Scheduled Task as SYSTEM; Linux: systemd service as root). Requires --tenant and an elevated/root shell.",
+    false,
+  )
+  .option("--stop", "Stop and remove a previously --persist'd background instance.", false)
   .action(
-    withErrorHandling((opts) =>
-      runUi({
+    withErrorHandling((opts) => {
+      if (opts.stop) return uninstallPersistent();
+      if (opts.persist) {
+        return installPersistent({
+          tenant: opts.tenant,
+          clientId: opts.clientId,
+          host: opts.host,
+          baseline: opts.baseline,
+        });
+      }
+      return runUi({
         tenant: opts.tenant,
         clientId: opts.clientId,
         report: opts.report,
         baseline: opts.baseline,
         host: opts.host,
-      }),
-    ),
+      });
+    }),
   );
 
 program

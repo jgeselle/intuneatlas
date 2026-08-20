@@ -74,15 +74,29 @@ own Entra app via --client-id.
 
 4. Keeping a shared instance up across reboots
 --------------------------------------------------
-install-service.ps1 registers `ui` as a Scheduled Task (starts at boot, no
-login needed, restarts itself on failure) — for a dedicated machine/VM
-running a real shared instance, not solo use. Run as Administrator:
+`intuneatlas ui --persist` registers that exact command to run in the
+background — Windows: a Scheduled Task as SYSTEM; Linux: a systemd service
+as root — starting at boot, no login needed, restarting itself on failure.
+No separate installer script anymore; it's a flag on `ui` itself.
 
-  .\install-service.ps1 -Tenant <your-tenant>.onmicrosoft.com
+  Windows (elevated terminal):
+    intuneatlas ui --persist --host 0.0.0.0 --tenant <your-tenant>.onmicrosoft.com
+
+  Linux (as root):
+    sudo intuneatlas ui --persist --host 0.0.0.0 --tenant <your-tenant>.onmicrosoft.com
+
+Stop and remove it with: intuneatlas ui --stop (same elevation needed).
 
 Same redirect-URI requirement as above still applies — this only changes
-how the process survives, not how sign-in works. UNTESTED, same as
-everything else in this file that needs a real Windows machine.
+how the process survives, not how sign-in works. On Linux, opening the
+firewall port (if one's active — ufw/firewalld/etc.) isn't automated;
+you'll need to do that yourself if --host isn't loopback.
+
+UNTESTED beyond a syntax/logic check — this sandbox has no real Windows at
+all, and while it has a systemctl binary, systemd itself isn't running in
+this container, so neither platform's actual persistence behavior could be
+exercised end to end. Needs a real machine (ideally one you can reboot) on
+each platform to confirm.
 
 5. Nice-to-have, not blocking
 --------------------------------

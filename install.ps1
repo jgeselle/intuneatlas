@@ -69,3 +69,4 @@ if ($tenant) {
 
 Write-Host ""
 Write-Host "Stopped. Start it again anytime with: intuneatlas ui"
+Write-Host "Want it to survive reboots and run in the background (e.g. a shared team instance)? intuneatlas ui --persist --host 0.0.0.0 --tenant <tenant> (needs an elevated terminal). Stop it later with: intuneatlas ui --stop"
