@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { isSea } from "node:sea";
 
 export interface PersistOptions {
@@ -82,12 +82,23 @@ function installWindows(options: PersistOptions): void {
   const fullArgs = [...args, ...uiArgs(options)];
   // Each token double-quoted, the way Windows' own command-line parsing
   // expects — so a value with an embedded space (a --baseline path, say)
-  // survives being re-split back into arguments when the task actually
-  // launches. Built as a plain string here rather than joined inside
-  // PowerShell, then passed through as one single-quoted literal.
-  const argString = fullArgs.map((a) => `"${a.replace(/"/g, '""')}"`).join(" ").replace(/'/g, "''");
+  // survives being re-split back into arguments.
+  const quotedLine = [command, ...fullArgs].map((a) => `"${a.replace(/"/g, '""')}"`).join(" ");
   const host = options.host ?? "0.0.0.0";
   const loopback = host === "127.0.0.1" || host === "localhost";
+
+  // Register-ScheduledTask has no native way to capture stdout/stderr — a
+  // task that's crash-looping is otherwise completely invisible (this bit
+  // a real run: the task showed "Queued", the app ran fine started by hand,
+  // and there was nothing to look at to explain the difference). A tiny
+  // batch wrapper redirects both streams to a log file — written directly
+  // here rather than assembled inline in the PowerShell script, to avoid
+  // nesting cmd.exe's own quote-parsing rules inside a PowerShell string.
+  const runDir = "C:\\ProgramData\\intuneatlas";
+  const logPath = `${runDir}\\service.log`;
+  const wrapperPath = `${runDir}\\run.cmd`;
+  mkdirSync(runDir, { recursive: true });
+  writeFileSync(wrapperPath, `@echo off\r\ncd /d "${runDir}"\r\n${quotedLine} >> "${logPath}" 2>&1\r\n`, "utf8");
 
   const script = `
     $ErrorActionPreference = "Stop"
@@ -106,7 +117,7 @@ function installWindows(options: PersistOptions): void {
     Write-Host "Registering scheduled task '$name'..."
     Unregister-ScheduledTask -TaskName $name -Confirm:$false -ErrorAction SilentlyContinue
 
-    $action = New-ScheduledTaskAction -Execute '${command.replace(/'/g, "''")}' -Argument '${argString}'
+    $action = New-ScheduledTaskAction -Execute "cmd.exe" -Argument '/c "${wrapperPath}"' -WorkingDirectory "${runDir}"
     $trigger = New-ScheduledTaskTrigger -AtStartup
     $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
     $settings = New-ScheduledTaskSettingsSet \`
@@ -124,8 +135,10 @@ function installWindows(options: PersistOptions): void {
     Start-Sleep -Seconds 3
     Write-Host "Task state: $((Get-ScheduledTask -TaskName $name).State)"
     Write-Host ""
-    Write-Host "Should be reachable shortly at http://<this-machine's-address>:${PORT}"
-    Write-Host "Stop it with: intuneatlas ui --stop"
+    Write-Host "On this machine:  http://localhost:${PORT}"
+    Write-Host "Elsewhere:        http://<this machine's real address>:${PORT}"
+    Write-Host "Log file:         ${logPath}"
+    Write-Host "Stop it with:     intuneatlas ui --stop"
   `;
 
   execFileSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], { stdio: "inherit" });
@@ -190,9 +203,11 @@ WantedBy=multi-user.target
   execFileSync("systemctl", ["enable", "--now", NAME], { stdio: "inherit" });
 
   console.log("");
-  console.log(`Status: systemctl status ${NAME}`);
-  console.log(`Should be reachable shortly at http://<this-machine's-address>:${PORT}`);
-  console.log("Stop it with: intuneatlas ui --stop");
+  console.log(`Status:           systemctl status ${NAME}`);
+  console.log(`Logs:             journalctl -u ${NAME} -f`);
+  console.log(`On this machine:  http://localhost:${PORT}`);
+  console.log(`Elsewhere:        http://<this machine's real address>:${PORT}`);
+  console.log("Stop it with:     intuneatlas ui --stop");
   if (!loopback) {
     console.log(`Reminder: open TCP ${PORT} in your firewall if one's active (ufw, firewalld, ...) — not done automatically here.`);
   }
