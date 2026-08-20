@@ -89,7 +89,7 @@ rule doesn't require touching any code.
 - [x] `ui --persist` / `--stop` — a shared instance that survives reboots (Scheduled Task on Windows, systemd on Linux)
 - [ ] Actually deploying a staged change back to the tenant (write-back) — deliberately deferred; the review gate above exists, the write doesn't yet
 - [ ] `intuneatlas get <path>` headless command
-- [ ] winget submission (template exists, not filed) and a real code-signing certificate (exe ships unsigned today)
+- [ ] A real code-signing certificate (exe ships unsigned today)
 - [ ] Azure-hosted deployment (Bicep, scheduled scans) — the auth this needs is now built, the infra-as-code isn't
 - [ ] GitHub Action for scheduled drift scanning
 
