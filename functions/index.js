@@ -3,17 +3,25 @@
 // edge. No client-side fetch, no CSP loosening: the browser gets the same
 // plain static HTML it always did, just with real numbers baked in.
 //
-// Stale-while-revalidate: a visitor always gets whatever's already cached,
-// instantly. If it's due for a refresh, that happens in the background for
-// the *next* visitor (context.waitUntil) — nobody's page load ever waits
-// on GitHub except the very first request ever, right after a deploy, with
-// nothing cached yet at all.
+// The static markup itself is NEVER cached here — every request calls
+// context.next() to get whatever's actually deployed right now (Cloudflare's
+// own asset-serving layer already caches that correctly, invalidated per
+// deploy). An earlier version of this file cached the *rendered page* under
+// a fixed synthetic key, decoupled from both the request hostname and the
+// deploy — which meant every deployment and every preview URL under this
+// project shared one cache slot, and once it was written it never got
+// re-rendered from a fresh deploy again, only ever re-stamped with new
+// numbers on top of whatever markup happened to be cached first. That's why
+// pushing markup changes appeared to silently not take effect. Caching only
+// the small GitHub data below avoids that failure mode entirely: the page
+// structure always reflects the real current deploy, and only the two
+// numbers get a stale-while-revalidate cache.
 //
-// Buffers the HTML to a string and does plain string replacement instead
-// of streaming it through HTMLRewriter — the page is a few dozen KB,
-// buffering it costs nothing, and it avoids any interaction between
-// HTMLRewriter and a cloned response that wasn't worth re-litigating
-// without real production logs to debug it against.
+// Stale-while-revalidate for that data: a visitor always gets whatever
+// numbers are already cached, instantly. If they're due for a refresh, that
+// happens in the background for the *next* visitor (context.waitUntil) —
+// nobody's page load ever waits on GitHub except the very first request
+// ever, with nothing cached yet at all.
 
 const REPO = "jgeselle/intuneatlas";
 
@@ -21,9 +29,9 @@ const REPO = "jgeselle/intuneatlas";
 // traffic only triggers a background refresh roughly this often, nowhere
 // close to that limit regardless of visitor volume.
 const REFRESH_AFTER_SECONDS = 900; // 15 minutes
-// Stored cache entries get a long Cache-Control so the Cache API itself
-// never evicts them out from under us on its own schedule — staleness is
-// tracked and acted on ourselves via the X-Cached-At header instead.
+// The data cache entry gets a long Cache-Control so the Cache API itself
+// never evicts it out from under us on its own schedule — staleness is
+// tracked and acted on ourselves via the cachedAt field instead.
 const STORED_MAX_AGE_SECONDS = 60 * 60 * 24; // 24 hours
 // Bounds the one case that *can* still make a visitor wait: a true cold
 // start (nothing cached yet). Never worth more than a couple seconds.
@@ -45,6 +53,16 @@ const RESPONSE_HEADERS = {
   "Cache-Control": "public, max-age=0, must-revalidate",
 };
 
+// Fixed synthetic key for the *data* cache only — deliberately decoupled
+// from both the request hostname and CF_PAGES_COMMIT_SHA. Tying it to the
+// commit SHA was tried and reverted: it forced a live GitHub fetch after
+// every single deploy, even ones that never touched this file, multiplying
+// how often a routine push happens to land on a transient GitHub hiccup.
+// That's safe to do for the numbers (they're the same regardless of which
+// deploy served the request) in a way it was never safe to do for the
+// markup itself.
+const DATA_CACHE_KEY = new Request("https://intuneatlas-landing-cache.internal/live-data");
+
 async function fetchGitHub(path) {
   const res = await fetch(`https://api.github.com${path}`, {
     headers: {
@@ -57,9 +75,7 @@ async function fetchGitHub(path) {
   return res.json();
 }
 
-// Fallback is whatever's already in `baseHtml` — for a cold start that's
-// the static default baked into the HTML; for a background refresh it's
-// last time's live value, which is a better degradation than reverting to
+// Fallback is last known good data — a better degradation than reverting to
 // the static default just because one refresh had a hiccup.
 async function fetchStarCount(fallback) {
   try {
@@ -90,17 +106,6 @@ function replaceElementText(html, id, tag, text) {
   return html.replace(pattern, `$1${escapeHtml(text)}$2`);
 }
 
-// Reads back whatever's currently rendered for an id/tag pair. On a cold
-// start `html` is the static asset, so this naturally returns the baked-in
-// default placeholder; on a background refresh `html` is last time's
-// already-rendered output, so this returns last time's *live* value — that
-// second case is the one that actually matters: it's what a failed refresh
-// should fall back to instead of the hardcoded static default.
-function extractElementText(html, id, tag) {
-  const match = html.match(new RegExp(`<${tag} id="${id}">([^<]*)</${tag}>`));
-  return match ? match[1] : null;
-}
-
 function withSecurityHeaders(response) {
   const withHeaders = new Response(response.body, response);
   for (const [name, value] of Object.entries(RESPONSE_HEADERS)) {
@@ -109,66 +114,54 @@ function withSecurityHeaders(response) {
   return withHeaders;
 }
 
-// Renders live HTML starting from `baseHtml` (the id-tagged placeholders
-// still need to exist in it, whatever their current text is), stores the
-// result, and returns it. `templateResponse` only donates headers
-// (content-type etc.) to the new Response — its body is never read here.
-async function renderAndStore(baseHtml, templateResponse, cache, cacheKey) {
-  let bodyHtml = baseHtml;
-  const currentVersion = extractElementText(baseHtml, "live-version", "span") ?? "v0.0.3";
-  const currentStars = extractElementText(baseHtml, "live-stars", "b") ?? "1,284";
-  try {
-    const [version, stars] = await Promise.all([fetchLatestVersion(currentVersion), fetchStarCount(currentStars)]);
-    bodyHtml = replaceElementText(baseHtml, "live-version", "span", version);
-    bodyHtml = replaceElementText(bodyHtml, "live-version-2", "span", version);
-    bodyHtml = replaceElementText(bodyHtml, "live-stars", "b", stars);
-  } catch (err) {
-    // Never let this surface as a broken page — but silently falling back
-    // with no trace makes a real bug indistinguishable from "GitHub had a
-    // hiccup." Log it so it's visible in Workers Logs.
-    console.error("Landing page live-data render failed, keeping previous values:", err);
-  }
+async function fetchLiveData(fallbackVersion, fallbackStars) {
+  const [version, stars] = await Promise.all([
+    fetchLatestVersion(fallbackVersion),
+    fetchStarCount(fallbackStars),
+  ]);
+  return { version, stars, cachedAt: Date.now() };
+}
 
-  const html = new Response(bodyHtml, templateResponse);
-  html.headers.set("X-Cached-At", String(Date.now()));
-  html.headers.set("Cache-Control", `public, max-age=${STORED_MAX_AGE_SECONDS}`);
-  await cache.put(cacheKey, html.clone());
-  return html;
+async function storeLiveData(cache, data) {
+  const response = new Response(JSON.stringify(data), {
+    headers: {
+      "content-type": "application/json",
+      "cache-control": `public, max-age=${STORED_MAX_AGE_SECONDS}`,
+    },
+  });
+  await cache.put(DATA_CACHE_KEY, response);
 }
 
 export async function onRequest(context) {
   const cache = caches.default;
-  // Fixed synthetic key, not the real request URL — keeps the cache
-  // insulated from any query-string variance on the incoming request and,
-  // deliberately, from which deploy is currently live: tying it to
-  // CF_PAGES_COMMIT_SHA was tried and reverted — it forced a cold start
-  // (a live GitHub fetch) after every single deploy, even ones that never
-  // touched this file, which just multiplies how often a routine push
-  // happens to land on a transient GitHub hiccup. The 15-minute background
-  // refresh below already keeps data fresh on its own, independent of
-  // deploys — that's the mechanism that should own freshness, not deploys.
-  const cacheKey = new Request("https://intuneatlas-landing-cache.internal/home", context.request);
 
-  const cached = await cache.match(cacheKey);
-  if (cached) {
-    const cachedAt = Number(cached.headers.get("X-Cached-At") ?? 0);
-    const ageSeconds = (Date.now() - cachedAt) / 1000;
-    if (ageSeconds > REFRESH_AFTER_SECONDS) {
-      // Clone immediately, before returning anything to the visitor below
-      // — refreshes off this clone, using its own already-rendered text as
-      // the template (same ids, just old data) rather than re-fetching the
-      // static asset. Never awaited: this request doesn't wait on it.
-      const template = cached.clone();
-      context.waitUntil(template.text().then((baseHtml) => renderAndStore(baseHtml, template, cache, cacheKey)));
-    }
-    return withSecurityHeaders(cached);
-  }
-
-  // True cold start: nothing cached yet at all. Someone has to pay for the
-  // first live fetch — bounded to a few seconds by GITHUB_FETCH_TIMEOUT_MS
-  // — and everyone after this is instant.
+  // Always the real, currently-deployed markup — this is never cached by
+  // us, only by Cloudflare's own deploy-aware asset serving.
   const assetResponse = await context.next();
   const baseHtml = await assetResponse.text();
-  const html = await renderAndStore(baseHtml, assetResponse, cache, cacheKey);
+
+  const cachedData = await cache.match(DATA_CACHE_KEY);
+  let data = cachedData ? await cachedData.json() : null;
+
+  if (!data) {
+    // True cold start for the data cache — nobody has ever computed this
+    // yet. Bounded to a few seconds by GITHUB_FETCH_TIMEOUT_MS.
+    data = await fetchLiveData("v0.0.3", "1,284");
+    context.waitUntil(storeLiveData(cache, data));
+  } else {
+    const ageSeconds = (Date.now() - data.cachedAt) / 1000;
+    if (ageSeconds > REFRESH_AFTER_SECONDS) {
+      // Never awaited: this request doesn't wait on it, the *next* visitor
+      // benefits from whatever it finds.
+      context.waitUntil(fetchLiveData(data.version, data.stars).then((fresh) => storeLiveData(cache, fresh)));
+    }
+  }
+
+  let bodyHtml = baseHtml;
+  bodyHtml = replaceElementText(bodyHtml, "live-version", "span", data.version);
+  bodyHtml = replaceElementText(bodyHtml, "live-version-2", "span", data.version);
+  bodyHtml = replaceElementText(bodyHtml, "live-stars", "b", data.stars);
+
+  const html = new Response(bodyHtml, assetResponse);
   return withSecurityHeaders(html);
 }
