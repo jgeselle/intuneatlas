@@ -90,6 +90,17 @@ function replaceElementText(html, id, tag, text) {
   return html.replace(pattern, `$1${escapeHtml(text)}$2`);
 }
 
+// Reads back whatever's currently rendered for an id/tag pair. On a cold
+// start `html` is the static asset, so this naturally returns the baked-in
+// default placeholder; on a background refresh `html` is last time's
+// already-rendered output, so this returns last time's *live* value — that
+// second case is the one that actually matters: it's what a failed refresh
+// should fall back to instead of the hardcoded static default.
+function extractElementText(html, id, tag) {
+  const match = html.match(new RegExp(`<${tag} id="${id}">([^<]*)</${tag}>`));
+  return match ? match[1] : null;
+}
+
 function withSecurityHeaders(response) {
   const withHeaders = new Response(response.body, response);
   for (const [name, value] of Object.entries(RESPONSE_HEADERS)) {
@@ -104,8 +115,10 @@ function withSecurityHeaders(response) {
 // (content-type etc.) to the new Response — its body is never read here.
 async function renderAndStore(baseHtml, templateResponse, cache, cacheKey) {
   let bodyHtml = baseHtml;
+  const currentVersion = extractElementText(baseHtml, "live-version", "span") ?? "v0.0.3";
+  const currentStars = extractElementText(baseHtml, "live-stars", "b") ?? "1,284";
   try {
-    const [version, stars] = await Promise.all([fetchLatestVersion("v0.0.3"), fetchStarCount("1,284")]);
+    const [version, stars] = await Promise.all([fetchLatestVersion(currentVersion), fetchStarCount(currentStars)]);
     bodyHtml = replaceElementText(baseHtml, "live-version", "span", version);
     bodyHtml = replaceElementText(bodyHtml, "live-version-2", "span", version);
     bodyHtml = replaceElementText(bodyHtml, "live-stars", "b", stars);
