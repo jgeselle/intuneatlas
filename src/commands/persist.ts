@@ -125,6 +125,8 @@ function installWindows(options: PersistOptions): void {
         -RestartInterval (New-TimeSpan -Minutes 1) \`
         -StartWhenAvailable \`
         -DontStopOnIdleEnd \`
+        -AllowStartIfOnBatteries \`
+        -DontStopIfGoingOnBatteries \`
         -ExecutionTimeLimit ([TimeSpan]::Zero)
 
     Register-ScheduledTask -TaskName $name -Action $action -Trigger $trigger -Principal $principal -Settings $settings \`
