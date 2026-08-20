@@ -15,17 +15,24 @@ await build({
   platform: "node",
   target: "node22",
   format: "cjs",
-  // keytar (native OS-keychain binding, pulled in by
-  // @azure/identity-cache-persistence) ships a .node binary esbuild can't
-  // bundle as JS. Left external — at runtime this means require('keytar')
-  // resolves against node_modules, which the packaged exe doesn't ship, so
-  // it'll throw. That's fine: src/auth/interactive.ts already wraps cache
-  // registration in a try/catch and falls back to a plain, uncached
-  // credential (same graceful degradation already built for Linux, which
-  // lacks a compatible keychain backend). Persistent token caching just
-  // won't work in the packaged Windows exe until this is revisited —
-  // documented, not a silent gap or a crash risk.
-  external: ["keytar"],
+  // keytar (native OS-keychain binding, pulled in by both
+  // @azure/identity-cache-persistence AND @azure/msal-node-extensions) ships
+  // a .node binary esbuild can't bundle as JS. @azure/msal-node-extensions
+  // itself also pulls in @azure/msal-node-runtime, which ships its own
+  // platform-specific .node binaries (native broker support) resolved via
+  // path logic that breaks once hoisted into a single bundled file — so the
+  // whole package is left external, not just keytar, to keep esbuild from
+  // ever trying to inline it. At runtime this means require('keytar') /
+  // require('@azure/msal-node-extensions') resolve against node_modules,
+  // which the packaged exe doesn't ship, so both throw. That's fine:
+  // src/auth/interactive.ts and src/auth/webSession.ts (via
+  // createMsalCachePlugin in tokenCache.ts) both wrap cache setup in a
+  // try/catch and fall back to no persistent cache (same graceful
+  // degradation already built for Linux, which lacks a compatible keychain
+  // backend). Persistent caching just won't work in the packaged Windows
+  // exe until this is revisited — documented, not a silent gap or a crash
+  // risk.
+  external: ["keytar", "@azure/msal-node-extensions"],
   // esbuild empties every `import.meta.url` reference under CJS output —
   // confirmed the hard way: it broke a real file-path computation *inside
   // the bundled `open` package itself* (ESM-only, computes its own

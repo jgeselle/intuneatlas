@@ -7,6 +7,7 @@ interface ScanRow {
   scanned_at: string;
   flow: string;
   tenant: string;
+  tenant_name: string | null;
   policy_count: number;
 }
 
@@ -39,8 +40,8 @@ export function recordScan(report: ScanReport): void {
   db.exec("BEGIN");
   try {
     const scanResult = db
-      .prepare(`INSERT INTO scans (scanned_at, flow, tenant, policy_count) VALUES (?, ?, ?, ?)`)
-      .run(report.scannedAt, report.flow, report.tenant, report.policyCount);
+      .prepare(`INSERT INTO scans (scanned_at, flow, tenant, tenant_name, policy_count) VALUES (?, ?, ?, ?, ?)`)
+      .run(report.scannedAt, report.flow, report.tenant, report.tenantName ?? null, report.policyCount);
     const scanId = scanResult.lastInsertRowid;
 
     const insertSetting = db.prepare(`
@@ -127,6 +128,7 @@ export function getLatestScan(tenant?: string): ScanReport | undefined {
     scannedAt: scan.scanned_at,
     flow: scan.flow,
     tenant: scan.tenant,
+    ...(scan.tenant_name ? { tenantName: scan.tenant_name } : {}),
     policyCount: scan.policy_count,
     settingCount: settings.length,
     conflictCount: settings.filter((s) => s.conflict).length,

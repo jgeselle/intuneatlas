@@ -4,7 +4,7 @@ import type { RawSimplePolicy } from "./types.js";
 
 interface GraphCompliancePolicy {
   id: string;
-  "@odata.type": string;
+  "@odata.type"?: string;
   displayName?: string;
   assignments?: Array<{ target: { "@odata.type": string; groupId?: string } }>;
 }

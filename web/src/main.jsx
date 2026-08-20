@@ -10,8 +10,14 @@ import "./index.css";
 // connect screen be exercised during frontend-only development.
 const report = window.__INTUNEATLAS_REPORT__ ?? null;
 
+// Who's looking at this instance — `{ name, email }`. The server always
+// verifies a real Microsoft sign-in before this page is ever served (see
+// staticServer.ts), so this is never null in practice; frontend-only dev
+// (`vite dev`) never gets it injected at all, hence the fallback.
+const session = window.__INTUNEATLAS_SESSION__ ?? null;
+
 createRoot(document.getElementById("root")).render(
   <StrictMode>
-    <App initialReport={report} />
+    <App initialReport={report} session={session} />
   </StrictMode>,
 );

@@ -1,3 +1,4 @@
+import { GRAPH_BETA_BASE } from "../config.js";
 import { graphGetAll } from "../graph.js";
 import { mapAssignmentTargets } from "./assignments.js";
 import { resolveSettingDefinition, type ResolvedDefinition } from "./settingDefinitions.js";
@@ -24,9 +25,13 @@ interface GraphSetting {
 }
 
 export async function fetchConfigurationPolicies(token: string): Promise<RawPolicy[]> {
+  // Confirmed live against a real tenant: this resource 404s on v1.0
+  // ("Resource not found for the segment 'configurationPolicies'") — it's
+  // still beta-only, same as setting-definition resolution below.
   const policies = await graphGetAll<GraphPolicy>(
     token,
     "/deviceManagement/configurationPolicies?$expand=Assignments",
+    GRAPH_BETA_BASE,
   );
 
   return Promise.all(
@@ -44,6 +49,7 @@ async function fetchPolicySettings(token: string, policyId: string): Promise<Raw
   const graphSettings = await graphGetAll<GraphSetting>(
     token,
     `/deviceManagement/configurationPolicies/${policyId}/settings`,
+    GRAPH_BETA_BASE,
   );
 
   return Promise.all(

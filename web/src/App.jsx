@@ -18,9 +18,33 @@ import {
   ChatCircle,
   Compass,
   ArrowCounterClockwise,
+  ArrowsClockwise,
   PaperPlaneTilt,
   Clock,
+  SignOut,
+  CaretDown,
 } from "@phosphor-icons/react";
+
+/* --------------------------------------------------------------- utils --- */
+
+function initialsOf(name) {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  const first = parts[0][0];
+  const last = parts.length > 1 ? parts[parts.length - 1][0] : "";
+  return (first + last).toUpperCase();
+}
+
+function sinceLabel(mins) {
+  if (mins <= 0) return "just now";
+  if (mins === 1) return "1 minute ago";
+  if (mins < 60) return mins + " minutes ago";
+  const h = Math.floor(mins / 60);
+  if (h === 1) return "1 hour ago";
+  if (h < 24) return h + " hours ago";
+  const d = Math.floor(h / 24);
+  return d === 1 ? "1 day ago" : d + " days ago";
+}
 
 /* ------------------------------------------------------------- styles --- */
 
@@ -584,9 +608,9 @@ function Recommendations({ settingIndex, onOpen }) {
 
 /* ---------------------------------------------------------- change log --- */
 
-function ChangeCard({ change, onUpdateField, onRevert }) {
+function ChangeCard({ change, onUpdateField, onRevert, viewer }) {
   const [reason, setReason] = useState(change.reason);
-  const [reviewedBy, setReviewedBy] = useState(change.reviewedBy);
+  const reviewedByMe = change.reviewedBy === viewer.name;
 
   return (
     <li className="rounded-lg border border-stone-200 bg-white p-4">
@@ -624,22 +648,29 @@ function ChangeCard({ change, onUpdateField, onRevert }) {
             className="mt-1 w-full resize-none rounded-md border border-stone-300 bg-white p-2 text-xs placeholder-stone-400 focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600"
           />
         </label>
-        <label className="block">
+        <div>
           <span className="text-xs font-medium text-stone-500">Reviewed by</span>
-          <input
-            value={reviewedBy}
-            onChange={(e) => setReviewedBy(e.target.value)}
-            onBlur={() => reviewedBy !== change.reviewedBy && onUpdateField(change.id, "reviewedBy", reviewedBy)}
-            placeholder="Name of the second pair of eyes"
-            className="mt-1 w-full rounded-md border border-stone-300 bg-white p-2 text-xs placeholder-stone-400 focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600"
-          />
-        </label>
+          <button
+            type="button"
+            onClick={() => onUpdateField(change.id, "reviewedBy", viewer.name)}
+            disabled={reviewedByMe}
+            className={
+              "mt-1 flex w-full items-center justify-center gap-1.5 rounded-md p-2 text-xs font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 " +
+              (reviewedByMe
+                ? "cursor-default bg-teal-50 text-teal-700 ring-1 ring-inset ring-teal-200"
+                : "bg-stone-100 text-stone-700 hover:bg-stone-200")
+            }
+          >
+            <Check className="h-3.5 w-3.5" />
+            {reviewedByMe ? `Reviewed by ${viewer.name}` : `Mark reviewed by ${viewer.name}`}
+          </button>
+        </div>
       </div>
     </li>
   );
 }
 
-function ChangeLog({ changes, onUpdateField, onRevert }) {
+function ChangeLog({ changes, onUpdateField, onRevert, viewer }) {
   const list = Object.values(changes).sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
   const ready = list.filter((c) => c.ready).length;
 
@@ -675,7 +706,7 @@ function ChangeLog({ changes, onUpdateField, onRevert }) {
       ) : (
         <ul className="space-y-3">
           {list.map((c) => (
-            <ChangeCard key={c.id} change={c} onUpdateField={onUpdateField} onRevert={onRevert} />
+            <ChangeCard key={c.id} change={c} onUpdateField={onUpdateField} onRevert={onRevert} viewer={viewer} />
           ))}
         </ul>
       )}
@@ -886,22 +917,17 @@ function SimplePolicyList({ kindLabel, items, query, setQuery, onOpen }) {
 
 /* -------------------------------------------------------- connect screen --- */
 
-function ConnectScreen({ onConnected }) {
-  const [tenant, setTenant] = useState("");
+function ConnectScreen({ onConnected, session }) {
   const [scanning, setScanning] = useState(false);
   const [error, setError] = useState(null);
 
   async function submit(e) {
     e.preventDefault();
-    if (!tenant.trim() || scanning) return;
+    if (scanning) return;
     setScanning(true);
     setError(null);
     try {
-      const res = await fetch("/api/scan", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tenant: tenant.trim() }),
-      });
+      const res = await fetch("/api/scan", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error || "Scan failed");
       onConnected(body);
@@ -918,39 +944,158 @@ function ConnectScreen({ onConnected }) {
           <Compass className="h-6 w-6 shrink-0 text-teal-700" />
           <div className="text-sm font-semibold">IntuneAtlas</div>
         </div>
-        <h1 className="mt-4 text-lg font-semibold">Connect a tenant</h1>
+        <h1 className="mt-4 text-lg font-semibold">No scan yet</h1>
         <p className="mt-1 text-sm text-stone-500">
-          Nothing's been scanned yet. Sign in to a tenant to build the settings index — this opens an interactive sign-in in your
-          browser.
+          {session ? `Signed in as ${session.name}. ` : ""}
+          Nothing's been pulled from Intune yet — scan now to build the settings index.
         </p>
-        <form onSubmit={submit} className="mt-4 space-y-3">
-          <input
-            value={tenant}
-            onChange={(e) => setTenant(e.target.value)}
-            placeholder="contoso.onmicrosoft.com"
-            autoFocus
-            className="w-full rounded-md border border-stone-300 bg-white px-3 py-2 text-sm placeholder-stone-400 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
-          />
+        <form onSubmit={submit} className="mt-4">
           <button
             type="submit"
-            disabled={!tenant.trim() || scanning}
+            disabled={scanning}
             className="w-full rounded-md bg-teal-800 px-3.5 py-2 text-sm font-medium text-white hover:bg-teal-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-400"
           >
-            {scanning ? "Scanning…" : "Sign in & scan"}
+            {scanning ? "Scanning…" : "Scan now"}
           </button>
         </form>
         {error && <p className="mt-3 text-xs text-red-700">{error}</p>}
-        <p className="mt-4 text-xs text-stone-400">
-          Advanced auth (device code, client credentials) is CLI-only — run <code className="font-mono">intuneatlas ui --help</code>.
-        </p>
+        {session && (
+          <p className="mt-4 text-center text-xs text-stone-400">
+            Wrong account? <a href="/auth/logout" className="text-stone-500 underline hover:text-stone-700">Sign out</a>
+          </p>
+        )}
       </div>
+    </div>
+  );
+}
+
+/* ----------------------------------------------------- sync & identity --- */
+
+function SyncControl({ syncing, syncedAgo, onSync, compact = false }) {
+  const dot = syncing ? "bg-teal-300" : syncedAgo >= 60 ? "bg-amber-400" : "bg-teal-400";
+
+  if (compact) {
+    return (
+      <button
+        onClick={onSync}
+        disabled={syncing}
+        aria-label={syncing ? "Syncing" : "Sync tenant"}
+        title={syncing ? "Reading tenant…" : "Synced " + sinceLabel(syncedAgo)}
+        className="rounded-md p-1.5 text-teal-100 hover:bg-teal-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300 disabled:text-teal-400"
+      >
+        <ArrowsClockwise className={"h-4 w-4 " + (syncing ? "animate-spin" : "")} />
+      </button>
+    );
+  }
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 px-1">
+        <span className={"h-1.5 w-1.5 shrink-0 rounded-full " + dot} />
+        <span className="min-w-0 truncate text-xs text-teal-300">
+          {syncing ? "Reading tenant…" : "Synced " + sinceLabel(syncedAgo)}
+        </span>
+      </div>
+      <button
+        onClick={onSync}
+        disabled={syncing}
+        className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-teal-50 ring-1 ring-inset ring-teal-700 hover:bg-teal-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300 disabled:cursor-not-allowed disabled:text-teal-400"
+      >
+        <ArrowsClockwise className={"h-3.5 w-3.5 " + (syncing ? "animate-spin" : "")} />
+        {syncing ? "Syncing" : "Sync now"}
+      </button>
+    </div>
+  );
+}
+
+function AccountMenu({ session, tenant, up = false, full = false }) {
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+
+  const initials = initialsOf(session.name);
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="true"
+        aria-expanded={open}
+        className={
+          "flex items-center gap-2 rounded-md py-1 pl-1 pr-1.5 hover:bg-teal-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300 " +
+          (full ? "w-full" : "")
+        }
+      >
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-teal-700 text-xs font-semibold text-white">
+          {initials}
+        </span>
+        {full ? (
+          <span className="min-w-0 flex-1 text-left">
+            <span className="block truncate text-sm text-white">{session.name}</span>
+            <span className="block truncate text-xs text-teal-300">{session.email}</span>
+          </span>
+        ) : (
+          <span className="hidden text-sm text-teal-50 sm:block">{session.name}</span>
+        )}
+        <CaretDown className="h-3.5 w-3.5 shrink-0 text-teal-300" />
+      </button>
+
+      {open && (
+        <>
+          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+          <div
+            className={
+              "absolute z-40 rounded-lg border border-stone-200 bg-white p-3 shadow-xl " +
+              // "up" opens from the sidebar footer, which is narrower than a
+              // fixed width — stretch to match the rail instead of
+              // overflowing past its edge. The other placement has open
+              // room to its left, so a fixed width there is fine.
+              (up ? "bottom-full left-0 right-0 mb-2" : "right-0 mt-2 w-64")
+            }
+          >
+            <div className="flex items-center gap-2.5">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-teal-800 text-xs font-semibold text-white">
+                {initials}
+              </span>
+              <div className="min-w-0">
+                <div className="truncate text-sm font-medium">{session.name}</div>
+                <div className="truncate text-xs text-stone-500">{session.email}</div>
+              </div>
+            </div>
+
+            {tenant && (
+              <dl className="mt-3 space-y-1.5 border-t border-stone-100 pt-3 text-xs">
+                <div className="flex items-baseline justify-between gap-3">
+                  <dt className="text-stone-500">Tenant</dt>
+                  <dd className="truncate text-right text-stone-700">{tenant}</dd>
+                </div>
+              </dl>
+            )}
+
+            <a
+              href="/auth/logout"
+              className="mt-3 flex w-full items-center gap-2 rounded-md border-t border-stone-200 px-2 pt-3 pb-1.5 text-xs font-medium text-stone-600 hover:bg-stone-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+            >
+              <SignOut className="h-3.5 w-3.5" />
+              Sign out
+            </a>
+          </div>
+        </>
+      )}
     </div>
   );
 }
 
 /* ----------------------------------------------------------------- app --- */
 
-export default function App({ initialReport }) {
+export default function App({ initialReport, session }) {
   const [report, setReport] = useState(initialReport);
   const [view, setView] = useState("overview");
   const [query, setQuery] = useState("");
@@ -959,6 +1104,8 @@ export default function App({ initialReport }) {
   const [changes, setChanges] = useState(initialReport?.changes ?? {});
   const [open, setOpen] = useState(null);
   const [toast, setToast] = useState(null);
+  const [syncing, setSyncing] = useState(false);
+  const [, forceTick] = useState(0);
 
   // Notes and staged changes are persisted server-side and aren't
   // scan-specific — resync whenever a fresh report comes in (e.g. after
@@ -968,18 +1115,43 @@ export default function App({ initialReport }) {
     if (report?.changes) setChanges(report.changes);
   }, [report]);
 
+  // The "synced N minutes ago" label ages whether or not anyone's looking —
+  // just a render tick, syncedAgo below is always recomputed from the real
+  // scannedAt timestamp rather than tracked as separate drift-prone state.
+  useEffect(() => {
+    const t = window.setInterval(() => forceTick((n) => n + 1), 60000);
+    return () => window.clearInterval(t);
+  }, []);
+
   if (!report) {
-    return <ConnectScreen onConnected={setReport} />;
+    return <ConnectScreen onConnected={setReport} session={session} />;
   }
 
   const settingIndex = report.settings ?? [];
   const compliancePolicies = report.compliancePolicies ?? [];
   const enrollmentConfigurations = report.enrollmentConfigurations ?? [];
+  const syncedAgo = report.scannedAt ? Math.max(0, Math.round((Date.now() - new Date(report.scannedAt).getTime()) / 60000)) : 0;
 
   const flash = (msg) => {
     setToast(msg);
     window.setTimeout(() => setToast(null), 2600);
   };
+
+  async function resync() {
+    if (syncing) return;
+    setSyncing(true);
+    try {
+      const res = await fetch("/api/scan", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || "Sync failed");
+      setReport(body);
+      flash("Re-indexed " + (body.policyCount ?? 0) + " policies · " + (body.settingCount ?? 0) + " settings");
+    } catch (err) {
+      flash(err.message);
+    } finally {
+      setSyncing(false);
+    }
+  }
 
   async function addNote(key, text) {
     try {
@@ -1065,16 +1237,25 @@ export default function App({ initialReport }) {
 
   return (
     <div className="flex min-h-screen w-full flex-col bg-stone-50 text-stone-900 lg:flex-row">
-      <aside className="shrink-0 bg-teal-900 lg:w-60">
+      <aside className="flex shrink-0 flex-col bg-teal-900 lg:w-60">
         <div className="flex items-center gap-2.5 px-4 py-4">
           <Compass className="h-6 w-6 shrink-0 text-teal-300" />
-          <div>
-            <div className="text-sm font-semibold leading-tight text-white">IntuneAtlas</div>
-            <div className="text-xs leading-tight text-teal-300">
-              {report.scannedAt ? new Date(report.scannedAt).toLocaleString() : "no scan loaded"}
+          <div className="min-w-0">
+            <div className="truncate text-sm font-semibold leading-tight text-white">IntuneAtlas</div>
+            <div className="truncate text-xs leading-tight text-teal-300" title={report.tenant}>
+              {report.tenantName || report.tenant || "no tenant"}
             </div>
           </div>
+
+          {/* narrow layouts: the sidebar collapses into a top bar, so these ride along here */}
+          {session && (
+            <div className="ml-auto flex shrink-0 items-center gap-1 lg:hidden">
+              <SyncControl syncing={syncing} syncedAgo={syncedAgo} onSync={resync} compact />
+              <AccountMenu session={session} tenant={report.tenantName || report.tenant} />
+            </div>
+          )}
         </div>
+
         <nav className="flex gap-1 overflow-x-auto px-2 pb-3 lg:flex-col lg:overflow-visible lg:pb-4">
           {nav.map((n) => {
             const Icon = n.icon;
@@ -1102,6 +1283,16 @@ export default function App({ initialReport }) {
             );
           })}
         </nav>
+
+        {/* wide layouts: sync and identity settle at the foot of the rail */}
+        <div className="mt-auto hidden border-t border-teal-800 px-3 py-3 lg:block">
+          <SyncControl syncing={syncing} syncedAgo={syncedAgo} onSync={resync} />
+          {session && (
+            <div className="mt-3 border-t border-teal-800 pt-3">
+              <AccountMenu session={session} tenant={report.tenantName || report.tenant} up full />
+            </div>
+          )}
+        </div>
       </aside>
 
       <main className="min-w-0 flex-1">
@@ -1154,7 +1345,7 @@ export default function App({ initialReport }) {
           )}
 
           {view === "changes" && (
-            <ChangeLog changes={changes} onUpdateField={updateChangeField} onRevert={revertEntryChange} />
+            <ChangeLog changes={changes} onUpdateField={updateChangeField} onRevert={revertEntryChange} viewer={session} />
           )}
         </div>
       </main>

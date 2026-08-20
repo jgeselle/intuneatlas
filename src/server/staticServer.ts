@@ -2,6 +2,9 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { readFile } from "node:fs/promises";
 import { extname, join } from "node:path";
 import { resolveAppPath } from "../packagedPaths.js";
+import type { ViewerIdentity, WebSessionManager } from "../auth/webSession.js";
+
+export const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "::1"]);
 
 // Lazy, not a top-level constant — cli.ts imports every command module
 // eagerly regardless of which command actually runs, so a top-level
@@ -20,11 +23,6 @@ const CONTENT_TYPES: Record<string, string> = {
   ".png": "image/png",
   ".ico": "image/x-icon",
 };
-
-export interface ScanRequestBody {
-  tenant: string;
-  deviceCode?: boolean;
-}
 
 export interface NoteRequestBody {
   targetKey: string;
@@ -52,20 +50,37 @@ export interface StartServerOptions {
   /** null means "nothing scanned yet" — the UI shows its connect screen. */
   report: unknown | null;
   startPort?: number;
-  /** Backs the browser's "connect a tenant" flow — kept out of this module so it stays auth-agnostic. */
-  onScanRequest?: (body: ScanRequestBody) => Promise<unknown>;
+  /** Interface to bind to. Defaults to loopback-only; anything else is a shared/team deployment. */
+  host?: string;
+  /**
+   * There's exactly one way in: a real per-browser Entra sign-in (see
+   * src/auth/webSession.ts), gating every route — including the page itself
+   * — whether this is running solo on a laptop or exposed for a team. What
+   * differs between those two is only `host` above and whether sign-in can
+   * happen silently from a cached account (see WebSessionManager.trySilentLogin).
+   */
+  session: WebSessionManager;
+  /** Backs the browser's "scan now" action — the token comes from the caller's own session, there's nothing else to pass in. */
+  onScanRequest?: (graphToken: string) => Promise<unknown>;
   /** Backs the note-adding UI; returns the updated note list for that key. */
-  onNoteRequest?: (body: NoteRequestBody) => unknown[];
+  onNoteRequest?: (body: NoteRequestBody, viewer: ViewerIdentity) => unknown[];
   /** Stages a change; must return the created record including its targetKey. */
   onStageChange?: (body: StageChangeRequestBody) => WithTargetKey;
   /** Updates reason/reviewer on a staged change; must return the updated record including its targetKey. */
-  onUpdateChange?: (id: number, body: UpdateChangeRequestBody) => WithTargetKey;
+  onUpdateChange?: (id: number, body: UpdateChangeRequestBody, viewer: ViewerIdentity) => WithTargetKey;
   /** Reverts a staged change; returns the targetKey that was removed, or undefined if it didn't exist. */
   onRevertChange?: (id: number) => string | undefined;
 }
 
 export async function startServer(options: StartServerOptions): Promise<{ url: string; server: Server }> {
   let currentReport = options.report;
+  const host = options.host ?? "127.0.0.1";
+  const session = options.session;
+
+  function requestOrigin(req: IncomingMessage): string {
+    const proto = (req.headers["x-forwarded-proto"] as string | undefined) ?? "http";
+    return `${proto}://${req.headers.host}`;
+  }
 
   function setChange(targetKey: string, change: unknown): void {
     if (!currentReport || typeof currentReport !== "object") return;
@@ -84,15 +99,54 @@ export async function startServer(options: StartServerOptions): Promise<{ url: s
 
   const server = createServer(async (req, res) => {
     try {
+      if (req.method === "GET" && req.url === "/auth/login") {
+        const url = await session.loginRedirectUrl(`${requestOrigin(req)}/auth/callback`);
+        res.writeHead(302, { Location: url });
+        res.end();
+        return;
+      }
+      if (req.method === "GET" && req.url?.startsWith("/auth/callback")) {
+        await handleCallback(req, res, session, requestOrigin);
+        return;
+      }
+      if (req.method === "GET" && req.url === "/auth/logout") {
+        await session.signOut(req.headers.cookie);
+        res.writeHead(302, { Location: "/", "Set-Cookie": session.clearSessionCookie() });
+        res.end();
+        return;
+      }
+
+      let viewer = session.getSession(req.headers.cookie);
+      if (!viewer && req.method === "GET") {
+        // A returning solo user shouldn't have to click through a visible
+        // sign-in every launch — try the OS-cached account first, silently.
+        const silent = await session.trySilentLogin();
+        if (silent) {
+          res.writeHead(302, { Location: req.url ?? "/", "Set-Cookie": session.sessionCookie(silent.sessionId) });
+          res.end();
+          return;
+        }
+      }
+      if (!viewer) {
+        if (req.method === "GET") {
+          res.writeHead(302, { Location: "/auth/login" });
+          res.end();
+        } else {
+          res.writeHead(401, { "Content-Type": "application/json" });
+          res.end(JSON.stringify({ error: "Sign in required.", loginUrl: "/auth/login" }));
+        }
+        return;
+      }
+
       if (req.method === "POST" && req.url === "/api/scan") {
-        await handleScanRequest(req, res, options.onScanRequest, (report) => {
+        await handleScanRequest(req, res, options.onScanRequest, session, (report) => {
           currentReport = report;
         });
         return;
       }
 
       if (req.method === "POST" && req.url === "/api/notes") {
-        await handleNoteRequest(req, res, options.onNoteRequest, (targetKey, notes) => {
+        await handleNoteRequest(req, res, options.onNoteRequest, viewer, (targetKey, notes) => {
           if (currentReport && typeof currentReport === "object") {
             const existing = currentReport as Record<string, unknown>;
             const existingNotes = (existing.notes as Record<string, unknown[]> | undefined) ?? {};
@@ -109,7 +163,7 @@ export async function startServer(options: StartServerOptions): Promise<{ url: s
 
       const changeIdMatch = req.url?.match(/^\/api\/changes\/(\d+)$/);
       if (changeIdMatch && req.method === "PATCH") {
-        await handleUpdateChange(req, res, Number(changeIdMatch[1]), options.onUpdateChange, (change) =>
+        await handleUpdateChange(req, res, Number(changeIdMatch[1]), options.onUpdateChange, viewer, (change) =>
           setChange(change.targetKey, change),
         );
         return;
@@ -119,18 +173,53 @@ export async function startServer(options: StartServerOptions): Promise<{ url: s
         return;
       }
 
-      await serveStatic(req, res, () => currentReport);
+      await serveStatic(req, res, () => currentReport, viewer);
     } catch {
       res.writeHead(404, { "Content-Type": "text/plain" });
       res.end("Not found");
     }
   });
 
-  const port = await listenOnFreePort(server, options.startPort ?? 7878);
-  return { url: `http://localhost:${port}`, server };
+  // The redirect URI registered on the Entra app is an exact string, and
+  // OAuth doesn't allow wildcard port matching — every launch goes through
+  // the same sign-in now, so silently walking to the next free port would
+  // just break it. Fail loudly instead of guessing.
+  const port = await listenOnFreePort(server, options.startPort ?? 7878, host);
+  return { url: `http://${LOOPBACK_HOSTS.has(host) ? "localhost" : host}:${port}`, server };
 }
 
-async function serveStatic(req: IncomingMessage, res: ServerResponse, getReport: () => unknown): Promise<void> {
+async function handleCallback(
+  req: IncomingMessage,
+  res: ServerResponse,
+  session: WebSessionManager,
+  requestOrigin: (req: IncomingMessage) => string,
+): Promise<void> {
+  const url = new URL(req.url ?? "", requestOrigin(req));
+  const code = url.searchParams.get("code");
+  const state = url.searchParams.get("state");
+  if (!code || !state) {
+    res.writeHead(400, { "Content-Type": "text/plain" });
+    res.end("Missing code or state.");
+    return;
+  }
+
+  try {
+    const { sessionId } = await session.completeLogin({ code, state, redirectUri: `${requestOrigin(req)}/auth/callback` });
+    res.writeHead(302, { Location: "/", "Set-Cookie": session.sessionCookie(sessionId) });
+    res.end();
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    res.writeHead(400, { "Content-Type": "text/plain" });
+    res.end(`Sign-in failed: ${message}`);
+  }
+}
+
+async function serveStatic(
+  req: IncomingMessage,
+  res: ServerResponse,
+  getReport: () => unknown,
+  viewer: ViewerIdentity,
+): Promise<void> {
   const dist = webDist();
   const requestPath = (req.url ?? "/").split("?")[0];
   const filePath = requestPath === "/" ? "index.html" : requestPath.replace(/^\/+/, "");
@@ -145,7 +234,9 @@ async function serveStatic(req: IncomingMessage, res: ServerResponse, getReport:
   const contentType = CONTENT_TYPES[extname(targetPath)] ?? "application/octet-stream";
 
   if (extname(targetPath) === ".html") {
-    const injectedScript = `<script>window.__INTUNEATLAS_REPORT__ = ${JSON.stringify(getReport())};</script>`;
+    const injectedScript =
+      `<script>window.__INTUNEATLAS_REPORT__ = ${JSON.stringify(getReport())};` +
+      `window.__INTUNEATLAS_SESSION__ = ${JSON.stringify(viewer)};</script>`;
     body = Buffer.from(body.toString("utf8").replace("</head>", `${injectedScript}</head>`));
   }
 
@@ -157,6 +248,7 @@ async function handleScanRequest(
   req: IncomingMessage,
   res: ServerResponse,
   onScanRequest: StartServerOptions["onScanRequest"],
+  session: WebSessionManager,
   setReport: (report: unknown) => void,
 ): Promise<void> {
   if (!onScanRequest) {
@@ -166,14 +258,14 @@ async function handleScanRequest(
   }
 
   try {
-    const body = JSON.parse(await readRequestBody(req)) as ScanRequestBody;
-    if (!body.tenant) {
-      res.writeHead(400, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: "tenant is required" }));
+    const graphToken = await session.getGraphToken(req.headers.cookie);
+    if (!graphToken) {
+      res.writeHead(401, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Your sign-in expired — refresh the page to sign in again.", loginUrl: "/auth/login" }));
       return;
     }
 
-    const report = await onScanRequest(body);
+    const report = await onScanRequest(graphToken);
     setReport(report);
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify(report));
@@ -188,6 +280,7 @@ async function handleNoteRequest(
   req: IncomingMessage,
   res: ServerResponse,
   onNoteRequest: StartServerOptions["onNoteRequest"],
+  viewer: ViewerIdentity,
   onSaved: (targetKey: string, notes: unknown[]) => void,
 ): Promise<void> {
   if (!onNoteRequest) {
@@ -204,7 +297,7 @@ async function handleNoteRequest(
       return;
     }
 
-    const notes = onNoteRequest(body);
+    const notes = onNoteRequest(body, viewer);
     onSaved(body.targetKey, notes);
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify(notes));
@@ -251,6 +344,7 @@ async function handleUpdateChange(
   res: ServerResponse,
   id: number,
   onUpdateChange: StartServerOptions["onUpdateChange"],
+  viewer: ViewerIdentity,
   onSaved: (change: WithTargetKey) => void,
 ): Promise<void> {
   if (!onUpdateChange) {
@@ -267,7 +361,7 @@ async function handleUpdateChange(
       return;
     }
 
-    const change = onUpdateChange(id, body);
+    const change = onUpdateChange(id, body, viewer);
     onSaved(change);
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify(change));
@@ -311,20 +405,9 @@ function readRequestBody(req: IncomingMessage): Promise<string> {
   });
 }
 
-function listenOnFreePort(server: Server, startPort: number): Promise<number> {
+function listenOnFreePort(server: Server, startPort: number, host: string): Promise<number> {
   return new Promise((resolve, reject) => {
-    function tryPort(port: number) {
-      server.once("error", (err: NodeJS.ErrnoException) => {
-        if (err.code === "EADDRINUSE" && port < startPort + 20) {
-          tryPort(port + 1);
-        } else {
-          reject(err);
-        }
-      });
-      // Bind to localhost only — this server can trigger sign-in and serve
-      // real tenant data, it must not be reachable from the local network.
-      server.listen(port, "127.0.0.1", () => resolve(port));
-    }
-    tryPort(startPort);
+    server.once("error", reject);
+    server.listen(startPort, host, () => resolve(startPort));
   });
 }

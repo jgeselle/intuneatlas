@@ -4,7 +4,7 @@ import type { RawSimplePolicy } from "./types.js";
 
 interface GraphEnrollmentConfiguration {
   id: string;
-  "@odata.type": string;
+  "@odata.type"?: string;
   displayName?: string;
   priority?: number;
   assignments?: Array<{ target: { "@odata.type": string; groupId?: string } }>;

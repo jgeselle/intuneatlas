@@ -1,7 +1,11 @@
 export const GRAPH_V1_BASE = "https://graph.microsoft.com/v1.0";
 
-// Only for the specific calls that have no v1.0 equivalent yet — see
-// src/scan/settingDefinitions.ts for the one place this is used and why.
+// Only for the specific calls that have no v1.0 equivalent yet: setting
+// definition resolution (src/scan/settingDefinitions.ts) and Settings
+// Catalog configuration policies (src/scan/configurationPolicies.ts) — the
+// latter confirmed live against a real tenant to still 404 on v1.0 despite
+// docs suggesting otherwise ("Resource not found for the segment
+// 'configurationPolicies'").
 export const GRAPH_BETA_BASE = "https://graph.microsoft.com/beta";
 
 /**

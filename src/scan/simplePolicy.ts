@@ -3,7 +3,7 @@ import type { RawSimplePolicy } from "./types.js";
 
 interface GraphSimplePolicy {
   id: string;
-  "@odata.type": string;
+  "@odata.type"?: string;
   displayName?: string;
   name?: string;
   priority?: number;
@@ -19,7 +19,10 @@ interface GraphSimplePolicy {
  * "deviceEnrollmentPlatformRestrictions". For enrollment configs this is a
  * config *kind*, not a device platform — expected, not a bug.
  */
-export function platformFromODataType(odataType: string): string {
+export function platformFromODataType(odataType: string | undefined): string {
+  // Graph omits @odata.type for some tenant-specific system-created entries
+  // (seen live) — one odd policy shouldn't crash the whole scan over it.
+  if (!odataType) return "unknown";
   return odataType
     .replace(/^#microsoft\.graph\./, "")
     .replace(/CompliancePolicy$/, "")

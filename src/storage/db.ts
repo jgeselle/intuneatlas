@@ -26,6 +26,7 @@ export function getDb(): DatabaseSync {
       scanned_at TEXT NOT NULL,
       flow TEXT NOT NULL,
       tenant TEXT NOT NULL,
+      tenant_name TEXT,
       policy_count INTEGER NOT NULL
     );
 
@@ -95,8 +96,13 @@ export function getDb(): DatabaseSync {
  * this graduates into something more formal.
  */
 function migrate(db: DatabaseSync): void {
-  const columns = db.prepare(`PRAGMA table_info(settings_snapshot)`).all() as Array<{ name: string }>;
-  if (!columns.some((c) => c.name === "rec_json")) {
+  const settingsColumns = db.prepare(`PRAGMA table_info(settings_snapshot)`).all() as Array<{ name: string }>;
+  if (!settingsColumns.some((c) => c.name === "rec_json")) {
     db.exec(`ALTER TABLE settings_snapshot ADD COLUMN rec_json TEXT`);
+  }
+
+  const scanColumns = db.prepare(`PRAGMA table_info(scans)`).all() as Array<{ name: string }>;
+  if (!scanColumns.some((c) => c.name === "tenant_name")) {
+    db.exec(`ALTER TABLE scans ADD COLUMN tenant_name TEXT`);
   }
 }

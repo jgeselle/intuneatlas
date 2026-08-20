@@ -55,6 +55,32 @@ export async function registerCachePlugin(): Promise<void> {
   pluginRegistered = true;
 }
 
+/**
+ * OS-native persistent cache plugin for a raw `msal-node` `PublicClientApplication`
+ * (used by src/auth/webSession.ts for the browser sign-in flow) — a different
+ * plugin family from registerCachePlugin() above (that one is `@azure/identity`-
+ * specific), but backed by the exact same native dependency (`keytar`, via
+ * `@azure/msal-node-extensions`) and so needs the exact same guardrails:
+ * Windows/macOS only, never in a packaged SEA exe, and never allowed to crash
+ * the caller — any failure here just means no persistence, not a dead process.
+ */
+export async function createMsalCachePlugin(cacheFileName: string): Promise<import("@azure/msal-common/node").ICachePlugin | undefined> {
+  if (!CACHE_SUPPORTED) return undefined;
+  try {
+    const { PersistenceCreator, DataProtectionScope, PersistenceCachePlugin } = await import("@azure/msal-node-extensions");
+    await mkdir(CACHE_DIR, { recursive: true });
+    const persistence = await PersistenceCreator.createPersistence({
+      cachePath: join(CACHE_DIR, cacheFileName),
+      serviceName: CACHE_NAME,
+      accountName: cacheFileName,
+      dataProtectionScope: DataProtectionScope.CurrentUser,
+    });
+    return new PersistenceCachePlugin(persistence);
+  } catch {
+    return undefined; // no libsecret, unsupported platform, or anything else — proceed without persistence
+  }
+}
+
 function recordPath(tenantId: string, clientId: string): string {
   return join(CACHE_DIR, `${tenantId}-${clientId}.json`);
 }
