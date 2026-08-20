@@ -1,13 +1,14 @@
-name: Release (Windows)
+name: Release
 
-# Push a version tag (e.g. `v0.1.0`) to trigger — builds the standalone
-# Windows exe end to end and attaches a zip to a GitHub Release.
+# Push a version tag (e.g. `v0.1.0`) to trigger — builds standalone Windows
+# and Linux executables end to end and attaches both to a GitHub Release.
 #
-# This only runs on a real Windows runner because the SEA packaging step
-# (scripts/build-sea.mjs) patches a real Windows node.exe binary — that
-# can't be done from Linux. Nothing here has ever actually executed before
-# a human pushes the first tag; treat the first run as a real test, not a
-# rubber stamp.
+# The Windows job only runs on a real Windows runner because the SEA
+# packaging step (scripts/build-sea.mjs) patches a real Windows node.exe
+# binary — that can't be done from Linux, and has never actually executed
+# before a human pushes the first tag against it, so treat that job's
+# first run as a real test, not a rubber stamp. The Linux job's steps have
+# been run and verified for real (this repo's own dev sandbox is Linux).
 on:
   push:
     tags:
@@ -32,11 +33,8 @@ jobs:
       - name: Build (TypeScript + web UI)
         run: npm run build
 
-      - name: Bundle to a single file
-        run: npm run bundle
-
       - name: Package the standalone exe
-        run: node scripts/build-sea.mjs
+        run: npm run package
 
       # TODO: sign build/intuneatlas.exe once a certificate exists — see
       # SignPath Foundation / a purchased IV/OV cert with cloud-HSM signing
@@ -57,4 +55,38 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: release/intuneatlas-windows.zip
+          generate_release_notes: true
+
+  build-linux-exe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.15.0"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build (TypeScript + web UI)
+        run: npm run build
+
+      - name: Package the standalone binary
+        run: npm run package
+
+      - name: Assemble the release folder
+        run: |
+          dest="release/intuneatlas"
+          mkdir -p "$dest/web"
+          cp build/intuneatlas "$dest/"
+          chmod +x "$dest/intuneatlas"
+          cp -r web/dist "$dest/web/dist"
+          cp -r baselines "$dest/baselines"
+          tar -czf release/intuneatlas-linux.tar.gz -C release intuneatlas
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/intuneatlas-linux.tar.gz
           generate_release_notes: true

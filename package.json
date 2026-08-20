@@ -1,6 +1,6 @@
 {
   "name": "intuneatlas",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "description": "Flatten every Intune profile into one settings index, keyed on the CSP path.",
   "license": "MIT",
   "type": "module",
@@ -14,7 +14,7 @@
     "build": "tsc && npm run build:ui",
     "build:ui": "cd web && npm install && npm run build",
     "bundle": "node scripts/bundle.mjs",
-    "package:win": "node scripts/bundle.mjs && node scripts/build-sea.mjs",
+    "package": "node scripts/bundle.mjs && node scripts/build-sea.mjs",
     "dev": "tsx src/cli.ts",
     "start": "node dist/cli.js"
   },

@@ -1,25 +1,14 @@
 #!/usr/bin/env bash
-# intuneatlas installer for Linux — clones the latest release and builds it
-# from source, then puts a wrapper on your PATH.
+# intuneatlas installer for Linux — downloads the latest standalone Linux
+# binary and puts it on your PATH. No Node.js required, same as Windows.
 #
 # Usage:  curl -fsSL https://intuneatlas.com/install.sh | bash
-#
-# Unlike Windows, no packaged binary here: a Linux server already having
-# Node.js is a reasonable assumption, and building from source avoids
-# needing a whole separate SEA packaging pipeline (Windows only, for now)
-# just for this.
 
 set -euo pipefail
 
 API_URL="https://api.github.com/repos/jgeselle/intuneatlas/releases/latest"
 INSTALL_DIR="$HOME/.local/share/intuneatlas"
 BIN_DIR="$HOME/.local/bin"
-
-if ! command -v node >/dev/null 2>&1; then
-  echo "Node.js 22+ is required but wasn't found on PATH." >&2
-  echo "Install it first (nvm, your package manager, or nodejs.org), then re-run this." >&2
-  exit 1
-fi
 
 if ! command -v tar >/dev/null 2>&1; then
   echo "tar is required but wasn't found on PATH." >&2
@@ -28,34 +17,30 @@ fi
 
 echo "Fetching the latest release..."
 RELEASE_JSON="$(curl -fsSL "$API_URL")"
-TARBALL_URL="$(printf '%s' "$RELEASE_JSON" | grep -o '"tarball_url": *"[^"]*"' | head -n1 | cut -d'"' -f4)"
+ASSET_URL="$(printf '%s' "$RELEASE_JSON" | grep -o '"browser_download_url": *"[^"]*intuneatlas-linux\.tar\.gz"' | head -n1 | cut -d'"' -f4)"
 TAG_NAME="$(printf '%s' "$RELEASE_JSON" | grep -o '"tag_name": *"[^"]*"' | head -n1 | cut -d'"' -f4)"
-if [ -z "$TARBALL_URL" ]; then
-  echo "Couldn't find a tarball on the latest release." >&2
+if [ -z "$ASSET_URL" ]; then
+  echo "Couldn't find intuneatlas-linux.tar.gz in the latest release ($TAG_NAME)." >&2
   exit 1
 fi
 
-echo "Downloading $TAG_NAME source..."
+echo "Downloading $TAG_NAME..."
 rm -rf "$INSTALL_DIR"
 mkdir -p "$INSTALL_DIR"
-# No git dependency: a plain source tarball from GitHub's own release API,
-# fetched with curl (already required to get this far) and extracted with
-# tar (near-universal, unlike git — this bit a real run on a minimal
-# Debian box). --strip-components drops the "owner-repo-sha/" wrapper
-# directory GitHub's tarballs are packaged with.
-curl -fsSL "$TARBALL_URL" | tar -xz -C "$INSTALL_DIR" --strip-components=1
-
-cd "$INSTALL_DIR"
-echo "Installing dependencies and building (this can take a minute)..."
-npm install --no-audit --no-fund --silent
-npm run build --silent
+# --strip-components drops the top-level "intuneatlas/" wrapper directory
+# the release tarball is packaged with, so the binary and its web/dist +
+# baselines siblings land directly in $INSTALL_DIR.
+curl -fsSL "$ASSET_URL" | tar -xz -C "$INSTALL_DIR" --strip-components=1
+chmod +x "$INSTALL_DIR/intuneatlas"
 
 mkdir -p "$BIN_DIR"
-cat > "$BIN_DIR/intuneatlas" <<WRAPPER
-#!/usr/bin/env bash
-exec node "$INSTALL_DIR/dist/cli.js" "\$@"
-WRAPPER
-chmod +x "$BIN_DIR/intuneatlas"
+# A symlink, not a copy or wrapper script — the binary looks for its
+# web/dist and baselines siblings next to wherever process.execPath
+# resolves to, and confirmed for real (this repo's dev sandbox is Linux)
+# that Node resolves execPath through a symlink to the real target, so
+# this still finds them correctly in $INSTALL_DIR even when run via the
+# symlink in $BIN_DIR.
+ln -sf "$INSTALL_DIR/intuneatlas" "$BIN_DIR/intuneatlas"
 
 VERSION="$("$BIN_DIR/intuneatlas" --version)"
 
