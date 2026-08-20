@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Getting Started · IntuneAtlas Docs</title>
+<meta name="description" content="Install IntuneAtlas, sign in with your own Microsoft account, and run your first tenant scan. No Azure app registration needed for solo use.">
+<meta name="color-scheme" content="light">
+<link rel="canonical" href="https://intuneatlas.com/docs/">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230F766E' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpolygon points='16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76'/%3E%3C/svg%3E">
+<style>
+  :root{
+    --ink:#0A2B28;--teal:#0F766E;--teal-2:#115E59;
+    --paper:#FAF9F7;--line:#E7E5E4;--line-2:#D6D3D1;
+    --text:#1C1917;--muted:#78716C;--faint:#A8A29E;
+    --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+  }
+  *,*::before,*::after{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+  body{margin:0;background:var(--paper);color:var(--text);font-family:var(--sans);font-size:16px;line-height:1.65;-webkit-font-smoothing:antialiased}
+  h1,h2,h3{margin:0;line-height:1.25;font-weight:600;letter-spacing:-.02em}
+  p{margin:0}
+  a{color:var(--teal-2)}
+  ul,ol{margin:0;padding:0;list-style:none}
+  .wrap{max-width:800px;margin:0 auto;padding:0 22px}
+
+  .topbar{border-bottom:1px solid var(--line);background:#fff;position:sticky;top:0;z-index:40}
+  .topbar .wrap{display:flex;align-items:center;gap:18px;height:56px;max-width:960px;flex-wrap:wrap}
+  .repo{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:.875rem;text-decoration:none;color:var(--text);min-width:0}
+  .repo svg{flex:none;color:var(--teal)}
+  .repo .owner{color:var(--muted)}
+  .repo b{font-weight:600}
+  .topnav{display:flex;margin-left:auto;gap:18px;font-size:.8125rem}
+  .topnav a{color:var(--muted);text-decoration:none;padding:4px 0;border-bottom:2px solid transparent}
+  .topnav a:hover{color:var(--text)}
+  .topnav a.active{color:var(--text);border-bottom-color:var(--teal)}
+  .gh{color:var(--muted);flex:none}
+  .gh:hover{color:var(--text)}
+  @media(max-width:600px){.topbar .wrap{height:auto;padding:12px 22px}.topnav{margin-left:0;width:100%}}
+
+  main{padding:44px 0 60px}
+  .kicker{font-family:var(--mono);font-size:.6875rem;letter-spacing:.13em;text-transform:uppercase;color:var(--faint)}
+  h1{font-size:clamp(1.85rem,4vw,2.35rem);letter-spacing:-.03em;margin-top:10px}
+  .lede{margin-top:14px;font-size:1.0625rem;color:var(--muted);max-width:38em;line-height:1.6}
+
+  .doc-toc{margin-top:26px;padding:14px 16px;border:1px solid var(--line);border-radius:8px;background:#fff}
+  .doc-toc .kicker{margin-bottom:8px;display:block}
+  .doc-toc a{display:block;color:var(--muted);text-decoration:none;font-size:.875rem;padding:3px 0}
+  .doc-toc a:hover{color:var(--text)}
+
+  article section{margin-top:44px}
+  article h2{font-size:1.25rem}
+  article p{margin-top:12px}
+  article p + p{margin-top:10px}
+  article ul,article ol{margin-top:12px}
+  article li{position:relative;padding-left:22px;margin-top:8px;line-height:1.6}
+  article ul li::before{content:"";position:absolute;left:2px;top:.65em;width:5px;height:5px;border-radius:999px;background:var(--line-2)}
+  article ol{counter-reset:step}
+  article ol li{counter-increment:step}
+  article ol li::before{content:counter(step);position:absolute;left:0;top:0;font-family:var(--mono);font-size:.75rem;color:var(--faint)}
+
+  code{font-family:var(--mono);font-size:.85em;background:var(--line);border-radius:4px;padding:.1em .35em}
+  pre{margin:14px 0 0;border:1px solid var(--line);background:#fff;border-radius:8px;padding:14px 16px;overflow-x:auto;font-family:var(--mono);font-size:.8125rem;line-height:1.7}
+  pre code{background:none;padding:0;border-radius:0;font-size:1em}
+  pre .p{color:var(--faint);user-select:none}
+
+  .cmd{display:flex;align-items:center;gap:12px;background:var(--ink);border-radius:10px;padding:14px 16px;margin-top:12px}
+  .cmd code{font-family:var(--mono);font-size:.8125rem;color:#D7F0EB;background:none;padding:0;overflow-x:auto;white-space:nowrap;flex:1;min-width:0}
+  .cmd code .p{color:#5B9A92;user-select:none}
+  .cmd-label{font-family:var(--mono);font-size:.6875rem;color:var(--faint);margin-top:18px}
+  .cmd-label:first-of-type{margin-top:14px}
+
+  .note{margin-top:14px;border:1px solid var(--line-2);background:var(--paper);border-radius:8px;padding:12px 14px;font-size:.875rem;color:var(--muted)}
+  .note b{color:var(--text)}
+
+  footer{border-top:1px solid var(--line);margin-top:50px;padding:26px 0}
+  footer .wrap{max-width:960px;display:flex;flex-wrap:wrap;gap:16px;align-items:center;font-family:var(--mono);font-size:.75rem;color:var(--faint)}
+  footer nav{display:flex;gap:16px;margin-left:auto}
+  footer a{color:var(--faint);text-decoration:none}
+  footer a:hover{color:var(--muted)}
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="wrap">
+    <a class="repo" href="/">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="12" cy="12" r="10"></circle>
+        <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon>
+      </svg>
+      <span class="owner">jgeselle&thinsp;/</span><b>IntuneAtlas</b>
+    </a>
+    <nav class="topnav">
+      <a href="/docs/" class="active">Getting started</a>
+      <a href="/docs/cli.html">CLI reference</a>
+    </nav>
+    <a class="gh" href="https://github.com/jgeselle/intuneatlas" target="_blank" rel="noopener noreferrer" aria-label="GitHub repository">
+      <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8a8 8 0 0 0 5.47 7.59c.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.4 7.4 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+    </a>
+  </div>
+</div>
+
+<main>
+  <div class="wrap">
+    <span class="kicker">Docs</span>
+    <h1>Getting started</h1>
+    <p class="lede">
+      Install the CLI, sign in with your own Microsoft account, and get a searchable,
+      conflict-checked settings index for one tenant — no Azure app registration
+      needed for solo use.
+    </p>
+
+    <div class="doc-toc">
+      <span class="kicker">On this page</span>
+      <a href="#install">Install</a>
+      <a href="#first-run">Sign in and run your first scan</a>
+      <a href="#what-you-get">What you get</a>
+      <a href="#sharing">Sharing it with a team</a>
+      <a href="#next">Next</a>
+    </div>
+
+    <article>
+      <section id="install">
+        <h2>Install</h2>
+        <p>Both installers download a standalone binary — no Node.js required.</p>
+
+        <div class="cmd-label">Windows</div>
+        <div class="cmd">
+          <code><span class="p">$</span> irm https://intuneatlas.com/install.ps1 | iex</code>
+        </div>
+
+        <div class="cmd-label">Linux</div>
+        <div class="cmd">
+          <code><span class="p">$</span> curl -fsSL https://intuneatlas.com/install.sh | bash</code>
+        </div>
+
+        <p>Either one puts <code>intuneatlas</code> on your PATH. See the <a href="/docs/cli.html">CLI reference</a> for every command it adds.</p>
+      </section>
+
+      <section id="first-run">
+        <h2>Sign in and run your first scan</h2>
+        <ol>
+          <li>
+            Run:
+            <pre><span class="p">$</span> intuneatlas ui --tenant contoso.onmicrosoft.com</pre>
+          </li>
+          <li>
+            A browser window opens to a normal Microsoft sign-in screen. Sign in with your
+            own account — IntuneAtlas ships with a shared, multi-tenant app registration,
+            so there's no Azure app of your own to set up. It requests four read-only Graph
+            scopes: <code>DeviceManagementConfiguration.Read.All</code>,
+            <code>DeviceManagementManagedDevices.Read.All</code>,
+            <code>Organization.Read.All</code>, and
+            <code>DeviceManagementServiceConfig.Read.All</code>.
+          </li>
+          <li>
+            Once signed in, the scan runs and the web UI opens automatically at
+            <code>http://localhost:7878</code>. Reopening <code>ui</code> later reuses the
+            cached sign-in on Windows and macOS; on Linux it prompts again each time — a
+            limitation of the underlying credential cache there, not something IntuneAtlas
+            controls.
+          </li>
+        </ol>
+        <div class="note">
+          <b>Admin consent.</b> If your tenant requires admin consent for new app
+          permissions, a Global or Intune admin will need to approve the request — this
+          happens once per tenant, as part of the same sign-in prompt.
+        </div>
+      </section>
+
+      <section id="what-you-get">
+        <h2>What you get</h2>
+        <p>
+          The web UI shows every Windows Settings Catalog, compliance, and enrollment
+          setting from the scan, merged and keyed on its CSP path — with conflicts between
+          overlapping policies and coverage gaps against a baseline surfaced directly,
+          instead of buried across per-policy views.
+        </p>
+        <p>
+          It's read-only end to end: IntuneAtlas never writes anything back to the tenant.
+        </p>
+      </section>
+
+      <section id="sharing">
+        <h2>Sharing it with a team</h2>
+        <p>
+          <code>--host 0.0.0.0</code> turns the same server into a shared instance —
+          everyone who connects signs in with their own Microsoft account, and viewing an
+          already-scanned report needs no Intune permission at all; only triggering a new
+          scan does.
+        </p>
+        <div class="note">
+          Shared mode needs a real HTTPS hostname reachable by your teammates' browsers —
+          Entra requires the sign-in redirect to be either <code>https://</code> or exactly
+          <code>http://localhost</code>, so a plain LAN IP over HTTP won't work. A reverse
+          proxy with a certificate (<a href="https://caddyserver.com/" target="_blank" rel="noopener noreferrer">Caddy</a>
+          is the simplest option) or any host that terminates TLS for you both work.
+        </div>
+        <p>
+          <code>--persist</code> registers that exact command to keep running across
+          reboots — a Scheduled Task on Windows, a systemd service on Linux. See the
+          <a href="/docs/cli.html#ui">CLI reference</a> for the full flag list.
+        </p>
+      </section>
+
+      <section id="next">
+        <h2>Next</h2>
+        <ul>
+          <li><a href="/docs/cli.html">CLI reference</a> — every command and flag</li>
+          <li><a href="https://github.com/jgeselle/intuneatlas" target="_blank" rel="noopener noreferrer">Source on GitHub</a> — issues, baselines, and the full history</li>
+          <li><a href="https://github.com/jgeselle/intuneatlas/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">MIT license</a></li>
+        </ul>
+      </section>
+    </article>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>MIT © 2026 IntuneAtlas contributors</span>
+    <nav>
+      <a href="/">Home</a>
+      <a href="/docs/cli.html">CLI reference</a>
+      <a href="https://github.com/jgeselle/intuneatlas" target="_blank" rel="noopener noreferrer">GitHub</a>
+    </nav>
+  </div>
+</footer>
+
+</body>
+</html>
