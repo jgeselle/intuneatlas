@@ -126,16 +126,21 @@ async function renderAndStore(baseHtml, templateResponse, cache, cacheKey) {
 export async function onRequest(context) {
   const cache = caches.default;
   // Fixed synthetic key, not the real request URL — keeps the cache
-  // insulated from any query-string variance on the incoming request. The
-  // commit SHA is folded in so every new deploy starts with a clean cache
-  // instead of possibly serving a response an earlier, buggy version
-  // computed — confirmed the hard way: Cloudflare's edge cache isn't
-  // cleared by a deploy, so testing shortly after pushing a fix kept
-  // replaying an old cached response, indistinguishable from the fix not
-  // having worked at all.
-  const cacheKey = new Request(`https://intuneatlas-landing-cache.internal/home?build=${context.env.CF_PAGES_COMMIT_SHA ?? "dev"}`, context.request);
+  // insulated from any query-string variance on the incoming request and,
+  // deliberately, from which deploy is currently live: tying it to
+  // CF_PAGES_COMMIT_SHA was tried and reverted — it forced a cold start
+  // (a live GitHub fetch) after every single deploy, even ones that never
+  // touched this file, which just multiplies how often a routine push
+  // happens to land on a transient GitHub hiccup. The 15-minute background
+  // refresh below already keeps data fresh on its own, independent of
+  // deploys — that's the mechanism that should own freshness, not deploys.
+  const cacheKey = new Request("https://intuneatlas-landing-cache.internal/home", context.request);
+  // Manual bypass for testing a real change to this file — append ?fresh=1
+  // to force a genuine live render instead of guessing whether a response
+  // reflects the current deploy or a still-valid older cache entry.
+  const forceFresh = new URL(context.request.url).searchParams.has("fresh");
 
-  const cached = await cache.match(cacheKey);
+  const cached = forceFresh ? null : await cache.match(cacheKey);
   if (cached) {
     const cachedAt = Number(cached.headers.get("X-Cached-At") ?? 0);
     const ageSeconds = (Date.now() - cachedAt) / 1000;
@@ -150,9 +155,9 @@ export async function onRequest(context) {
     return withSecurityHeaders(cached);
   }
 
-  // True cold start: nothing cached yet for this deploy at all. Someone
-  // has to pay for the first live fetch — bounded to a few seconds by
-  // GITHUB_FETCH_TIMEOUT_MS — and everyone after this is instant.
+  // True cold start (nothing cached at all yet) or a manual ?fresh=1 —
+  // either way, someone has to pay for a live fetch here, bounded to a
+  // few seconds by GITHUB_FETCH_TIMEOUT_MS.
   const assetResponse = await context.next();
   const baseHtml = await assetResponse.text();
   const html = await renderAndStore(baseHtml, assetResponse, cache, cacheKey);
