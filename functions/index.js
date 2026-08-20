@@ -87,8 +87,14 @@ function withSecurityHeaders(response) {
 export async function onRequest(context) {
   const cache = caches.default;
   // Fixed synthetic key, not the real request URL — keeps the cache
-  // insulated from any query-string variance on the incoming request.
-  const cacheKey = new Request("https://intuneatlas-landing-cache.internal/home", context.request);
+  // insulated from any query-string variance on the incoming request. The
+  // commit SHA is folded in so every new deploy starts with a clean cache
+  // instead of possibly serving a response an earlier, buggy version
+  // computed — confirmed the hard way: Cloudflare's edge cache isn't
+  // cleared by a deploy, and testing shortly after pushing kept replaying
+  // a stale entry from before a fix, indistinguishable from the fix not
+  // having worked at all.
+  const cacheKey = new Request(`https://intuneatlas-landing-cache.internal/home?build=${context.env.CF_PAGES_COMMIT_SHA ?? "dev"}`, context.request);
 
   const cached = await cache.match(cacheKey);
   if (cached) return withSecurityHeaders(cached);
