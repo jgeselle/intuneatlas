@@ -61,15 +61,22 @@
   article ol li::before{content:counter(step);position:absolute;left:0;top:0;font-family:var(--mono);font-size:.75rem;color:var(--faint)}
 
   code{font-family:var(--mono);font-size:.85em;background:var(--line);border-radius:4px;padding:.1em .35em}
-  pre{margin:14px 0 0;border:1px solid var(--line);background:#fff;border-radius:8px;padding:14px 16px;overflow-x:auto;font-family:var(--mono);font-size:.8125rem;line-height:1.7}
+  pre{margin:0;border:1px solid var(--line);background:#fff;border-radius:8px;padding:14px 16px;overflow-x:auto;font-family:var(--mono);font-size:.8125rem;line-height:1.7}
   pre code{background:none;padding:0;border-radius:0;font-size:1em}
   pre .p{color:var(--faint);user-select:none}
 
+  .pre-wrap{position:relative;margin-top:14px}
   .cmd{display:flex;align-items:center;gap:12px;background:var(--ink);border-radius:10px;padding:14px 16px;margin-top:12px}
   .cmd code{font-family:var(--mono);font-size:.8125rem;color:#D7F0EB;background:none;padding:0;overflow-x:auto;white-space:nowrap;flex:1;min-width:0}
   .cmd code .p{color:#5B9A92;user-select:none}
   .cmd-label{font-family:var(--mono);font-size:.6875rem;color:var(--faint);margin-top:18px}
   .cmd-label:first-of-type{margin-top:14px}
+
+  .copy-btn{font-family:var(--mono);font-size:.6875rem;cursor:pointer;transition:.15s;border-radius:6px}
+  .pre-wrap .copy-btn{position:absolute;top:9px;right:9px;border:1px solid var(--line);background:#fff;color:var(--muted);padding:4px 9px}
+  .pre-wrap .copy-btn:hover{border-color:var(--faint);color:var(--text)}
+  .cmd .copy-btn{flex:none;border:1px solid rgba(255,255,255,.2);background:transparent;color:#9FCFC7;padding:5px 10px}
+  .cmd .copy-btn:hover{border-color:rgba(255,255,255,.5);color:#fff}
 
   .note{margin-top:14px;border:1px solid var(--line-2);background:var(--paper);border-radius:8px;padding:12px 14px;font-size:.875rem;color:var(--muted)}
   .note b{color:var(--text)}
@@ -159,26 +166,18 @@
           </li>
           <li>
             <b>Authentication</b> → <b>Add a platform</b> → <b>Mobile and desktop
-            applications</b>. This is the one platform type that works here: "Web" demands a
-            client secret (a public CLI can't keep one), and "Single-page application"
-            requires the token exchange to happen in browser JS, but IntuneAtlas's exchange
-            happens server-side in the CLI itself.
+            applications</b>.
           </li>
           <li>
             Add a <b>Custom redirect URI</b> (not one of the predefined options):
             <pre>http://localhost:7878/auth/callback</pre>
-            Save. <code>127.0.0.1</code> won't work here — Entra requires exactly the literal
-            host <code>localhost</code>.
+            Use <code>localhost</code>, not <code>127.0.0.1</code>.
           </li>
           <li>
-            Add a second Custom redirect URI, on the same platform, with no port and no path:
+            Add a second Custom redirect URI, same platform, no port or path:
             <pre>http://localhost</pre>
-            This is what <code>intuneatlas login</code> and <code>intuneatlas scan</code> use for
-            their own one-off sign-in prompt — a temporary listener on whatever port happens to
-            be free, not the fixed one <code>ui</code> uses above. Entra ignores the port for
-            <code>localhost</code> redirect URIs, but not the path, so it needs its own entry
-            separate from <code>/auth/callback</code>. Not needed if you only ever use
-            <code>--device-code</code>, which doesn't use a redirect URI at all.
+            Used by <code>intuneatlas login</code>/<code>scan</code>. Skip it if you only use
+            <code>--device-code</code>.
           </li>
           <li>
             <b>API permissions</b> → <b>Add a permission</b> → <b>Microsoft Graph</b> →
@@ -195,20 +194,16 @@
             <code>viewer</code> (browse only), <code>contributor</code> (+ notes, staging and
             managing your own changes), and <code>admin</code> (+ triggering scans, managing
             everyone's changes). For each: <b>Allowed member types</b> → <b>Users/Groups</b>,
-            and set <b>Value</b> to exactly the lowercase name above — that's the literal
-            string IntuneAtlas reads back out of the sign-in token, so it has to match.
+            <b>Value</b> exactly the lowercase name above.
           </li>
           <li>
-            Go to <b>Microsoft Entra ID</b> → <b>Enterprise applications</b> → your app →
+            <b>Microsoft Entra ID</b> → <b>Enterprise applications</b> → your app →
             <b>Users and groups</b> → <b>Add user/group</b>, and assign yourself (and anyone
-            else who'll use it) to one of the three roles you just created.
-            <b>This step is required, not optional</b> — IntuneAtlas has no fallback: sign in
-            with no role assigned and you'll see a "no role assigned" screen with nothing to
-            do, even for a solo install with nobody else to restrict. While you're on that
-            page, also flip <b>Properties</b> → <b>Assignment required?</b> to <b>Yes</b> — it
-            blocks sign-in itself for anyone you haven't assigned, at Entra, before IntuneAtlas
-            ever sees them. The app role check above still applies either way; this is an
-            extra, stronger layer worth turning on regardless.
+            else who'll use it) to one of the three roles. <b>Required</b> — skip it and you'll
+            get a "no role assigned" screen with nothing to do.
+          </li>
+          <li>
+            Same app → <b>Properties</b> → <b>Assignment required?</b> → <b>Yes</b>.
           </li>
         </ol>
       </section>
@@ -234,9 +229,7 @@
           <li>
             Once signed in, the scan runs and the web UI opens automatically at
             <code>http://localhost:7878</code>. Reopening <code>ui</code> later reuses the
-            cached sign-in on Windows and macOS; on Linux it prompts again each time — a
-            limitation of the underlying credential cache there, not something IntuneAtlas
-            controls.
+            cached sign-in on Windows and macOS; on Linux it prompts again each time.
           </li>
         </ol>
         <div class="note">
@@ -271,15 +264,12 @@
           or manage anyone's changes.
         </p>
         <div class="note">
-          Shared mode needs a real HTTPS hostname reachable by your teammates' browsers —
-          Entra requires the sign-in redirect to be either <code>https://</code> or exactly
-          <code>http://localhost</code>, so a plain LAN IP over HTTP won't work. A reverse
-          proxy with a certificate (<a href="https://caddyserver.com/" target="_blank" rel="noopener noreferrer">Caddy</a>
-          is the simplest option) or any host that terminates TLS for you both work. Once you
-          have that address, go back to your app's <b>Authentication</b> page and add
-          <code>https://&lt;hostname&gt;/auth/callback</code> as another Custom redirect URI,
-          under the same "Mobile and desktop applications" platform, alongside the localhost
-          one.
+          Shared mode needs a real HTTPS hostname reachable by your teammates' browsers — a
+          plain LAN IP over HTTP won't work. A reverse proxy with a certificate
+          (<a href="https://caddyserver.com/" target="_blank" rel="noopener noreferrer">Caddy</a>
+          is the simplest option) or any host that terminates TLS both work. Then add
+          <code>https://&lt;hostname&gt;/auth/callback</code> as another Custom redirect URI on
+          your app's <b>Authentication</b> page, alongside the localhost one.
         </div>
         <p>
           <code>--persist</code> registers that exact command to keep running across
@@ -310,6 +300,70 @@
     </nav>
   </div>
 </footer>
+
+<script>
+(function () {
+  function copyText(text, btn) {
+    function done() {
+      btn.textContent = "copied";
+      setTimeout(function () { btn.textContent = "copy"; }, 1500);
+    }
+    function fallback() {
+      var el = document.createElement("textarea");
+      el.value = text;
+      el.setAttribute("readonly", "");
+      el.style.position = "absolute";
+      el.style.left = "-9999px";
+      document.body.appendChild(el);
+      el.select();
+      try { document.execCommand("copy"); } catch (e) {}
+      document.body.removeChild(el);
+      done();
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, fallback);
+    } else {
+      fallback();
+    }
+  }
+
+  // Strips the "$" shell-prompt marker (see the .p spans in pre/.cmd
+  // blocks) so it never ends up in what actually gets pasted.
+  function textOf(el) {
+    var clone = el.cloneNode(true);
+    var prompt = clone.querySelector(".p");
+    if (prompt) prompt.remove();
+    return clone.textContent.replace(/^\s+/, "");
+  }
+
+  function addCopyButton(target, container) {
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "copy-btn";
+    btn.textContent = "copy";
+    btn.setAttribute("aria-label", "Copy to clipboard");
+    btn.addEventListener("click", function () { copyText(textOf(target), btn); });
+    container.appendChild(btn);
+  }
+
+  // Every <pre> gets a copy button — wrapped in a positioning div rather
+  // than appended inside the <pre> itself, so it can't end up part of a
+  // manual text-selection of the command.
+  document.querySelectorAll("pre").forEach(function (pre) {
+    var wrap = document.createElement("div");
+    wrap.className = "pre-wrap";
+    pre.parentNode.insertBefore(wrap, pre);
+    wrap.appendChild(pre);
+    addCopyButton(pre, wrap);
+  });
+
+  // The dark install-command boxes (.cmd) get one too, next to the code.
+  document.querySelectorAll(".cmd").forEach(function (cmdEl) {
+    var code = cmdEl.querySelector("code");
+    if (code) addCopyButton(code, cmdEl);
+  });
+})();
+</script>
 
 </body>
 </html>

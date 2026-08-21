@@ -55,9 +55,14 @@
   article p{margin-top:12px}
 
   code{font-family:var(--mono);font-size:.85em;background:var(--line);border-radius:4px;padding:.1em .35em}
-  pre{margin:14px 0 0;border:1px solid var(--line);background:#fff;border-radius:8px;padding:14px 16px;overflow-x:auto;font-family:var(--mono);font-size:.8125rem;line-height:1.7}
+  pre{margin:0;border:1px solid var(--line);background:#fff;border-radius:8px;padding:14px 16px;overflow-x:auto;font-family:var(--mono);font-size:.8125rem;line-height:1.7}
   pre code{background:none;padding:0;border-radius:0;font-size:1em}
   pre .p{color:var(--faint);user-select:none}
+
+  .pre-wrap{position:relative;margin-top:14px}
+  .copy-btn{font-family:var(--mono);font-size:.6875rem;cursor:pointer;transition:.15s;border-radius:6px}
+  .pre-wrap .copy-btn{position:absolute;top:9px;right:9px;border:1px solid var(--line);background:#fff;color:var(--muted);padding:4px 9px}
+  .pre-wrap .copy-btn:hover{border-color:var(--faint);color:var(--text)}
 
   .flags{width:100%;border-collapse:collapse;margin-top:16px;font-size:.875rem}
   .flags th,.flags td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
@@ -204,6 +209,60 @@
     </nav>
   </div>
 </footer>
+
+<script>
+(function () {
+  function copyText(text, btn) {
+    function done() {
+      btn.textContent = "copied";
+      setTimeout(function () { btn.textContent = "copy"; }, 1500);
+    }
+    function fallback() {
+      var el = document.createElement("textarea");
+      el.value = text;
+      el.setAttribute("readonly", "");
+      el.style.position = "absolute";
+      el.style.left = "-9999px";
+      document.body.appendChild(el);
+      el.select();
+      try { document.execCommand("copy"); } catch (e) {}
+      document.body.removeChild(el);
+      done();
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(done, fallback);
+    } else {
+      fallback();
+    }
+  }
+
+  // Strips the "$" shell-prompt marker (see the .p spans in pre blocks)
+  // so it never ends up in what actually gets pasted.
+  function textOf(el) {
+    var clone = el.cloneNode(true);
+    var prompt = clone.querySelector(".p");
+    if (prompt) prompt.remove();
+    return clone.textContent.replace(/^\s+/, "");
+  }
+
+  // Every <pre> gets a copy button — wrapped in a positioning div rather
+  // than appended inside the <pre> itself, so it can't end up part of a
+  // manual text-selection of the command.
+  document.querySelectorAll("pre").forEach(function (pre) {
+    var wrap = document.createElement("div");
+    wrap.className = "pre-wrap";
+    pre.parentNode.insertBefore(wrap, pre);
+    wrap.appendChild(pre);
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "copy-btn";
+    btn.textContent = "copy";
+    btn.setAttribute("aria-label", "Copy to clipboard");
+    btn.addEventListener("click", function () { copyText(textOf(pre), btn); });
+    wrap.appendChild(btn);
+  });
+})();
+</script>
 
 </body>
 </html>
