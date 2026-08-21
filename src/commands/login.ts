@@ -17,4 +17,12 @@ export async function runLogin(options: ResolveAuthOptions): Promise<void> {
   }
 
   console.log(`Signed in to ${tenant.displayName} (${tenant.id}) via ${auth.flow}.`);
+  if (auth.flow !== "client-credentials") {
+    const role = await auth.getRole();
+    console.log(
+      role
+        ? `IntuneAtlas role: ${role}.`
+        : "No IntuneAtlas role assigned yet — ask your tenant admin to assign you Viewer, Contributor, or Admin.",
+    );
+  }
 }

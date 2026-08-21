@@ -26,5 +26,10 @@ export function createClientCredentialsAuth(options: ClientCredentialsOptions): 
       }
       return result.token;
     },
+    // App-only auth authenticates as the application itself, not a human —
+    // there's no per-user identity to resolve a role from.
+    async getRole() {
+      return null;
+    },
   };
 }

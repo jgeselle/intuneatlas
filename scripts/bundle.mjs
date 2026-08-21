@@ -15,9 +15,8 @@ await build({
   platform: "node",
   target: "node22",
   format: "cjs",
-  // keytar (native OS-keychain binding, pulled in by both
-  // @azure/identity-cache-persistence AND @azure/msal-node-extensions) ships
-  // a .node binary esbuild can't bundle as JS. @azure/msal-node-extensions
+  // keytar (native OS-keychain binding, pulled in by @azure/msal-node-extensions)
+  // ships a .node binary esbuild can't bundle as JS. @azure/msal-node-extensions
   // itself also pulls in @azure/msal-node-runtime, which ships its own
   // platform-specific .node binaries (native broker support) resolved via
   // path logic that breaks once hoisted into a single bundled file — so the
