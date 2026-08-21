@@ -42,6 +42,12 @@ Always try `--dry-run` first for a new scenario or a new tenant — it logs
 every write it would make (including the setting definitions it resolved
 by search) without calling Graph.
 
+Seeding isn't atomic — confirmed for real: a run that fails partway
+(e.g. the group gets created, then the policy create call rejects) can
+leave orphaned objects behind. Run `teardown` after any failed or
+interrupted run before re-seeding; it only ever touches objects tagged
+`[intuneatlas-test]`, so it's always safe to run.
+
 Before any real (non-dry-run) write, the tool resolves the tenant it
 actually connected to via a live `/organization` call, prints it, and
 asks you to type `yes` to confirm — that's the safety check, done at the
@@ -54,11 +60,12 @@ same way as the first).
 - `conflict [keyword]` — two policies, same setting, different values,
   assigned to the same group. Default keyword: `Camera`.
 - `groupSetting [keyword]` — a policy built from a real group/nested
-  setting definition. Default keyword: `BitLocker`. The payload shape is
-  confirmed against Microsoft's schema docs; a specific group definition's
-  own validation on child values is the part only a live run can confirm
-  — see the comment on `groupSettingCollectionInstance` in
-  `settingsCatalog.ts` if it fails.
+  setting definition. Default keyword: `Attack Surface` (resolves
+  "Attack Surface Reduction Rules" — confirmed as a real group-collection
+  setting; `BitLocker` was tried first and has no group-type matches).
+  The wrapping payload shape is confirmed against Microsoft's schema
+  docs; a specific group definition's own validation on the guessed
+  child values is the part only a live run can confirm.
 - `belowBaseline [keyword]` — a policy that should trip the bundled
   `update.quality-deferral` baseline rule. Default keyword: `Defer`.
 - `volume [count]` — many policies (default 200) spread across a handful

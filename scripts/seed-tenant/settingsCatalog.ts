@@ -78,8 +78,22 @@ function matchesPlatform(def: SettingDefinition, platformToken: string): boolean
 }
 
 /**
+ * True for a standalone, top-level setting definition — confirmed against
+ * a live catalog that these self-reference (`rootDefinitionId === id`),
+ * while a child setting's rootDefinitionId points at its parent instead.
+ * Matters because a child setting can't be used alone: a real create call
+ * against one rejects it with "Setting contains parent setting that are
+ * not present in the policy" (confirmed for real, not theoretical) —
+ * you'd have to also include its parent's instance in the same policy.
+ */
+function isTopLevel(def: SettingDefinition): boolean {
+  return def.rootDefinitionId === def.id;
+}
+
+/**
  * First simple or choice definition matching keyword, restricted to a
- * given platform. Required, not optional: a keyword like "Camera" matches
+ * given platform, and to top-level (parent-less) settings only. Platform
+ * filtering is required, not optional: a keyword like "Camera" matches
  * across every platform's catalog (Windows, iOS, macOS, ...), and a
  * platform-unfiltered lookup can silently hand back e.g. an Apple ADE
  * Setup Assistant setting for a policy declared `platforms: "windows10"`
@@ -92,10 +106,10 @@ export async function findFirstSimpleOrChoice(
   platformToken: string,
 ): Promise<SettingDefinition> {
   const matches = await findSettingDefinitions(client, keyword);
-  const match = matches.find((d) => isSimpleOrChoice(d) && matchesPlatform(d, platformToken));
+  const match = matches.find((d) => isSimpleOrChoice(d) && matchesPlatform(d, platformToken) && isTopLevel(d));
   if (!match) {
     throw new Error(
-      `No simple/choice setting definition found matching "${keyword}" applicable to platform "${platformToken}". ` +
+      `No top-level simple/choice setting definition found matching "${keyword}" applicable to platform "${platformToken}". ` +
         `Try a different keyword — run findSettingDefinitions() directly to see what's actually in this tenant's catalog.`,
     );
   }
