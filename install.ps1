@@ -61,3 +61,6 @@ Write-Host "    intuneatlas ui --persist --host 0.0.0.0 --tenant <your-tenant>.o
 Write-Host "    intuneatlas ui --stop" -ForegroundColor Gray -NoNewline
 Write-Host "   (to remove it)" -ForegroundColor DarkGray
 Write-Host ""
+Write-Host "  Docs: " -ForegroundColor Gray -NoNewline
+Write-Host "https://intuneatlas.com/docs" -ForegroundColor White
+Write-Host ""

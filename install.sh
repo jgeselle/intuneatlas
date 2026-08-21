@@ -68,3 +68,5 @@ echo "    sudo $BIN_DIR/intuneatlas ui --persist --host 0.0.0.0 --tenant <your-t
 echo "    sudo $BIN_DIR/intuneatlas ui --stop   (to remove it)"
 echo "  (sudo often doesn't inherit your PATH, so the full path above matters for --persist specifically)"
 echo ""
+echo "  Docs: https://intuneatlas.com/docs"
+echo ""
