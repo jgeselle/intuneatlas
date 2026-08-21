@@ -70,23 +70,12 @@ explicit about what's actually verifiable, rather than asking for trust:
   with it. A compromise of this project's own infrastructure (there isn't
   much of it) can't compromise your tenant, because nothing of yours ever
   runs through anything shared.
-- **Build provenance, not just a signature.** Every released binary carries
-  a [Sigstore](https://www.sigstore.dev/)-signed attestation binding it to
-  the exact commit, repository, and workflow it was built from — free, via
-  GitHub's public-good instance, checkable yourself with
-  `gh attestation verify <file> --repo jgeselle/intuneatlas`. This is a
-  different, more specific claim than a code-signing certificate makes: a
-  cert says "someone holding this key signed this file"; an attestation
-  says "this exact binary came from this exact commit, built by this exact
-  workflow, in this exact repo." For a tool whose source you can already
-  read, that's the more relevant assurance — which is why this project
-  ships attestations instead of paying for a certificate, not merely in
-  place of one for lack of budget. (The Windows SmartScreen warning on
-  first run is real either way — that's about publisher reputation, which
-  only a paid certificate resolves — but it's a UX cost, not a security
-  gap.) An SBOM attestation ships alongside, for anyone whose procurement
-  process wants one. Both are wired into
-  [`release.yml`](./.github/workflows/release.yml).
+- **Build provenance, not just a signature.** Every release carries a
+  [Sigstore](https://www.sigstore.dev/)-signed attestation (plus an SBOM)
+  tying the binary to the exact commit and workflow it came from — verify
+  it yourself: `gh attestation verify <file> --repo jgeselle/intuneatlas`.
+  Windows still shows a SmartScreen warning on first run either way — that's
+  publisher reputation, a separate thing only a paid cert changes.
 - **Read-only, and testably so.** IntuneAtlas never writes back to your
   tenant — see [`test/`](./test) for the regression suite covering the merge
   logic that decides what you see.
