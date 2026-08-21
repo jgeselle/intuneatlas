@@ -97,22 +97,39 @@ export async function createSeedClient(options: { dryRun: boolean }): Promise<Se
       console.log(`[dry-run] ${method} ${url}${body ? `\n  ${JSON.stringify(body)}` : ""}`);
       return undefined;
     }
-    const res = await fetch(url, {
-      method,
-      headers: {
-        Authorization: `Bearer ${token}`,
-        ...(body ? { "Content-Type": "application/json" } : {}),
-        ...extraHeaders,
-      },
-      body: body ? JSON.stringify(body) : undefined,
-    });
-    if (!res.ok) {
+
+    // 429 is routine at any real volume against this toolkit's own
+    // concurrency (confirmed live: bulk-importing ~1500 settings tripped
+    // it repeatedly) — retry with the server's own Retry-After rather than
+    // failing the whole run over a transient rate limit.
+    const MAX_ATTEMPTS = 6;
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+      const res = await fetch(url, {
+        method,
+        headers: {
+          Authorization: `Bearer ${token}`,
+          ...(body ? { "Content-Type": "application/json" } : {}),
+          ...extraHeaders,
+        },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+
+      if (res.status === 429 && attempt < MAX_ATTEMPTS) {
+        const retryAfterSeconds = Number(res.headers.get("Retry-After")) || 2 ** attempt;
+        await new Promise((resolve) => setTimeout(resolve, retryAfterSeconds * 1000));
+        continue;
+      }
+
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Graph ${method} ${url} failed: ${res.status} ${res.statusText}\n${text}`);
+      }
+      if (res.status === 204) return undefined;
       const text = await res.text();
-      throw new Error(`Graph ${method} ${url} failed: ${res.status} ${res.statusText}\n${text}`);
+      return text ? (JSON.parse(text) as T) : undefined;
     }
-    if (res.status === 204) return undefined;
-    const text = await res.text();
-    return text ? (JSON.parse(text) as T) : undefined;
+    // Unreachable: the loop always returns or throws before MAX_ATTEMPTS is exhausted without a final non-429 response.
+    throw new Error(`Graph ${method} ${url} failed: exhausted retries`);
   }
 
   return {

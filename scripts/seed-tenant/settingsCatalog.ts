@@ -61,6 +61,11 @@ export async function findSettingDefinitions(client: SeedClient, keyword: string
  * filter and would otherwise come back as if it were its own child —
  * excluded here explicitly.
  */
+/** Direct id lookup — for when the id itself is already known (e.g. replaying a real export), not a keyword to search for. */
+export async function getSettingDefinition(client: SeedClient, id: string): Promise<SettingDefinition> {
+  return client.get<SettingDefinition>(`/deviceManagement/configurationSettings/${id}`, GRAPH_BETA_BASE);
+}
+
 export async function findChildDefinitions(client: SeedClient, rootDefinitionId: string): Promise<SettingDefinition[]> {
   const escaped = rootDefinitionId.replace(/'/g, "''");
   const results = await client.getAll<SettingDefinition>(
@@ -187,6 +192,18 @@ export function integerSettingInstance(definitionId: string, value: number) {
       "@odata.type": "#microsoft.graph.deviceManagementConfigurationIntegerSettingValue",
       value,
     },
+  };
+}
+
+/** A collection of simple string values, e.g. an allow-listed URL/domain set. */
+export function stringCollectionSettingInstance(definitionId: string, values: string[]) {
+  return {
+    "@odata.type": "#microsoft.graph.deviceManagementConfigurationSimpleSettingCollectionInstance",
+    settingDefinitionId: definitionId,
+    simpleSettingCollectionValue: values.map((value) => ({
+      "@odata.type": "#microsoft.graph.deviceManagementConfigurationStringSettingValue",
+      value,
+    })),
   };
 }
 

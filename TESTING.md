@@ -43,31 +43,54 @@ exact variables and setup.
 - **Relations** — real assignment topology: overlapping groups, exclusion
   groups, multiple platforms side by side.
 - **Conflicts** — the same setting reaching a device through two
-  different assigned policies with different values.
+  different assigned policies with different values, including across
+  *different Graph resource types* (a Settings Catalog policy and a
+  legacy `deviceConfigurations` profile writing the same real setting —
+  see below).
 - **Baseline drift** — values that should trip the bundled baseline
   rules (`baselines/windows/*.yml`).
 - **Settings Catalog coverage** — real Settings Catalog responses
-  contain shapes hand-written fixtures never do. Two known gaps to
-  confirm first, found by reading the scan code before ever touching a
-  real tenant:
-  1. `src/scan/configurationPolicies.ts`'s `extractValue()` has no case
-     for group/nested setting instances — falls back to the literal
-     string `"(group setting)"`. Real Settings Catalog policies use
-     these often (e.g. compound security-baseline settings); hand-built
-     fixtures using only simple/choice values never exercise this path.
-  2. `src/scan/settingDefinitions.ts`'s `resolveSettingDefinition()` sets
-     `category` to the raw Graph category GUID, not a friendly name —
-     the code's own comment already flags this as deferred. Every
-     category header in the Settings view would render as a GUID
-     against real data.
+  contain shapes hand-written fixtures never do. Confirmed and fixed so
+  far, in order found — each one only surfaced once real data actually
+  hit it:
+  1. Group/nested setting instances rendered as the literal string
+     `"(group setting)"` instead of their real children's values.
+  2. Categories rendered as a raw GUID instead of a friendly name.
+  3. A choice setting's *dependent* child (a different mechanism from a
+     group's children) was silently dropped — not even a placeholder.
+  4. A category's `displayName` isn't always populated even when
+     resolution succeeds (every ADMX-derived leaf category has an empty
+     one) — falls back to `description` now.
+  5. The merge index was keyed on display name, then on `cspPath` —
+     neither turned out to be reliably unique. Keyed on
+     `settingDefinitionId` now, the one field Graph actually guarantees
+     unique per setting.
+  6. The legacy, pre-Settings-Catalog `deviceConfigurations` endpoint
+     (Device Restrictions, Endpoint Protection, and everything before
+     the Settings Catalog existed) wasn't scanned at all — real tenants
+     still run these alongside Settings Catalog policies, and both can
+     write the same underlying CSP. `src/scan/deviceConfigurations.ts`
+     covers a deliberately narrow, live-verified starting set.
+  7. A real tenant of any real size legitimately trips Intune Graph's
+     throttling during a scan — `graphGet` had no 429 handling at all.
 
-  These are not fixed as part of the testing infrastructure itself —
-  confirm against real data first, fix as real product work after.
+  Keep finding these by testing against real data, not by guessing what
+  might be wrong — every one of the seven above was found that way.
 
 - Beyond Settings: this extends to the compliance/enrollment views,
   notes, the staged-change review workflow, and RBAC roles too — not
   just Settings Catalog data. Settings is just today's most urgent
   target.
+
+### Real corpus replay (`scripts/replay-policies/`)
+
+For volume and real-world shape no hand-picked scenario can match:
+point it at a local, gitignored directory of exported real policies and
+it imports them as real Settings Catalog policies in the test tenant
+(and/or resolves the whole corpus offline with zero writes, for a pure
+robustness check). See `scripts/replay-policies/README.md`. This is how
+findings 3–7 above were actually found — a hand-picked keyword search
+only ever exercises what you thought to search for.
 
 ### Workflow
 
