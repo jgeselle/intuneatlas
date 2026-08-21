@@ -1,0 +1,31 @@
+{
+  "description": "Two policies disagree on a value, but only ONE of them is actually deployed (the other targets no one) — not a conflict, since only one deployed opinion exists. This is the subtle rule a naive 'any two sources disagree' implementation would get wrong.",
+  "policies": [
+    {
+      "id": "policy-deployed",
+      "name": "Live Policy",
+      "platform": "windows10",
+      "assignments": [{ "kind": "allDevices" }],
+      "settings": [
+        { "settingDefinitionId": "def-screensaver", "name": "Screen Lock Timeout", "cspPath": "./Vendor/MSFT/Policy/Config/DeviceLock/DeviceLockTimeInSeconds", "category": "Device lock", "value": "300" }
+      ]
+    },
+    {
+      "id": "policy-draft",
+      "name": "Draft Policy (unassigned)",
+      "platform": "windows10",
+      "assignments": [],
+      "settings": [
+        { "settingDefinitionId": "def-screensaver", "name": "Screen Lock Timeout", "cspPath": "./Vendor/MSFT/Policy/Config/DeviceLock/DeviceLockTimeInSeconds", "category": "Device lock", "value": "900" }
+      ]
+    }
+  ],
+  "expect": [
+    {
+      "key": "Screen Lock Timeout::windows10",
+      "state": "Baseline",
+      "conflict": false,
+      "values": ["300", "900"]
+    }
+  ]
+}

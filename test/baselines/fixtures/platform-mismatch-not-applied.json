@@ -1,0 +1,34 @@
+{
+  "description": "A rule for one platform must never apply to a differently-platformed entry, even if the CSP path string happens to match — an iOS rule shouldn't grade a Windows setting.",
+  "entries": [
+    {
+      "key": "Require Passcode::windows10",
+      "name": "Require Passcode",
+      "cspPath": "./Vendor/MSFT/DeviceLock/DevicePasswordEnabled",
+      "category": "Device lock",
+      "platform": "windows10",
+      "values": ["0"],
+      "sources": [],
+      "conflict": false,
+      "state": "Baseline"
+    }
+  ],
+  "rules": [
+    {
+      "id": "cis-ios-passcode",
+      "name": "iOS passcode required",
+      "platform": "ios",
+      "path": "./Vendor/MSFT/DeviceLock/DevicePasswordEnabled",
+      "expect": "1",
+      "severity": "critical",
+      "rationale": "An unlocked phone is an unlocked mailbox.",
+      "source": "CIS iOS Benchmark"
+    }
+  ],
+  "expect": [
+    {
+      "key": "Require Passcode::windows10",
+      "state": "Baseline"
+    }
+  ]
+}

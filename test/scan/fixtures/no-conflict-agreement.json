@@ -1,0 +1,31 @@
+{
+  "description": "Two deployed policies set the same setting to the SAME value — agreement across multiple sources is not a conflict.",
+  "policies": [
+    {
+      "id": "policy-a",
+      "name": "Security Baseline A",
+      "platform": "windows10",
+      "assignments": [{ "kind": "allDevices" }],
+      "settings": [
+        { "settingDefinitionId": "def-firewall", "name": "Enable Firewall", "cspPath": "./Vendor/MSFT/Firewall/DomainProfile/EnableFirewall", "category": "Firewall", "value": "1" }
+      ]
+    },
+    {
+      "id": "policy-b",
+      "name": "Security Baseline B",
+      "platform": "windows10",
+      "assignments": [{ "kind": "group", "groupId": "grp-all-laptops", "excluded": false }],
+      "settings": [
+        { "settingDefinitionId": "def-firewall", "name": "Enable Firewall", "cspPath": "./Vendor/MSFT/Firewall/DomainProfile/EnableFirewall", "category": "Firewall", "value": "1" }
+      ]
+    }
+  ],
+  "expect": [
+    {
+      "key": "Enable Firewall::windows10",
+      "state": "Baseline",
+      "conflict": false,
+      "values": ["1"]
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "description": "Three deployed policies set the same setting; two agree and one disagrees — still a conflict, since it only takes two deployed values disagreeing, not a majority.",
+  "policies": [
+    {
+      "id": "policy-1",
+      "name": "Corp Baseline",
+      "platform": "windows10",
+      "assignments": [{ "kind": "group", "groupId": "grp-corp", "excluded": false }],
+      "settings": [{ "settingDefinitionId": "def-usb", "name": "Allow USB Storage", "cspPath": "./Vendor/MSFT/Policy/Config/System/AllowStorageCard", "category": "Storage", "value": "0" }]
+    },
+    {
+      "id": "policy-2",
+      "name": "Kiosk Baseline",
+      "platform": "windows10",
+      "assignments": [{ "kind": "group", "groupId": "grp-kiosks", "excluded": false }],
+      "settings": [{ "settingDefinitionId": "def-usb", "name": "Allow USB Storage", "cspPath": "./Vendor/MSFT/Policy/Config/System/AllowStorageCard", "category": "Storage", "value": "0" }]
+    },
+    {
+      "id": "policy-3",
+      "name": "Field Team Override",
+      "platform": "windows10",
+      "assignments": [{ "kind": "group", "groupId": "grp-field", "excluded": false }],
+      "settings": [{ "settingDefinitionId": "def-usb", "name": "Allow USB Storage", "cspPath": "./Vendor/MSFT/Policy/Config/System/AllowStorageCard", "category": "Storage", "value": "1" }]
+    }
+  ],
+  "expect": [
+    {
+      "key": "Allow USB Storage::windows10",
+      "state": "Conflict",
+      "conflict": true,
+      "values": ["0", "1"]
+    }
+  ]
+}

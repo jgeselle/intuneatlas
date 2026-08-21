@@ -1,0 +1,25 @@
+{
+  "description": "A policy with BOTH an exclusion and a real target (allDevices, minus one group) is deployed — the exclusion alone doesn't disqualify it as long as something else is targeted too.",
+  "policies": [
+    {
+      "id": "policy-mixed",
+      "name": "All Devices Except Contractors",
+      "platform": "windows10",
+      "assignments": [
+        { "kind": "allDevices" },
+        { "kind": "group", "groupId": "grp-contractors", "excluded": true }
+      ],
+      "settings": [
+        { "settingDefinitionId": "def-wifi", "name": "Allow Wi-Fi Auto-Connect", "cspPath": "./Vendor/MSFT/WiFi/AllowAutoConnectToWiFiSenseHotspots", "category": "Wi-Fi", "value": "0" }
+      ]
+    }
+  ],
+  "expect": [
+    {
+      "key": "Allow Wi-Fi Auto-Connect::windows10",
+      "state": "Baseline",
+      "conflict": false,
+      "values": ["0"]
+    }
+  ]
+}

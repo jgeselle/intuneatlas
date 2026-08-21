@@ -1,0 +1,42 @@
+{
+  "description": "A Baseline-state entry whose value fails a numeric rule gets promoted to Below baseline with a recommendation attached.",
+  "entries": [
+    {
+      "key": "Screen Lock Timeout::windows10",
+      "name": "Screen Lock Timeout",
+      "cspPath": "./Vendor/MSFT/Policy/Config/DeviceLock/DeviceLockTimeInSeconds",
+      "category": "Device lock",
+      "platform": "windows10",
+      "values": ["1200"],
+      "sources": [],
+      "conflict": false,
+      "state": "Baseline"
+    }
+  ],
+  "rules": [
+    {
+      "id": "cis-lock-timeout",
+      "name": "Screen lock timeout at most 15 minutes",
+      "platform": "windows",
+      "path": "./Vendor/MSFT/Policy/Config/DeviceLock/DeviceLockTimeInSeconds",
+      "expect": { "max": 900 },
+      "severity": "medium",
+      "rationale": "Idle unattended sessions should lock within 15 minutes.",
+      "source": "CIS Windows 10 Benchmark"
+    }
+  ],
+  "expect": [
+    {
+      "key": "Screen Lock Timeout::windows10",
+      "state": "Below baseline",
+      "rec": {
+        "ruleId": "cis-lock-timeout",
+        "current": "1200",
+        "recommended": "900 or less",
+        "severity": "medium",
+        "why": "Idle unattended sessions should lock within 15 minutes.",
+        "source": "CIS Windows 10 Benchmark"
+      }
+    }
+  ]
+}

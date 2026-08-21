@@ -1,0 +1,22 @@
+{
+  "description": "A policy with no assignments at all targets no one — the setting shows up in the index but as Not deployed.",
+  "policies": [
+    {
+      "id": "policy-unassigned",
+      "name": "Drafted But Never Assigned",
+      "platform": "windows10",
+      "assignments": [],
+      "settings": [
+        { "settingDefinitionId": "def-usb", "name": "Block Removable Storage", "cspPath": "./Vendor/MSFT/Policy/Config/Storage/RemovableDiskDenyWriteAccess", "category": "Storage", "value": "1" }
+      ]
+    }
+  ],
+  "expect": [
+    {
+      "key": "Block Removable Storage::windows10",
+      "state": "Not deployed",
+      "conflict": false,
+      "values": ["1"]
+    }
+  ]
+}

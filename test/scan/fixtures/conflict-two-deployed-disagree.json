@@ -1,0 +1,44 @@
+{
+  "description": "Two policies, both deployed, set the same setting to different values — must be flagged as a conflict.",
+  "policies": [
+    {
+      "id": "policy-baseline-defender",
+      "name": "Baseline Defender Config",
+      "platform": "windows10",
+      "assignments": [{ "kind": "allDevices" }],
+      "settings": [
+        {
+          "settingDefinitionId": "def-bitlocker",
+          "name": "Require BitLocker",
+          "cspPath": "./Vendor/MSFT/BitLocker/RequireDeviceEncryption",
+          "category": "Encryption",
+          "value": "1"
+        }
+      ]
+    },
+    {
+      "id": "policy-legacy-encryption",
+      "name": "Legacy Encryption Policy",
+      "platform": "windows10",
+      "assignments": [{ "kind": "group", "groupId": "grp-finance", "excluded": false }],
+      "settings": [
+        {
+          "settingDefinitionId": "def-bitlocker",
+          "name": "Require BitLocker",
+          "cspPath": "./Vendor/MSFT/BitLocker/RequireDeviceEncryption",
+          "category": "Encryption",
+          "value": "0"
+        }
+      ]
+    }
+  ],
+  "expect": [
+    {
+      "key": "Require BitLocker::windows10",
+      "name": "Require BitLocker",
+      "state": "Conflict",
+      "conflict": true,
+      "values": ["1", "0"]
+    }
+  ]
+}

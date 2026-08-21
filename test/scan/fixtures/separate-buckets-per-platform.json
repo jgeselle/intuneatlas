@@ -1,0 +1,27 @@
+{
+  "description": "The same setting name on two different platforms must NOT be merged into one bucket — they're keyed by name+platform specifically so an iOS and a Windows policy sharing a coincidental setting name never get compared against each other.",
+  "policies": [
+    {
+      "id": "policy-windows",
+      "name": "Windows Baseline",
+      "platform": "windows10",
+      "assignments": [{ "kind": "allDevices" }],
+      "settings": [
+        { "settingDefinitionId": "def-win-lock", "name": "Require Passcode", "cspPath": "./Vendor/MSFT/DeviceLock/DevicePasswordEnabled", "category": "Device lock", "value": "1" }
+      ]
+    },
+    {
+      "id": "policy-ios",
+      "name": "iOS Baseline",
+      "platform": "ios",
+      "assignments": [{ "kind": "allDevices" }],
+      "settings": [
+        { "settingDefinitionId": "def-ios-lock", "name": "Require Passcode", "cspPath": "com.apple.mobiledevice.passwordpolicy.forcePIN", "category": "Passcode", "value": "0" }
+      ]
+    }
+  ],
+  "expect": [
+    { "key": "Require Passcode::windows10", "state": "Baseline", "conflict": false, "values": ["1"] },
+    { "key": "Require Passcode::ios", "state": "Baseline", "conflict": false, "values": ["0"] }
+  ]
+}

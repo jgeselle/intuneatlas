@@ -16,7 +16,9 @@
     "bundle": "node scripts/bundle.mjs",
     "package": "node scripts/bundle.mjs && node scripts/build-sea.mjs",
     "dev": "tsx src/cli.ts",
-    "start": "node dist/cli.js"
+    "start": "node dist/cli.js",
+    "test": "tsx --test \"test/**/*.test.ts\"",
+    "typecheck:test": "tsc --noEmit -p test/tsconfig.json"
   },
   "dependencies": {
     "@azure/identity": "^4.13.1",

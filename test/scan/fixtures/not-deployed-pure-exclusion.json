@@ -1,0 +1,21 @@
+{
+  "description": "A policy whose only assignment is an exclusion targets no one on its own — an exclusion-only assignment set counts as Not deployed, not deployed-with-caveats.",
+  "policies": [
+    {
+      "id": "policy-exclusion-only",
+      "name": "Exempt Executives From Something",
+      "platform": "windows10",
+      "assignments": [{ "kind": "group", "groupId": "grp-executives", "excluded": true }],
+      "settings": [
+        { "settingDefinitionId": "def-lock", "name": "Require PIN", "cspPath": "./Vendor/MSFT/PassportForWork/Biometrics/UseBiometrics", "category": "Authentication", "value": "0" }
+      ]
+    }
+  ],
+  "expect": [
+    {
+      "key": "Require PIN::windows10",
+      "state": "Not deployed",
+      "conflict": false
+    }
+  ]
+}

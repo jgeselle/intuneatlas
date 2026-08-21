@@ -1,0 +1,34 @@
+{
+  "description": "An entry whose value already satisfies a string-expectation rule stays Baseline, no recommendation attached.",
+  "entries": [
+    {
+      "key": "Require BitLocker::windows10",
+      "name": "Require BitLocker",
+      "cspPath": "./Vendor/MSFT/BitLocker/RequireDeviceEncryption",
+      "category": "Encryption",
+      "platform": "windows10",
+      "values": ["1"],
+      "sources": [],
+      "conflict": false,
+      "state": "Baseline"
+    }
+  ],
+  "rules": [
+    {
+      "id": "cis-bitlocker",
+      "name": "BitLocker required",
+      "platform": "windows",
+      "path": "./Vendor/MSFT/BitLocker/RequireDeviceEncryption",
+      "expect": "1",
+      "severity": "critical",
+      "rationale": "Unencrypted disks are readable by anyone with physical access.",
+      "source": "CIS Windows 10 Benchmark"
+    }
+  ],
+  "expect": [
+    {
+      "key": "Require BitLocker::windows10",
+      "state": "Baseline"
+    }
+  ]
+}

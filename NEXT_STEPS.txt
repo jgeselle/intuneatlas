@@ -1,7 +1,10 @@
 intuneatlas — shared/team ui: what's left for you to do
 =========================================================
 
-The code is done, typechecked, and tested as far as this environment allows.
+The code is done and typechecks. "Tested" here has always meant real manual
+verification against actual hardware/tenants where noted below — there is no
+automated test suite at all yet (see the credibility-gap note in the
+project's own history for why that's the highest-value next thing to add).
 
 Note: there's no more bundled shared app registration (removed — a
 multi-tenant public client can't let a foreign tenant configure its own
