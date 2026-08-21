@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { readFile } from "node:fs/promises";
-import { extname, join } from "node:path";
+import { extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { resolveAppPath } from "../packagedPaths.js";
 import type { ViewerIdentity, WebSessionManager } from "../auth/webSession.js";
 
@@ -230,11 +230,24 @@ async function serveStatic(
   const dist = webDist();
   const requestPath = (req.url ?? "/").split("?")[0];
   const filePath = requestPath === "/" ? "index.html" : requestPath.replace(/^\/+/, "");
-  const fullPath = join(dist, filePath);
+  const fullPath = resolve(dist, filePath);
+
+  // join()/resolve() alone don't stop `..` from walking outside `dist` — a
+  // browser normalizes that out of a URL before it's ever sent, but a bare
+  // HTTP client (curl --path-as-is, or worse) won't, and this route only
+  // requires *a* valid session, not any Intune permission. Without this
+  // check, a signed-in-but-otherwise-unprivileged viewer could read
+  // anything else readable by the host process — the local scan/notes DB,
+  // the MSAL token cache. relative() (not a plain startsWith(dist)) so a
+  // sibling directory that happens to share `dist` as a string prefix
+  // (e.g. a `dist-secrets` folder next to `dist`) isn't misjudged as
+  // "inside" it.
+  const rel = relative(dist, fullPath);
+  const escapesDist = rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel);
 
   // Not resolving deep client-side routes — this is a single-page app with
   // no router, so anything unrecognized just falls back to index.html.
-  const isAsset = extname(filePath) !== "";
+  const isAsset = extname(filePath) !== "" && !escapesDist;
   const targetPath = isAsset ? fullPath : join(dist, "index.html");
 
   let body = await readFile(targetPath);
