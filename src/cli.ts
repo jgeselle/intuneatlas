@@ -18,7 +18,7 @@ program
 function withAuthOptions(command: Command): Command {
   return command
     .requiredOption("--tenant <id-or-domain>", "Tenant ID or domain, e.g. contoso.onmicrosoft.com")
-    .option("--client-id <id>", "Entra app (client) ID")
+    .option("--client-id <id>", "Your Entra app (client) ID — see intuneatlas.com/docs to register one; can also come from INTUNEATLAS_CLIENT_ID")
     .option("--client-secret <secret>", "Client secret — selects the unattended client-credentials flow")
     .option("--device-code", "Use device-code sign-in instead of the interactive browser flow", false);
 }
@@ -74,7 +74,7 @@ program
   .command("ui")
   .description("Open the web UI. Always signs in with your own Microsoft account — that's what runs any scan you trigger.")
   .option("--tenant <id-or-domain>", "Tenant to sign in to — needed the first time, or to switch tenants")
-  .option("--client-id <id>", "Entra app (client) ID")
+  .option("--client-id <id>", "Your Entra app (client) ID — see intuneatlas.com/docs to register one; can also come from INTUNEATLAS_CLIENT_ID")
   .option("--report <path>", "Read a report from a prior `scan --out` instead of scanning live")
   .option("--baseline <path>", "Directory of baseline YAML rules (defaults to the bundled starter pack)")
   .option(

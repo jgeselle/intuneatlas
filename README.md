@@ -25,7 +25,7 @@ Windows (no Node.js required — downloads a standalone binary):
 irm https://intuneatlas.com/install.ps1 | iex
 ```
 
-Linux (builds from source — needs Node.js 22+ already installed):
+Linux (no Node.js required — downloads a standalone binary):
 ```
 curl -fsSL https://intuneatlas.com/install.sh | bash
 ```
@@ -36,6 +36,12 @@ npm install
 npm run build
 node dist/cli.js ui
 ```
+
+**Before first sign-in**, register an Entra app for it to sign in with — every
+install brings its own, there's no bundled shared client. It's a five-minute,
+one-time setup: [intuneatlas.com/docs/#register-app](https://intuneatlas.com/docs/#register-app)
+walks through it. Then pass its client ID via `--client-id`, or set
+`INTUNEATLAS_CLIENT_ID` once so you don't have to repeat it.
 
 `ui` opens the web UI and always signs you in with your own Microsoft
 account first — that's the identity behind every note and change review, and
@@ -52,8 +58,8 @@ background — a Scheduled Task on Windows, a systemd service on Linux —
 starting at boot and restarting itself on failure, for a shared instance on
 a dedicated machine (needs an elevated/root shell); `--stop` undoes it.
 `login`/`scan` (headless) also exist directly, with `--device-code`
-(interactive fallback) and `--client-id`/`--client-secret` (unattended,
-client-credentials flow) available there for scripted/CI use.
+(interactive fallback) and `--client-secret` (unattended, client-credentials
+flow) available there for scripted/CI use.
 
 ## What's in this repo
 

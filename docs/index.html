@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Getting Started · IntuneAtlas Docs</title>
-<meta name="description" content="Install IntuneAtlas, sign in with your own Microsoft account, and run your first tenant scan. No Azure app registration needed for solo use.">
+<meta name="description" content="Install IntuneAtlas, register an Entra app, sign in with your own Microsoft account, and run your first tenant scan.">
 <meta name="color-scheme" content="light">
 <link rel="canonical" href="https://intuneatlas.com/docs/">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230F766E' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpolygon points='16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76'/%3E%3C/svg%3E">
@@ -107,14 +107,14 @@
     <span class="kicker">Docs</span>
     <h1>Getting started</h1>
     <p class="lede">
-      Install the CLI, sign in with your own Microsoft account, and get a searchable,
-      conflict-checked settings index for one tenant — no Azure app registration
-      needed for solo use.
+      Install the CLI, register an Entra app for it to sign in with, and get a searchable,
+      conflict-checked settings index for one tenant.
     </p>
 
     <div class="doc-toc">
       <span class="kicker">On this page</span>
       <a href="#install">Install</a>
+      <a href="#register-app">Register an Entra app</a>
       <a href="#first-run">Sign in and run your first scan</a>
       <a href="#what-you-get">What you get</a>
       <a href="#sharing">Sharing it with a team</a>
@@ -139,21 +139,61 @@
         <p>Either one puts <code>intuneatlas</code> on your PATH. See the <a href="/docs/cli.html">CLI reference</a> for every command it adds.</p>
       </section>
 
+      <section id="register-app">
+        <h2>Register an Entra app</h2>
+        <p>
+          IntuneAtlas doesn't ship with a bundled app registration — every install signs in
+          with an app you register yourself, in your own tenant. It only takes a few
+          minutes, and you only do it once.
+        </p>
+        <ol>
+          <li>
+            Go to <a href="https://portal.azure.com" target="_blank" rel="noopener noreferrer">portal.azure.com</a>
+            → <b>Microsoft Entra ID</b> → <b>App registrations</b> → <b>New registration</b>.
+            Give it any name (e.g. "IntuneAtlas"); the default "Accounts in this
+            organizational directory only" is fine unless you specifically need multi-tenant.
+          </li>
+          <li>
+            Once created, copy the <b>Application (client) ID</b> from the overview page —
+            that's what goes in <code>--client-id</code> below.
+          </li>
+          <li>
+            <b>Authentication</b> → <b>Add a platform</b> → <b>Mobile and desktop
+            applications</b>. This is the one platform type that works here: "Web" demands a
+            client secret (a public CLI can't keep one), and "Single-page application"
+            requires the token exchange to happen in browser JS, but IntuneAtlas's exchange
+            happens server-side in the CLI itself.
+          </li>
+          <li>
+            Add a <b>Custom redirect URI</b> (not one of the predefined options):
+            <pre>http://localhost:7878/auth/callback</pre>
+            Save. <code>127.0.0.1</code> won't work here — Entra requires exactly the literal
+            host <code>localhost</code>.
+          </li>
+          <li>
+            <b>API permissions</b> → <b>Add a permission</b> → <b>Microsoft Graph</b> →
+            <b>Delegated permissions</b> → add these four, all read-only:
+            <code>DeviceManagementConfiguration.Read.All</code>,
+            <code>DeviceManagementManagedDevices.Read.All</code>,
+            <code>Organization.Read.All</code>, and
+            <code>DeviceManagementServiceConfig.Read.All</code>. If you're a Global or Intune
+            admin, click <b>Grant admin consent</b> now — otherwise the first sign-in will
+            prompt for it instead.
+          </li>
+        </ol>
+      </section>
+
       <section id="first-run">
         <h2>Sign in and run your first scan</h2>
         <ol>
           <li>
-            Run:
-            <pre><span class="p">$</span> intuneatlas ui --tenant contoso.onmicrosoft.com</pre>
+            Run, using the client ID from the app you just registered:
+            <pre><span class="p">$</span> intuneatlas ui --tenant contoso.onmicrosoft.com --client-id &lt;application-id&gt;</pre>
           </li>
           <li>
             A browser window opens to a normal Microsoft sign-in screen. Sign in with your
-            own account — IntuneAtlas ships with a shared, multi-tenant app registration,
-            so there's no Azure app of your own to set up. It requests four read-only Graph
-            scopes: <code>DeviceManagementConfiguration.Read.All</code>,
-            <code>DeviceManagementManagedDevices.Read.All</code>,
-            <code>Organization.Read.All</code>, and
-            <code>DeviceManagementServiceConfig.Read.All</code>.
+            own account — this is the same account and permissions used for every scan and
+            change review from here on.
           </li>
           <li>
             Once signed in, the scan runs and the web UI opens automatically at
@@ -164,9 +204,9 @@
           </li>
         </ol>
         <div class="note">
-          <b>Admin consent.</b> If your tenant requires admin consent for new app
-          permissions, a Global or Intune admin will need to approve the request — this
-          happens once per tenant, as part of the same sign-in prompt.
+          <b>Skip retyping <code>--client-id</code>.</b> Set it once as an environment
+          variable instead — <code>INTUNEATLAS_CLIENT_ID</code> — and every command picks it
+          up automatically.
         </div>
       </section>
 
@@ -196,7 +236,11 @@
           Entra requires the sign-in redirect to be either <code>https://</code> or exactly
           <code>http://localhost</code>, so a plain LAN IP over HTTP won't work. A reverse
           proxy with a certificate (<a href="https://caddyserver.com/" target="_blank" rel="noopener noreferrer">Caddy</a>
-          is the simplest option) or any host that terminates TLS for you both work.
+          is the simplest option) or any host that terminates TLS for you both work. Once you
+          have that address, go back to your app's <b>Authentication</b> page and add
+          <code>https://&lt;hostname&gt;/auth/callback</code> as another Custom redirect URI,
+          under the same "Mobile and desktop applications" platform, alongside the localhost
+          one.
         </div>
         <p>
           <code>--persist</code> registers that exact command to keep running across

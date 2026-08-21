@@ -123,13 +123,13 @@
         <table class="flags">
           <tr><th>Flag</th><th>Description</th></tr>
           <tr><td class="req">--tenant &lt;id-or-domain&gt;</td><td>Tenant ID or domain, e.g. <code>contoso.onmicrosoft.com</code></td></tr>
-          <tr><td>--client-id &lt;id&gt;</td><td>Entra app (client) ID — overrides the bundled shared client</td></tr>
+          <tr><td class="req">--client-id &lt;id&gt;</td><td>Your Entra app (client) ID — <a href="/docs/#register-app">register one</a> first. Can also come from <code>INTUNEATLAS_CLIENT_ID</code>.</td></tr>
           <tr><td>--client-secret &lt;secret&gt;</td><td>Client secret — selects the unattended client-credentials flow instead of interactive sign-in</td></tr>
           <tr><td>--device-code</td><td>Use device-code sign-in instead of the interactive browser flow</td></tr>
         </table>
 
         <div class="ex-label">Example</div>
-        <pre><span class="p">$</span> intuneatlas login --tenant contoso.onmicrosoft.com</pre>
+        <pre><span class="p">$</span> intuneatlas login --tenant contoso.onmicrosoft.com --client-id &lt;application-id&gt;</pre>
       </section>
 
       <section id="scan">
@@ -139,7 +139,7 @@
         <table class="flags">
           <tr><th>Flag</th><th>Description</th></tr>
           <tr><td class="req">--tenant &lt;id-or-domain&gt;</td><td>Tenant ID or domain</td></tr>
-          <tr><td>--client-id &lt;id&gt;</td><td>Entra app (client) ID</td></tr>
+          <tr><td class="req">--client-id &lt;id&gt;</td><td>Your Entra app (client) ID — <a href="/docs/#register-app">register one</a> first. Can also come from <code>INTUNEATLAS_CLIENT_ID</code>.</td></tr>
           <tr><td>--client-secret &lt;secret&gt;</td><td>Client secret — unattended client-credentials flow</td></tr>
           <tr><td>--device-code</td><td>Use device-code sign-in instead of the interactive browser flow</td></tr>
           <tr><td>--out &lt;path&gt;</td><td>Write JSON to a file instead of stdout</td></tr>
@@ -147,7 +147,7 @@
         </table>
 
         <div class="ex-label">Example</div>
-        <pre><span class="p">$</span> intuneatlas scan --tenant contoso.onmicrosoft.com --out report.json</pre>
+        <pre><span class="p">$</span> intuneatlas scan --tenant contoso.onmicrosoft.com --client-id &lt;application-id&gt; --out report.json</pre>
       </section>
 
       <section id="ui">
@@ -157,7 +157,7 @@
         <table class="flags">
           <tr><th>Flag</th><th>Description</th></tr>
           <tr><td>--tenant &lt;id-or-domain&gt;</td><td>Tenant to sign in to — needed the first time, or to switch tenants</td></tr>
-          <tr><td>--client-id &lt;id&gt;</td><td>Entra app (client) ID</td></tr>
+          <tr><td class="req">--client-id &lt;id&gt;</td><td>Your Entra app (client) ID — <a href="/docs/#register-app">register one</a> first. Can also come from <code>INTUNEATLAS_CLIENT_ID</code>.</td></tr>
           <tr><td>--report &lt;path&gt;</td><td>Read a report from a prior <code>scan --out</code> instead of scanning live</td></tr>
           <tr><td>--baseline &lt;path&gt;</td><td>Directory of baseline YAML rules (defaults to the bundled starter pack)</td></tr>
           <tr><td>--host &lt;address&gt;</td><td>Interface to bind to (default: <code>127.0.0.1</code>, this machine only). Anything else — e.g. <code>0.0.0.0</code> — shares it with a team; each teammate signs in with their own Microsoft account.</td></tr>
@@ -166,10 +166,10 @@
         </table>
 
         <div class="ex-label">Solo, on your own machine</div>
-        <pre><span class="p">$</span> intuneatlas ui --tenant contoso.onmicrosoft.com</pre>
+        <pre><span class="p">$</span> intuneatlas ui --tenant contoso.onmicrosoft.com --client-id &lt;application-id&gt;</pre>
 
         <div class="ex-label">Shared instance that survives reboots</div>
-        <pre><span class="p">$</span> intuneatlas ui --persist --host 0.0.0.0 --tenant contoso.onmicrosoft.com</pre>
+        <pre><span class="p">$</span> intuneatlas ui --persist --host 0.0.0.0 --tenant contoso.onmicrosoft.com --client-id &lt;application-id&gt;</pre>
 
         <div class="ex-label">Stop and remove it</div>
         <pre><span class="p">$</span> intuneatlas ui --stop</pre>

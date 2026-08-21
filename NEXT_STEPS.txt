@@ -2,41 +2,20 @@ intuneatlas — shared/team ui: what's left for you to do
 =========================================================
 
 The code is done, typechecked, and tested as far as this environment allows.
-One manual step is blocking real sign-in from working at all, plus a couple
-of optional follow-ups.
 
-1. REQUIRED — register the redirect URI in Entra (blocks everything)
-----------------------------------------------------------------------
-The web sign-in flow (src/auth/webSession.ts) uses the existing shared app
-registration (client ID d0a404f2-0421-40bc-ad8b-866a5a2115b1), but it needs
-its own callback URL added — nothing works until this is done.
+Note: there's no more bundled shared app registration (removed — a
+multi-tenant public client can't let a foreign tenant configure its own
+redirect URI; that's a property of the Application object, which lives only
+in the home/publisher tenant, so scaling it to arbitrary self-hosters meant
+every one of them routing through you forever). Every install, including
+your own, now registers its own Entra app and passes --client-id. The public
+walkthrough for that lives at intuneatlas.com/docs/#register-app — same
+steps apply to your own dev/testing app, nothing here duplicates it.
 
-  - Go to portal.azure.com > Microsoft Entra ID > App registrations
-  - Open the app with client ID d0a404f2-0421-40bc-ad8b-866a5a2115b1
-  - Authentication > Add a platform > Mobile and desktop applications
-    (Settled here after two wrong guesses, both confirmed wrong by real
-    errors: "Web" demands a client secret [AADSTS7000218] — no good, we
-    don't have one and don't want one. "Single-page application" allows no
-    secret, but Entra then requires the token be redeemed via an actual
-    browser CORS request [AADSTS9002327] — no good either, our exchange
-    happens server-side in Node, not in browser JS. "Mobile and desktop
-    applications" is the one platform that's both secretless AND redeemable
-    via a plain server-to-server POST — it's what the OLD desktop sign-in
-    flow already used, for exactly this reason: our code, despite being a
-    web server, behaves like a native app to Entra — a trusted local
-    process making a direct HTTPS call to the token endpoint.)
-  - Add this as a Custom redirect URI (not one of the predefined options):
-      http://localhost:7878/auth/callback
-    (Same https-or-localhost-only restriction applies, so 127.0.0.1 still
-    won't work — not needed anyway, the code always advertises "localhost".
-    Remove the URI from Web and/or SPA if you added it there first — it
-    only needs to live under this one platform.)
-  - Save
-
-2. Test it locally
+1. Test it locally
 -------------------
   npm run build
-  node dist/cli.js ui --tenant <your-tenant>.onmicrosoft.com
+  node dist/cli.js ui --tenant <your-tenant>.onmicrosoft.com --client-id <your-app-id>
 
 First run: browser opens straight to a Microsoft sign-in screen (not the old
 desktop popup — it's now the same web flow shared mode uses). After signing
@@ -44,7 +23,7 @@ in once, closing and reopening `ui` should skip the prompt (silent, cached
 sign-in) on Windows/macOS. On Linux it'll prompt every time — expected,
 same limitation the desktop flow already had.
 
-3. Shared/team mode needs HTTPS on a real hostname — plain --host 0.0.0.0
+2. Shared/team mode needs HTTPS on a real hostname — plain --host 0.0.0.0
      over HTTP will NOT work
 ----------------------------------------------------------------------------
 The "localhost" redirect URI above only covers your own browser on your own
@@ -67,12 +46,11 @@ So testing/deploying shared mode for real needs a TLS-fronted address:
 
 Once you have that real address, register https://<hostname>/auth/callback
 as its own Custom redirect URI under the same "Mobile and desktop
-applications" platform as the localhost one — separate entry, alongside it.
-Either the same shared app registration (if you're willing to add every
-deployment's callback there) or, better for a real deployment, that team's
-own Entra app via --client-id.
+applications" platform as the localhost one — separate entry, alongside it,
+on the same app registration used for local testing (or a separate one, if
+you want to keep dev and prod cleanly apart).
 
-4. Keeping a shared instance up across reboots
+3. Keeping a shared instance up across reboots
 --------------------------------------------------
 `intuneatlas ui --persist` registers that exact command to run in the
 background — Windows: a Scheduled Task as SYSTEM; Linux: a systemd service
@@ -80,10 +58,10 @@ as root — starting at boot, no login needed, restarting itself on failure.
 No separate installer script anymore; it's a flag on `ui` itself.
 
   Windows (elevated terminal):
-    intuneatlas ui --persist --host 0.0.0.0 --tenant <your-tenant>.onmicrosoft.com
+    intuneatlas ui --persist --host 0.0.0.0 --tenant <your-tenant>.onmicrosoft.com --client-id <your-app-id>
 
   Linux (as root):
-    sudo intuneatlas ui --persist --host 0.0.0.0 --tenant <your-tenant>.onmicrosoft.com
+    sudo intuneatlas ui --persist --host 0.0.0.0 --tenant <your-tenant>.onmicrosoft.com --client-id <your-app-id>
 
 Stop and remove it with: intuneatlas ui --stop (same elevation needed).
 
@@ -98,7 +76,7 @@ this container, so neither platform's actual persistence behavior could be
 exercised end to end. Needs a real machine (ideally one you can reboot) on
 each platform to confirm.
 
-5. Nice-to-have, not blocking
+4. Nice-to-have, not blocking
 --------------------------------
 - No automated test suite exercises this end-to-end against a real tenant —
   only structural checks against a mocked session (this sandbox has no real
