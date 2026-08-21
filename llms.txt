@@ -1,0 +1,15 @@
+# IntuneAtlas
+
+> Open-source CLI and web UI that flattens every Microsoft Intune profile into one settings index, keyed on the CSP path. Surfaces conflicts, coverage gaps, and baseline drift instead of burying them in per-policy views. Reads a tenant read-only via Microsoft Graph. MIT licensed.
+
+Installs as a standalone binary (no Node.js required) on Windows and Linux. Scans Windows Settings Catalog, compliance, and enrollment policies, then serves a local web UI over the result — solo on one machine or shared with a team, everyone signing in with their own Microsoft account. Every install registers its own Entra app registration; there's no bundled shared client.
+
+## Docs
+
+- [Getting started](https://intuneatlas.com/docs/): install, register an Entra app, run the first scan
+- [CLI reference](https://intuneatlas.com/docs/cli.html): every subcommand and flag — login, scan, ui, export
+
+## Source
+
+- [GitHub repository](https://github.com/jgeselle/intuneatlas): source, issues, baseline rule packs, full history
+- [License](https://github.com/jgeselle/intuneatlas/blob/main/LICENSE): MIT
