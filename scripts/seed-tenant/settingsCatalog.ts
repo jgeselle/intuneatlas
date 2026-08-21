@@ -191,14 +191,23 @@ export function integerSettingInstance(definitionId: string, value: number) {
 }
 
 /** optionItemId is one of `definition.options[].itemId` — the opaque `{definitionId}_{index}` form. */
-export function choiceSettingInstance(definitionId: string, optionItemId: string) {
+/**
+ * `children` here is the real mechanism for a *dependent* setting — a
+ * child that only exists because this specific option was selected (e.g.
+ * "Block Flash: Enabled" → dependent "Block Flash Action: ..."), distinct
+ * from a group/group-collection's children. Confirmed against a live
+ * tenant: the child is itself a full choiceSettingInstance with its own
+ * settingDefinitionId whose rootDefinitionId points at the PARENT choice
+ * definition, not a group definition.
+ */
+export function choiceSettingInstance(definitionId: string, optionItemId: string, children: unknown[] = []) {
   return {
     "@odata.type": "#microsoft.graph.deviceManagementConfigurationChoiceSettingInstance",
     settingDefinitionId: definitionId,
     choiceSettingValue: {
       "@odata.type": "#microsoft.graph.deviceManagementConfigurationChoiceSettingValue",
       value: optionItemId,
-      children: [] as unknown[],
+      children,
     },
   };
 }

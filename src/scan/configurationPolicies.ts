@@ -15,7 +15,13 @@ interface GraphSettingInstance {
   "@odata.type": string;
   settingDefinitionId: string;
   simpleSettingValue?: { value: unknown };
-  choiceSettingValue?: { value: string };
+  // children here is a *dependent* setting — one that only exists because
+  // this specific option was selected (e.g. "Block Flash: Enabled" with a
+  // dependent "Block Flash Action: ..."), a different mechanism from
+  // groupSettingValue below. Confirmed against a live tenant: the child's
+  // own settingDefinitionId has rootDefinitionId pointing at this PARENT
+  // choice definition, not at a group definition.
+  choiceSettingValue?: { value: string; children?: GraphSettingInstance[] };
   simpleSettingCollectionValue?: Array<{ value: unknown }>;
   choiceSettingCollectionValue?: Array<{ value: string }>;
   // A group is one compound instance made of several child settings; a
@@ -75,12 +81,14 @@ async function fetchPolicySettings(token: string, policyId: string): Promise<Raw
 
 /**
  * Value extraction covering simple, choice, and group/group-collection
- * settings. Group settings recurse: each child is itself a full setting
- * instance with its own definition to resolve and its own value to
- * extract, same as the top-level call — confirmed against a live tenant
- * (Attack Surface Reduction Rules) that this is a flat one-level-deep
- * children array per group, not arbitrarily nested, but the recursive
- * call handles deeper nesting too if a real tenant ever has it.
+ * settings, plus a choice value's own dependent children (a distinct
+ * mechanism from group settings — see the comment on
+ * GraphSettingInstance.choiceSettingValue.children). Confirmed against a
+ * live tenant (Attack Surface Reduction Rules for groups; a real
+ * "Block Flash activation" + dependent "Block Flash Action" pair for
+ * choice children) that both are a flat one-level-deep children array,
+ * not arbitrarily nested, but the recursive call handles deeper nesting
+ * too if a real tenant ever has it.
  *
  * Choice values come back from Graph as opaque `{definitionId}_{index}`
  * strings, not human-readable text — resolved through the definition's
@@ -95,7 +103,12 @@ async function extractValue(
   const resolveOption = (itemId: string) => definition.options?.get(itemId) ?? itemId;
 
   if (instance.simpleSettingValue) return String(instance.simpleSettingValue.value);
-  if (instance.choiceSettingValue) return resolveOption(instance.choiceSettingValue.value);
+  if (instance.choiceSettingValue) {
+    const resolved = resolveOption(instance.choiceSettingValue.value);
+    const children = instance.choiceSettingValue.children;
+    if (children?.length) return `${resolved} (${await summarizeChildInstances(token, children)})`;
+    return resolved;
+  }
   if (instance.simpleSettingCollectionValue) {
     return instance.simpleSettingCollectionValue.map((v) => String(v.value)).join(", ");
   }
@@ -111,19 +124,19 @@ async function extractValue(
   return "(unsupported setting type)";
 }
 
-async function summarizeGroups(token: string, groups: Array<{ children: GraphSettingInstance[] }>): Promise<string> {
-  const groupSummaries = await Promise.all(
-    groups.map(async (group) => {
-      const parts = await Promise.all(
-        group.children.map(async (child) => {
-          const childDefinition = await resolveSettingDefinition(token, child.settingDefinitionId);
-          const childValue = await extractValue(token, child, childDefinition);
-          return `${childDefinition.name}: ${childValue}`;
-        }),
-      );
-      return parts.join(", ");
+async function summarizeChildInstances(token: string, children: GraphSettingInstance[]): Promise<string> {
+  const parts = await Promise.all(
+    children.map(async (child) => {
+      const childDefinition = await resolveSettingDefinition(token, child.settingDefinitionId);
+      const childValue = await extractValue(token, child, childDefinition);
+      return `${childDefinition.name}: ${childValue}`;
     }),
   );
+  return parts.join(", ");
+}
+
+async function summarizeGroups(token: string, groups: Array<{ children: GraphSettingInstance[] }>): Promise<string> {
+  const groupSummaries = await Promise.all(groups.map((group) => summarizeChildInstances(token, group.children)));
   // Multiple instances (e.g. several configured ASR rules) get numbered so
   // they don't read as one run-on value.
   return groupSummaries.length === 1
