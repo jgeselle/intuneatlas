@@ -1,6 +1,6 @@
 {
   "name": "intuneatlas",
-  "version": "0.0.22",
+  "version": "0.0.23",
   "description": "Flatten every Intune profile into one settings index, matched by the real setting — not just a shared name.",
   "license": "MIT",
   "type": "module",
