@@ -1,0 +1,135 @@
+import { useState } from "react";
+import { Sliders, WarningCircle, Warning, Prohibit, MagnifyingGlass, ChatCircle } from "@phosphor-icons/react";
+import { Chip, Stat } from "../components/bits.jsx";
+import { STATE_STYLE } from "../lib/styles.js";
+import { platformLabel } from "../lib/format.js";
+
+function SettingsView({ entries, notes = {}, query, setQuery, platform, setPlatform, onOpen }) {
+  const [state, setState] = useState("All");
+  const platforms = ["All", ...Array.from(new Set(entries.map((e) => e.platform)))];
+  const states = ["All", "Below baseline", "Conflict", "Not deployed", "Baseline"];
+
+  const shown = entries.filter(
+    (e) =>
+      (platform === "All" || e.platform === platform) &&
+      (state === "All" || e.state === state) &&
+      (e.name.toLowerCase().includes(query.toLowerCase()) ||
+        e.category.toLowerCase().includes(query.toLowerCase()) ||
+        (e.cspPath || "").toLowerCase().includes(query.toLowerCase())),
+  );
+
+  const categories = Array.from(new Set(shown.map((e) => e.category)));
+  const count = (s) => entries.filter((e) => e.state === s).length;
+
+  return (
+    <div className="space-y-5">
+      <header>
+        <h1 className="text-xl font-semibold">Settings</h1>
+        <p className="mt-1 text-sm text-stone-500">
+          Every configuration setting in the tenant, merged across policies. Where two policies set the same thing differently, it
+          shows up here as a conflict.
+        </p>
+      </header>
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Stat label="Managed" value={entries.length} icon={Sliders} />
+        <Stat label="Below baseline" value={count("Below baseline")} tone={count("Below baseline") ? "amber" : "neutral"} icon={WarningCircle} />
+        <Stat label="Conflicting" value={count("Conflict")} tone={count("Conflict") ? "alert" : "neutral"} icon={Warning} />
+        <Stat label="Not deployed" value={count("Not deployed")} icon={Prohibit} />
+      </div>
+
+      <div className="flex flex-col gap-3">
+        <div className="relative">
+          <MagnifyingGlass className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-stone-400" />
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search by name, category, or CSP path"
+            className="w-full rounded-md border border-stone-300 bg-white py-2 pl-9 pr-3 text-sm placeholder-stone-400 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+          />
+        </div>
+        <div className="flex flex-wrap gap-1">
+          {states.map((s) => (
+            <button
+              key={s}
+              onClick={() => setState(s)}
+              className={
+                "shrink-0 rounded-md px-3 py-1.5 text-xs font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 " +
+                (state === s ? "bg-stone-900 text-white" : "bg-white text-stone-600 ring-1 ring-inset ring-stone-300 hover:bg-stone-50")
+              }
+            >
+              {s}
+              <span className="ml-1.5 tabular-nums opacity-60">{s === "All" ? entries.length : count(s)}</span>
+            </button>
+          ))}
+          <span className="mx-1 hidden w-px bg-stone-200 sm:block" />
+          {platforms.map((p) => (
+            <button
+              key={p}
+              onClick={() => setPlatform(p)}
+              className={
+                "shrink-0 rounded-md px-3 py-1.5 text-xs font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 " +
+                (platform === p ? "bg-teal-700 text-white" : "bg-white text-stone-600 ring-1 ring-inset ring-stone-300 hover:bg-stone-50")
+              }
+            >
+              {p === "All" ? "All" : platformLabel(p)}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="space-y-5">
+        {categories.map((cat) => (
+          <section key={cat}>
+            <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-stone-500">{cat}</h2>
+            <ul className="divide-y divide-stone-100 overflow-hidden rounded-lg border border-stone-200 bg-white">
+              {shown
+                .filter((e) => e.category === cat)
+                .map((e) => (
+                  <li key={e.key}>
+                    <button
+                      onClick={() => onOpen(e.key)}
+                      className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-stone-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-teal-500"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className="truncate text-sm font-medium">{e.name}</span>
+                          {(notes[e.key] || []).length > 0 && (
+                            <span
+                              className="inline-flex shrink-0 items-center gap-0.5 text-xs text-stone-400"
+                              title={(notes[e.key] || []).length + " notes"}
+                            >
+                              <ChatCircle className="h-3.5 w-3.5" />
+                              <span className="tabular-nums">{(notes[e.key] || []).length}</span>
+                            </span>
+                          )}
+                        </div>
+                        <div className="mt-0.5 truncate text-xs text-stone-500">
+                          {platformLabel(e.platform)} · {e.sources.length === 1 ? e.sources[0].policyName : e.sources.length + " policies"}
+                        </div>
+                      </div>
+                      <div className="hidden w-56 shrink-0 sm:block">
+                        <div className={"truncate text-sm " + (e.conflict ? "text-red-700" : "text-stone-700")}>
+                          {e.values.join(", ")}
+                        </div>
+                      </div>
+                      <Chip className={STATE_STYLE[e.state]}>{e.state}</Chip>
+                    </button>
+                  </li>
+                ))}
+            </ul>
+          </section>
+        ))}
+
+        {shown.length === 0 && (
+          <div className="rounded-lg border border-dashed border-stone-300 bg-white px-4 py-16 text-center">
+            <p className="text-sm font-medium">No settings match that filter</p>
+            <p className="mt-1 text-xs text-stone-500">Clear the search or pick a different state.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export { SettingsView };
