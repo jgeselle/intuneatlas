@@ -16,7 +16,10 @@ serves a web UI over the result — solo on your own machine or shared with a
 team, everyone signing in with their own Microsoft account. Baselines and a
 review-gated change log are real; actually deploying a change back to the
 tenant, and platform coverage beyond Windows, don't exist yet — see the
-roadmap below.
+roadmap below. Backed by a real (if not exhaustive) test suite — the merge
+and conflict logic, the baseline engine, and the auth/authorization layer all
+have real regression tests, not just typechecking; see
+[`test/`](./test) and the [Test workflow](.github/workflows/test.yml).
 
 ## Using it
 
@@ -56,15 +59,22 @@ so reopening it later goes straight to what you already have, with a silent,
 cached sign-in rather than a fresh prompt. `--report <file>` loads a saved
 report instead of the last scan. `--host <address>` (default `127.0.0.1`,
 this machine only) turns it into a shared instance a whole team can point a
-browser at — everyone signs in with their own account, and viewing an
-already-scanned report never needs any Intune permission, only triggering a
-new scan does. `--persist` registers that exact command to run in the
-background — a Scheduled Task on Windows, a systemd service on Linux —
-starting at boot and restarting itself on failure, for a shared instance on
-a dedicated machine (needs an elevated/root shell); `--stop` undoes it.
-`login`/`scan` (headless) also exist directly, with `--device-code`
-(interactive fallback) and `--client-secret` (unattended, client-credentials
-flow) available there for scripted/CI use.
+browser at — everyone signs in with their own account, and what they can do
+once signed in follows the [Entra App Role](https://intuneatlas.com/docs/#register-app)
+you assign them (Viewer, Contributor, or Admin — enforced server-side, on
+every action, not just hidden in the UI). Sharing it needs a real HTTPS
+reverse proxy in front — the app itself only ever speaks plain HTTP, and
+Entra's own sign-in redirect rules mean it can't work without one anyway;
+never expose `--host` directly to a network. `--persist` registers that
+exact command to run in the background — a Scheduled Task on Windows, a
+systemd service on Linux — starting at boot and restarting itself on failure,
+for a shared instance on a dedicated machine (needs an elevated/root shell);
+`--stop` undoes it. `login`/`scan` (headless) also exist directly, with
+`--device-code` (interactive fallback) and `--client-secret` (unattended,
+client-credentials flow) available there for scripted/CI use — `scan` from
+the CLI is subject to the same Admin-role check as triggering one from the
+UI (client-credentials sign-in is exempt: it authenticates as the app
+itself, not a person, so there's no per-user role to check).
 
 ## What's in this repo
 
@@ -73,6 +83,7 @@ flow) available there for scripted/CI use.
 | [`index.html`](./index.html) | Static marketing/landing page for the project |
 | [`src/`](./src) | The CLI — auth, Graph scanning, settings index, local server |
 | [`web/`](./web) | The local web UI (Vite + React), served by `intuneatlas ui` |
+| [`test/`](./test) | Fixture-driven regression tests for the merge/conflict/baseline logic and the auth/authorization layer |
 | [`_headers`](./_headers) | Cloudflare Pages response headers (CSP, etc.) for the landing page |
 
 ## The idea
@@ -89,6 +100,47 @@ flow) available there for scripted/CI use.
 Baselines are meant to be plain YAML files in a directory, so contributing a
 rule doesn't require touching any code.
 
+## Trust model
+
+This is a tool you point at your own Intune tenant, so it's worth being
+explicit about what's actually verifiable, rather than asking for trust:
+
+- **No shared trust surface.** There's no bundled client ID or shared
+  service anywhere — every install registers its own Entra app and signs in
+  with it. A compromise of this project's own infrastructure (there isn't
+  much of it) can't compromise your tenant, because nothing of yours ever
+  runs through anything shared.
+- **Build provenance, not just a signature.** Every released binary carries
+  a [Sigstore](https://www.sigstore.dev/)-signed attestation binding it to
+  the exact commit, repository, and workflow it was built from — free, via
+  GitHub's public-good instance, checkable yourself with
+  `gh attestation verify <file> --repo jgeselle/intuneatlas`. This is a
+  different, more specific claim than a code-signing certificate makes: a
+  cert says "someone holding this key signed this file"; an attestation
+  says "this exact binary came from this exact commit, built by this exact
+  workflow, in this exact repo." For a tool whose source you can already
+  read, that's the more relevant assurance — which is why this project
+  ships attestations instead of paying for a certificate, not merely in
+  place of one for lack of budget. (The Windows SmartScreen warning on
+  first run is real either way — that's about publisher reputation, which
+  only a paid certificate resolves — but it's a UX cost, not a security
+  gap.) An SBOM attestation ships alongside, for anyone whose procurement
+  process wants one. Both are wired into
+  [`release.yml`](./.github/workflows/release.yml).
+- **Read-only, and testably so.** IntuneAtlas never writes back to your
+  tenant — see [`test/`](./test) for the regression suite covering the merge
+  logic that decides what you see.
+- **Access is enforced server-side, not just hidden in the UI.** Entra App
+  Roles gate every mutating action — see the `--host` note above.
+
+## Maintenance expectations
+
+This is a solo, unpaid, MIT-licensed project — not a company, not a
+product with an SLA. I maintain it because I use it, on a best-effort
+basis; there's no guaranteed response time on issues or feature requests.
+Found a security issue? Please see [`SECURITY.md`](./SECURITY.md) rather
+than opening a public issue.
+
 ## Roadmap
 
 - [x] Graph API read-only scan of Intune policies (Windows Settings Catalog, compliance, enrollment)
@@ -98,9 +150,10 @@ rule doesn't require touching any code.
 - [x] Review-gated change log (stage a recommendation, require a reason and a signed-in reviewer)
 - [x] Packaging: standalone Windows binary (SEA), PowerShell installer, winget manifest template
 - [x] `ui --persist` / `--stop` — a shared instance that survives reboots (Scheduled Task on Windows, systemd on Linux)
+- [x] Entra App Roles (Viewer / Contributor / Admin), enforced server-side across the UI and CLI
+- [x] Sigstore build provenance + SBOM attestations on every released binary — see [Trust model](#trust-model)
 - [ ] Actually deploying a staged change back to the tenant (write-back) — deliberately deferred; the review gate above exists, the write doesn't yet
 - [ ] `intuneatlas get <path>` headless command
-- [ ] A real code-signing certificate (exe ships unsigned today)
 - [ ] Azure-hosted deployment (Bicep, scheduled scans) — the auth this needs is now built, the infra-as-code isn't
 - [ ] GitHub Action for scheduled drift scanning
 

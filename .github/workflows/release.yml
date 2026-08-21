@@ -37,10 +37,13 @@ jobs:
       - name: Package the standalone exe
         run: npm run package
 
-      # TODO: sign build/intuneatlas.exe once a certificate exists — see
-      # SignPath Foundation / a purchased IV/OV cert with cloud-HSM signing
-      # (project plan has the detail). Currently ships unsigned; Windows
-      # will show a SmartScreen warning on first run until this is added.
+      # build/intuneatlas.exe ships unsigned, deliberately — this is an
+      # unmonetized solo project, and a code-signing cert is a recurring
+      # cost that buys publisher-reputation trust, which the build
+      # provenance + SBOM attestations below establish more specifically
+      # anyway (see the README's Trust model section). Windows will show a
+      # SmartScreen warning on first run as a result — a real UX cost, not
+      # a security gap.
 
       - name: Assemble the release folder
         shell: pwsh
