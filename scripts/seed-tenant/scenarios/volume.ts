@@ -26,19 +26,35 @@ export async function seedVolume(client: SeedClient, count = 200): Promise<void>
     throw new Error("None of the volume scenario's keywords resolved to a setting in this tenant's catalog.");
   }
 
+  // Cycling through every option value (not just the first) is deliberate
+  // — it spreads volume across more distinct values. That means it can
+  // land on an option that needs a dependent child setting this toolkit
+  // doesn't build (confirmed for real: a Chrome content-setting option
+  // rejected with "doesnt contain required dependent settings"). One bad
+  // option shouldn't sink the whole batch, so failures here are skipped
+  // and counted rather than thrown — volume's job is a lot of policies,
+  // not every attempted one succeeding.
   let created = 0;
+  let skipped = 0;
   for (let i = 0; i < count; i++) {
     const definition = definitions[i % definitions.length];
     if (!definition.options?.length) continue;
     const option = definition.options[i % definition.options.length];
-    const policy = await createConfigurationPolicy(client, {
-      name: `volume ${i + 1}/${count} (${definition.displayName})`,
-      platforms: "windows10",
-      settings: [choiceSettingInstance(definition.id, option.itemId)],
-    });
-    await assignPolicy(client, policy.id, [{ kind: "group", groupId: group.id }]);
-    created++;
+    try {
+      const policy = await createConfigurationPolicy(client, {
+        name: `volume ${i + 1}/${count} (${definition.displayName})`,
+        platforms: "windows10",
+        settings: [choiceSettingInstance(definition.id, option.itemId)],
+      });
+      await assignPolicy(client, policy.id, [{ kind: "group", groupId: group.id }]);
+      created++;
+    } catch (err) {
+      skipped++;
+      console.log(`volume ${i + 1}/${count}: skipped (${err instanceof Error ? err.message.split("\n")[0] : err})`);
+    }
   }
 
-  console.log(`volume: created ${created} policies across ${definitions.length} settings, assigned to "${group.displayName}".`);
+  console.log(
+    `volume: created ${created} policies (${skipped} skipped) across ${definitions.length} settings, assigned to "${group.displayName}".`,
+  );
 }
