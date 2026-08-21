@@ -5,10 +5,9 @@ name: Release
 #
 # The Windows job only runs on a real Windows runner because the SEA
 # packaging step (scripts/build-sea.mjs) patches a real Windows node.exe
-# binary — that can't be done from Linux, and has never actually executed
-# before a human pushes the first tag against it, so treat that job's
-# first run as a real test, not a rubber stamp. The Linux job's steps have
-# been run and verified for real (this repo's own dev sandbox is Linux).
+# binary — that can't be done from Linux. Both jobs' output have been
+# verified for real: the Linux binary in this repo's own dev sandbox, and
+# the Windows one via install.ps1 on real Windows hardware.
 on:
   push:
     tags:

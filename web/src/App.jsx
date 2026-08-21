@@ -1130,34 +1130,46 @@ export default function App({ initialReport, session }) {
   const [, forceTick] = useState(0);
 
   // Desktop-only: collapse the rail to an icon-only strip, pinned across
-  // reloads. The hover-to-flyout expansion itself is plain CSS
-  // (`lg:hover:w-60` / `lg:group-hover:opacity-100` below) rather than
-  // JS-tracked mouseenter/mouseleave state — real `:hover` is simply more
-  // reliable than reimplementing it, and it's exactly how the ported
-  // Seresphere original does it too. JS only needs to know about
-  // `menuPinned`: opening the account menu while collapsed should force the
-  // rail open even if the pointer isn't over it (e.g. it was opened via
+  // reloads. `menuPinned`: opening the account menu while collapsed should
+  // force the rail open even if the pointer isn't over it (e.g. opened via
   // keyboard), and keep it open through the close animation instead of
-  // letting a CSS-only rail snap shut mid-transition.
+  // snapping shut mid-transition.
   const [railCollapsed, setRailCollapsed] = useState(
     () => typeof window !== "undefined" && window.localStorage.getItem(RAIL_COLLAPSE_KEY) === "1",
   );
   const [menuPinned, setMenuPinned] = useState(false);
 
-  // Opacity classes for text that should hide in the icon-only strip but
-  // reveal on hover (CSS) or while the account menu is pinned open (JS).
-  // Only for elements whose *layout* doesn't depend on being centered —
-  // opacity alone still reserves the element's full width, which is fine
-  // for a label sitting next to a fixed-position icon, but fights any
-  // `justify-center` on the row (see `syncFullShown` below, which swaps
-  // whole blocks by display instead, for exactly that case).
+  // The rail's hover-to-flyout width used to be plain CSS (`lg:hover:w-60`
+  // with a `lg:delay-200` on the resting state, so a quick pass-over
+  // wouldn't collapse it instantly). That had a real bug: `transition-delay`
+  // freezes an element exactly where it is when the target changes and
+  // *then* waits out the delay — it has no notion of "already fully open"
+  // vs. "still mid-expansion". So leaving right after a brief hover (before
+  // the 150ms expand had finished) froze the rail at some half-open width
+  // for the whole 200ms delay before it finally started shrinking — it
+  // visibly got stuck. JS timing fixes this because it actually knows which
+  // case it's in: `railSettled` only becomes true once the expand has had
+  // time to finish, and only *that* case gets the grace period before
+  // collapsing. Leaving mid-expansion collapses immediately instead, with
+  // no artificial freeze — the width transition just smoothly reverses
+  // from wherever it currently is.
+  const [railHoverOpen, setRailHoverOpen] = useState(false);
+  const [railSettled, setRailSettled] = useState(false);
+  const railSettleTimer = useRef(null);
+  const railCloseTimer = useRef(null);
+  const railWide = railHoverOpen || menuPinned;
+
+  // Opacity for text that should hide in the icon-only strip but reveal
+  // once the rail is wide — tracks `railWide` directly (no separate delay
+  // needed here, same reasoning as above: JS already decides exactly when
+  // to flip it). Only for elements whose *layout* doesn't depend on being
+  // centered — opacity alone still reserves the element's full width,
+  // which is fine for a label sitting next to a fixed-position icon, but
+  // fights any `justify-center` on the row (see `syncFullShown` below,
+  // which swaps whole blocks by display instead, for exactly that case).
   function railDim(extra = "") {
     if (!railCollapsed) return extra;
-    // Same delay pattern as the rail's own width (see the `aside` className
-    // below): instant to fade in on hover, but a `lg:delay-200` grace period
-    // on the resting/fade-out state so the text doesn't vanish before the
-    // rail even starts shrinking back.
-    return extra + (menuPinned ? " lg:opacity-100 lg:delay-0" : " lg:opacity-0 lg:delay-200 lg:group-hover:opacity-100 lg:group-hover:delay-0");
+    return extra + (railWide ? " lg:opacity-100" : " lg:opacity-0");
   }
 
   // Whether the sync control's full block (vs. its icon-only strip form)
@@ -1180,8 +1192,17 @@ export default function App({ initialReport, session }) {
   // there's a rendered "before" state, so it genuinely fades in.
   const [syncStatusFaded, setSyncStatusFaded] = useState(false);
   const syncRevealTimer = useRef(null);
+
   function onRailMouseEnter() {
     if (!railCollapsed) return;
+    window.clearTimeout(railCloseTimer.current);
+    setRailHoverOpen(true);
+    if (!railSettled) {
+      window.clearTimeout(railSettleTimer.current);
+      // Matches the width transition's own duration below — once this
+      // fires, the rail has actually had time to reach full width.
+      railSettleTimer.current = window.setTimeout(() => setRailSettled(true), 150);
+    }
     window.clearTimeout(syncRevealTimer.current);
     syncRevealTimer.current = window.setTimeout(() => {
       setSyncRevealed(true);
@@ -1189,15 +1210,29 @@ export default function App({ initialReport, session }) {
     }, 80);
   }
   function onRailMouseLeave() {
+    window.clearTimeout(railSettleTimer.current);
     window.clearTimeout(syncRevealTimer.current);
-    // Matches the rail's own `delay-200` before it starts shrinking back —
-    // otherwise the rail would stay wide for that extra beat while the
-    // sync block (on its own, un-delayed timer) had already vanished,
-    // leaving a wide-but-empty-looking strip for a moment.
-    syncRevealTimer.current = window.setTimeout(() => {
+    if (railSettled) {
+      // Was genuinely fully open — give it a short grace period before
+      // collapsing, so a quick pass just past the edge doesn't slam it
+      // shut. The sync block gets the same grace period so it retreats
+      // together with the rail instead of vanishing first.
+      railCloseTimer.current = window.setTimeout(() => {
+        setRailHoverOpen(false);
+        setRailSettled(false);
+      }, 200);
+      syncRevealTimer.current = window.setTimeout(() => {
+        setSyncRevealed(false);
+        setSyncStatusFaded(false);
+      }, 200);
+    } else {
+      // Never finished opening — collapse immediately instead of freezing
+      // mid-width for the same grace period.
+      setRailHoverOpen(false);
+      setRailSettled(false);
       setSyncRevealed(false);
       setSyncStatusFaded(false);
-    }, 200);
+    }
   }
   const syncFullShown = !railCollapsed || menuPinned || syncRevealed;
   const syncStatusVisible = !railCollapsed || menuPinned || syncStatusFaded;
@@ -1349,21 +1384,10 @@ export default function App({ initialReport, session }) {
         onMouseEnter={onRailMouseEnter}
         onMouseLeave={onRailMouseLeave}
         className={
-          "group flex shrink-0 flex-col bg-teal-900 transition-[width] duration-150 ease-out " +
+          "flex shrink-0 flex-col bg-teal-900 transition-[width] duration-150 ease-out " +
           (railCollapsed
             ? "overflow-hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-40 " +
-              (menuPinned
-                ? // A deliberate pin (menu opened while collapsed), not a
-                  // hover — snap open immediately, same as the hover-enter
-                  // case below.
-                  "lg:w-60 lg:shadow-2xl lg:delay-0"
-                : // Resting: a beat before shrinking back on mouse-leave
-                  // (`lg:delay-200`, on the *base* classes — that's what
-                  // governs the transition back to this state) so a quick
-                  // pass-over doesn't collapse it instantly. Hovering
-                  // overrides that to `lg:hover:delay-0` so expanding stays
-                  // snappy.
-                  "lg:w-16 lg:delay-200 lg:hover:w-60 lg:hover:shadow-2xl lg:hover:delay-0")
+              (railWide ? "lg:w-60 lg:shadow-2xl" : "lg:w-16")
             : "lg:w-60")
         }
       >

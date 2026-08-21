@@ -2,10 +2,6 @@
 # and puts it on your PATH. No Node.js required.
 #
 # Usage:  irm https://intuneatlas.com/install.ps1 | iex
-#
-# UNTESTED — this needs a real Windows machine to verify; written carefully
-# but treat the first run as the first real test, same as the release
-# workflow that builds what this installs.
 
 $ErrorActionPreference = "Stop"
 # Invoke-WebRequest's default progress-bar rendering is dramatically slower

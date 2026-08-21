@@ -70,11 +70,13 @@ how the process survives, not how sign-in works. On Linux, opening the
 firewall port (if one's active — ufw/firewalld/etc.) isn't automated;
 you'll need to do that yourself if --host isn't loopback.
 
-UNTESTED beyond a syntax/logic check — this sandbox has no real Windows at
-all, and while it has a systemctl binary, systemd itself isn't running in
-this container, so neither platform's actual persistence behavior could be
-exercised end to end. Needs a real machine (ideally one you can reboot) on
-each platform to confirm.
+Windows Scheduled Task persistence confirmed working on real hardware
+(including tracking down the DisallowStartIfOnBatteries default that was
+silently blocking the task from ever launching). Linux systemd persistence
+is still only syntax/logic-checked — this sandbox has a systemctl binary but
+systemd itself isn't running in the container, so that path hasn't been
+exercised end to end yet. Needs a real Linux machine (ideally one you can
+reboot) to confirm.
 
 4. Nice-to-have, not blocking
 --------------------------------
