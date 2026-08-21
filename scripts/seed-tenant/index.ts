@@ -7,6 +7,7 @@
 import { createSeedClient } from "./client.js";
 import { seedBelowBaseline } from "./scenarios/belowBaseline.js";
 import { seedConflict } from "./scenarios/conflict.js";
+import { seedDependentChoice } from "./scenarios/dependentChoice.js";
 import { seedGroupSetting } from "./scenarios/groupSetting.js";
 import { seedLegacyConflict } from "./scenarios/legacyConflict.js";
 import { seedMultiPlatform } from "./scenarios/multiPlatform.js";
@@ -25,6 +26,7 @@ const SCENARIOS: Record<string, (client: Awaited<ReturnType<typeof createSeedCli
   volume: (client) => seedVolume(client, arg ? Number(arg) : undefined),
   multiPlatform: (client) => seedMultiPlatform(client),
   legacyConflict: (client) => seedLegacyConflict(client, arg),
+  dependentChoice: (client) => seedDependentChoice(client, arg),
   teardown: (client) => teardown(client),
 };
 

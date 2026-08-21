@@ -171,6 +171,33 @@ export async function findFirstGroup(
   return { definition: match, children };
 }
 
+/**
+ * First top-level choice definition matching keyword that has a
+ * *dependent* child (a different mechanism from a group's children —
+ * confirmed live: the child's own rootDefinitionId points at this
+ * parent choice definition, not a group definition). Searches the
+ * matched candidates' own children via findChildDefinitions rather than
+ * assuming any one keyword hit has one.
+ */
+export async function findFirstChoiceWithDependentChild(
+  client: SeedClient,
+  keyword: string,
+  platformToken: string,
+): Promise<{ definition: SettingDefinition; child: SettingDefinition }> {
+  const matches = await findSettingDefinitions(client, keyword);
+  const candidates = matches.filter(
+    (d) => isChoice(d) && matchesPlatform(d, platformToken) && usableWithPolicyTechnology(d, "mdm") && isTopLevel(d),
+  );
+  for (const candidate of candidates) {
+    const children = await findChildDefinitions(client, candidate.id);
+    const childChoice = children.find((c) => isChoice(c) && (c.options?.length ?? 0) > 0);
+    if (childChoice) return { definition: candidate, child: childChoice };
+  }
+  throw new Error(
+    `No top-level choice setting with a dependent choice child found matching "${keyword}" applicable to platform "${platformToken}".`,
+  );
+}
+
 /** A simple string-valued setting instance, e.g. a free-text policy value. */
 export function stringSettingInstance(definitionId: string, value: string) {
   return {

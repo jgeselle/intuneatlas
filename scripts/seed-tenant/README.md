@@ -77,6 +77,11 @@ same way as the first).
   disagreeing on the same setting, assigned to the same group. Default
   keyword: `Camera`. Exercises the cross-source merge in
   `src/scan/deviceConfigurations.ts`.
+- `dependentChoice [keyword]` — a choice setting with a *dependent*
+  child (a different mechanism from a group's children). Default
+  keyword: `Flash`. Exercises the fix in
+  `src/scan/configurationPolicies.ts` for a dependent child being
+  silently dropped entirely.
 - `teardown` — deletes every group, configuration policy, and legacy
   device configuration profile this toolkit created (anything tagged
   `[intuneatlas-test]`), nothing else.

@@ -76,21 +76,16 @@ exact variables and setup.
 
   Keep finding these by testing against real data, not by guessing what
   might be wrong — every one of the seven above was found that way.
+  Findings 3–7 specifically came from checking a real tenant's actual
+  exported policies against the live catalog, not from a keyword search —
+  worth doing again against real exports if you have them, even
+  one-off/by-hand, whenever the existing scenarios stop turning up
+  anything new.
 
 - Beyond Settings: this extends to the compliance/enrollment views,
   notes, the staged-change review workflow, and RBAC roles too — not
   just Settings Catalog data. Settings is just today's most urgent
   target.
-
-### Real corpus replay (`scripts/replay-policies/`)
-
-For volume and real-world shape no hand-picked scenario can match:
-point it at a local, gitignored directory of exported real policies and
-it imports them as real Settings Catalog policies in the test tenant
-(and/or resolves the whole corpus offline with zero writes, for a pure
-robustness check). See `scripts/replay-policies/README.md`. This is how
-findings 3–7 above were actually found — a hand-picked keyword search
-only ever exercises what you thought to search for.
 
 ### Workflow
 
