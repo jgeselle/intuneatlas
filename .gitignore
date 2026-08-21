@@ -7,3 +7,6 @@ build/
 # Personal working/progress notes — not project documentation, kept
 # locally only. See project history for why this stopped being tracked.
 NEXT_STEPS.txt
+
+# Real policy exports from a real tenant, for local reference only — never commit.
+donottrack/
