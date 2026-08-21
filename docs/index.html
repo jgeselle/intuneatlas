@@ -77,10 +77,12 @@
   .pre-wrap .copy-btn:hover{border-color:var(--faint);color:var(--text)}
   /* Hidden until hover/focus, but only on devices that actually have a
      hover-capable pointer — a touch device would otherwise never be able
-     to reveal or use it. */
+     to reveal or use it. Docs-only: the landing page keeps its own
+     always-visible install-command button as-is. */
   @media (hover:hover){
-    .pre-wrap .copy-btn{opacity:0}
-    .pre-wrap:hover .copy-btn,.pre-wrap .copy-btn:focus-visible{opacity:1}
+    .pre-wrap .copy-btn,.cmd .copy-btn{opacity:0}
+    .pre-wrap:hover .copy-btn,.pre-wrap .copy-btn:focus-visible,
+    .cmd:hover .copy-btn,.cmd .copy-btn:focus-visible{opacity:1}
   }
   .cmd .copy-btn{flex:none;border:1px solid rgba(255,255,255,.2);background:transparent;color:#9FCFC7;padding:5px 10px}
   .cmd .copy-btn:hover{border-color:rgba(255,255,255,.5);color:#fff}
