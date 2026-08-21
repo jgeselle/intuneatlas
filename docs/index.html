@@ -187,8 +187,14 @@
         <h2>Sign in and run your first scan</h2>
         <ol>
           <li>
-            Run, using the client ID from the app you just registered:
-            <pre><span class="p">$</span> intuneatlas ui --tenant contoso.onmicrosoft.com --client-id &lt;application-id&gt;</pre>
+            Run:
+            <pre><span class="p">$</span> intuneatlas ui --tenant contoso.onmicrosoft.com</pre>
+            No client ID registered yet on this machine? You'll be prompted for the
+            Application (client) ID from the app you just created — paste it in once and
+            it's saved (<code>~/.intuneatlas</code>) for every future command, on any tenant.
+            Prefer to skip the prompt entirely, or set it up non-interactively? Pass
+            <code>--client-id &lt;application-id&gt;</code> instead — same effect, and it also
+            works as the way to change the saved one later.
           </li>
           <li>
             A browser window opens to a normal Microsoft sign-in screen. Sign in with your
@@ -204,9 +210,10 @@
           </li>
         </ol>
         <div class="note">
-          <b>Skip retyping <code>--client-id</code>.</b> Set it once as an environment
-          variable instead — <code>INTUNEATLAS_CLIENT_ID</code> — and every command picks it
-          up automatically.
+          <b>Scripts and CI.</b> The prompt only ever appears in a real interactive terminal
+          — piped or non-interactive stdin skips it and fails fast instead of hanging.
+          Always pass <code>--client-id</code> explicitly there, or set
+          <code>INTUNEATLAS_CLIENT_ID</code> (a per-run override, not saved to disk).
         </div>
       </section>
 

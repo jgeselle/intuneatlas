@@ -6,7 +6,7 @@ interface OrganizationResponse {
 }
 
 export async function runLogin(options: ResolveAuthOptions): Promise<void> {
-  const auth = resolveAuth(options);
+  const auth = await resolveAuth(options);
   const token = await auth.getToken();
 
   const org = await graphGet<OrganizationResponse>(token, "/organization");

@@ -18,7 +18,7 @@ program
 function withAuthOptions(command: Command): Command {
   return command
     .requiredOption("--tenant <id-or-domain>", "Tenant ID or domain, e.g. contoso.onmicrosoft.com")
-    .option("--client-id <id>", "Your Entra app (client) ID — see intuneatlas.com/docs to register one; can also come from INTUNEATLAS_CLIENT_ID")
+    .option("--client-id <id>", "Your Entra app (client) ID — see intuneatlas.com/docs to register one. Saved after first use, so you only need this once; pass it again anytime to change it.")
     .option("--client-secret <secret>", "Client secret — selects the unattended client-credentials flow")
     .option("--device-code", "Use device-code sign-in instead of the interactive browser flow", false);
 }
@@ -74,7 +74,7 @@ program
   .command("ui")
   .description("Open the web UI. Always signs in with your own Microsoft account — that's what runs any scan you trigger.")
   .option("--tenant <id-or-domain>", "Tenant to sign in to — needed the first time, or to switch tenants")
-  .option("--client-id <id>", "Your Entra app (client) ID — see intuneatlas.com/docs to register one; can also come from INTUNEATLAS_CLIENT_ID")
+  .option("--client-id <id>", "Your Entra app (client) ID — see intuneatlas.com/docs to register one. Saved after first use, so you only need this once; pass it again anytime to change it.")
   .option("--report <path>", "Read a report from a prior `scan --out` instead of scanning live")
   .option("--baseline <path>", "Directory of baseline YAML rules (defaults to the bundled starter pack)")
   .option(
@@ -83,7 +83,7 @@ program
   )
   .option(
     "--persist",
-    "Register this exact command to run in the background, starting at boot and restarting on failure (Windows: Scheduled Task as SYSTEM; Linux: systemd service as root). Requires --tenant and an elevated/root shell.",
+    "Register this exact command to run in the background, starting at boot and restarting on failure (Windows: Scheduled Task as SYSTEM; Linux: systemd service as root). Requires --tenant, --client-id, and an elevated/root shell — the background service can't prompt for either at boot, or read the client ID saved for your own interactive login.",
     false,
   )
   .option("--stop", "Stop and remove a previously --persist'd background instance.", false)

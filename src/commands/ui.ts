@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import open from "open";
+import { resolveClientId } from "../auth/index.js";
 import { createWebSessionManager } from "../auth/webSession.js";
 import { defaultBaselinesDir, loadBaselines } from "../baselines/loader.js";
 import { buildReport, type ScanReport } from "../scan/report.js";
@@ -34,13 +35,7 @@ export async function runUi(options: UiOptions): Promise<void> {
       "Missing tenant. Pass --tenant <id-or-domain> — needed to sign in — or run `intuneatlas scan` first.",
     );
   }
-  const clientId = options.clientId ?? process.env.INTUNEATLAS_CLIENT_ID;
-  if (!clientId) {
-    throw new Error(
-      "Missing client ID. Register your own Entra app (see intuneatlas.com/docs) and pass " +
-        "--client-id <id>, or set INTUNEATLAS_CLIENT_ID.",
-    );
-  }
+  const clientId = await resolveClientId(options.clientId);
   const session = await createWebSessionManager(tenantId, clientId);
   const baselinePath = options.baseline;
 

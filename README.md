@@ -40,8 +40,13 @@ node dist/cli.js ui
 **Before first sign-in**, register an Entra app for it to sign in with — every
 install brings its own, there's no bundled shared client. It's a five-minute,
 one-time setup: [intuneatlas.com/docs/#register-app](https://intuneatlas.com/docs/#register-app)
-walks through it. Then pass its client ID via `--client-id`, or set
-`INTUNEATLAS_CLIENT_ID` once so you don't have to repeat it.
+walks through it. Run any command afterward without `--client-id` and, in a
+real terminal, you'll be prompted for it once — the answer is saved
+(`~/.intuneatlas`) so every command after that, on any tenant, just works.
+Pass `--client-id` explicitly to skip the prompt or change the saved value
+later; scripts/CI should always pass it (or set `INTUNEATLAS_CLIENT_ID`,
+a per-run override that isn't saved) since the prompt only ever appears in
+an interactive terminal.
 
 `ui` opens the web UI and always signs you in with your own Microsoft
 account first — that's the identity behind every note and change review, and

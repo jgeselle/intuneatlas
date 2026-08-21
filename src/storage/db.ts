@@ -10,9 +10,10 @@ let db: DatabaseSync | undefined;
 
 /**
  * Singleton connection to the tool's local state store — scan snapshots,
- * scan history, and notes. Baselines stay separate, plain YAML files (rules
- * a human authors and reviews via git, not tool-managed state); this is only
- * for what the tool itself writes.
+ * scan history, notes, and small persisted config (e.g. the saved client
+ * ID). Baselines stay separate, plain YAML files (rules a human authors and
+ * reviews via git, not tool-managed state); this is only for what the tool
+ * itself writes.
  */
 export function getDb(): DatabaseSync {
   if (db) return db;
@@ -80,6 +81,11 @@ export function getDb(): DatabaseSync {
       updated_at TEXT NOT NULL
     );
     CREATE UNIQUE INDEX IF NOT EXISTS idx_staged_changes_target ON staged_changes(target_key);
+
+    CREATE TABLE IF NOT EXISTS config (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
   `);
 
   migrate(db);

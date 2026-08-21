@@ -34,6 +34,13 @@ export async function installPersistent(options: PersistOptions): Promise<void> 
   if (!options.tenant) {
     throw new Error("--persist needs --tenant explicitly — there's nobody around to answer for it later, at boot.");
   }
+  // The saved-client-ID prompt/store (see resolveClientId) lives under your
+  // own home directory — the persisted service runs as SYSTEM/root, a
+  // different home entirely, so it can't see it. Same reasoning as --tenant
+  // above: nothing interactive to fall back on at boot.
+  if (!options.clientId) {
+    throw new Error("--persist needs --client-id explicitly — the background service runs as SYSTEM/root, so it can't read your own saved one.");
+  }
 
   if (process.platform === "win32") {
     installWindows(options);

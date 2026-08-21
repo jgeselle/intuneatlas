@@ -123,7 +123,7 @@
         <table class="flags">
           <tr><th>Flag</th><th>Description</th></tr>
           <tr><td class="req">--tenant &lt;id-or-domain&gt;</td><td>Tenant ID or domain, e.g. <code>contoso.onmicrosoft.com</code></td></tr>
-          <tr><td class="req">--client-id &lt;id&gt;</td><td>Your Entra app (client) ID — <a href="/docs/#register-app">register one</a> first. Can also come from <code>INTUNEATLAS_CLIENT_ID</code>.</td></tr>
+          <tr><td>--client-id &lt;id&gt;</td><td>Your Entra app (client) ID — <a href="/docs/#register-app">register one</a> first. Omit it in a terminal and you'll be prompted once, then it's saved for next time. Can also come from <code>INTUNEATLAS_CLIENT_ID</code> (a per-run override, not saved).</td></tr>
           <tr><td>--client-secret &lt;secret&gt;</td><td>Client secret — selects the unattended client-credentials flow instead of interactive sign-in</td></tr>
           <tr><td>--device-code</td><td>Use device-code sign-in instead of the interactive browser flow</td></tr>
         </table>
@@ -139,7 +139,7 @@
         <table class="flags">
           <tr><th>Flag</th><th>Description</th></tr>
           <tr><td class="req">--tenant &lt;id-or-domain&gt;</td><td>Tenant ID or domain</td></tr>
-          <tr><td class="req">--client-id &lt;id&gt;</td><td>Your Entra app (client) ID — <a href="/docs/#register-app">register one</a> first. Can also come from <code>INTUNEATLAS_CLIENT_ID</code>.</td></tr>
+          <tr><td>--client-id &lt;id&gt;</td><td>Your Entra app (client) ID — <a href="/docs/#register-app">register one</a> first. Omit it in a terminal and you'll be prompted once, then it's saved for next time. Can also come from <code>INTUNEATLAS_CLIENT_ID</code> (a per-run override, not saved).</td></tr>
           <tr><td>--client-secret &lt;secret&gt;</td><td>Client secret — unattended client-credentials flow</td></tr>
           <tr><td>--device-code</td><td>Use device-code sign-in instead of the interactive browser flow</td></tr>
           <tr><td>--out &lt;path&gt;</td><td>Write JSON to a file instead of stdout</td></tr>
@@ -157,11 +157,11 @@
         <table class="flags">
           <tr><th>Flag</th><th>Description</th></tr>
           <tr><td>--tenant &lt;id-or-domain&gt;</td><td>Tenant to sign in to — needed the first time, or to switch tenants</td></tr>
-          <tr><td class="req">--client-id &lt;id&gt;</td><td>Your Entra app (client) ID — <a href="/docs/#register-app">register one</a> first. Can also come from <code>INTUNEATLAS_CLIENT_ID</code>.</td></tr>
+          <tr><td>--client-id &lt;id&gt;</td><td>Your Entra app (client) ID — <a href="/docs/#register-app">register one</a> first. Omit it in a terminal and you'll be prompted once, then it's saved for next time. Can also come from <code>INTUNEATLAS_CLIENT_ID</code> (a per-run override, not saved).</td></tr>
           <tr><td>--report &lt;path&gt;</td><td>Read a report from a prior <code>scan --out</code> instead of scanning live</td></tr>
           <tr><td>--baseline &lt;path&gt;</td><td>Directory of baseline YAML rules (defaults to the bundled starter pack)</td></tr>
           <tr><td>--host &lt;address&gt;</td><td>Interface to bind to (default: <code>127.0.0.1</code>, this machine only). Anything else — e.g. <code>0.0.0.0</code> — shares it with a team; each teammate signs in with their own Microsoft account.</td></tr>
-          <tr><td>--persist</td><td>Register this exact command to run in the background, starting at boot and restarting on failure (Windows: Scheduled Task as SYSTEM; Linux: systemd service as root). Requires <code>--tenant</code> and an elevated/root shell.</td></tr>
+          <tr><td>--persist</td><td>Register this exact command to run in the background, starting at boot and restarting on failure (Windows: Scheduled Task as SYSTEM; Linux: systemd service as root). Requires <code>--tenant</code>, <code>--client-id</code>, and an elevated/root shell — the background service can't prompt for either at boot, or read the client ID saved for your own interactive login.</td></tr>
           <tr><td>--stop</td><td>Stop and remove a previously <code>--persist</code>'d background instance</td></tr>
         </table>
 

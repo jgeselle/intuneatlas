@@ -10,7 +10,7 @@ export interface ScanOptions extends ResolveAuthOptions {
 }
 
 export async function runScan(options: ScanOptions): Promise<void> {
-  const auth = resolveAuth(options);
+  const auth = await resolveAuth(options);
   const token = await auth.getToken();
   const baselineRules = await loadBaselines(options.baseline ?? defaultBaselinesDir());
 
