@@ -2,6 +2,7 @@ import { applyBaselines } from "../baselines/evaluate.js";
 import type { BaselineRule } from "../baselines/types.js";
 import { fetchCompliancePolicies } from "./compliancePolicies.js";
 import { fetchConfigurationPolicies } from "./configurationPolicies.js";
+import { fetchLegacyDeviceConfigurations } from "./deviceConfigurations.js";
 import { fetchEnrollmentConfigurations } from "./enrollmentConfigurations.js";
 import { buildSettingIndex } from "./index.js";
 import { fetchTenantDisplayName } from "./organization.js";
@@ -13,6 +14,8 @@ export interface ScanReport {
   /** Friendly "Org Name (domain.onmicrosoft.com)" for display — `tenant` above stays the raw --tenant value used for auth/storage lookups. Undefined if Graph didn't return one (never blocks a scan over it). */
   tenantName?: string;
   policyCount: number;
+  /** Legacy deviceConfigurations profiles that contributed at least one mapped setting — see src/scan/deviceConfigurations.ts for exactly what's covered. */
+  legacyPolicyCount: number;
   settingCount: number;
   conflictCount: number;
   belowBaselineCount: number;
@@ -27,13 +30,17 @@ export async function buildReport(
   tenant: string,
   baselineRules: BaselineRule[] = [],
 ): Promise<ScanReport> {
-  const [policies, compliancePolicies, enrollmentConfigurations, tenantName] = await Promise.all([
+  const [policies, legacyPolicies, compliancePolicies, enrollmentConfigurations, tenantName] = await Promise.all([
     fetchConfigurationPolicies(token),
+    fetchLegacyDeviceConfigurations(token),
     fetchCompliancePolicies(token),
     fetchEnrollmentConfigurations(token),
     fetchTenantDisplayName(token),
   ]);
-  const settingIndex = applyBaselines(buildSettingIndex(policies), baselineRules);
+  // Legacy profiles fold into the same merge — a Settings Catalog policy and
+  // a legacy Device Restrictions profile writing the same real setting need
+  // to land in the same bucket to be conflict-checked against each other.
+  const settingIndex = applyBaselines(buildSettingIndex([...policies, ...legacyPolicies]), baselineRules);
 
   return {
     scannedAt: new Date().toISOString(),
@@ -41,6 +48,7 @@ export async function buildReport(
     tenant,
     tenantName,
     policyCount: policies.length,
+    legacyPolicyCount: legacyPolicies.length,
     settingCount: settingIndex.length,
     conflictCount: settingIndex.filter((e) => e.conflict).length,
     belowBaselineCount: settingIndex.filter((e) => e.state === "Below baseline").length,

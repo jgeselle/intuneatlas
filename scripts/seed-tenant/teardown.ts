@@ -24,6 +24,15 @@ export async function teardown(client: SeedClient): Promise<void> {
   }
   console.log(`teardown: deleted ${taggedPolicies.length} configuration ${taggedPolicies.length === 1 ? "policy" : "policies"}.`);
 
+  const legacyConfigs = await client.getAll<NamedObject>("/deviceManagement/deviceConfigurations?$select=id,displayName");
+  const taggedLegacyConfigs = legacyConfigs.filter(isTagged);
+  for (const config of taggedLegacyConfigs) {
+    await client.del(`/deviceManagement/deviceConfigurations/${config.id}`);
+  }
+  console.log(
+    `teardown: deleted ${taggedLegacyConfigs.length} legacy device configuration ${taggedLegacyConfigs.length === 1 ? "profile" : "profiles"}.`,
+  );
+
   const groups = await client.getAll<NamedObject>("/groups?$select=id,displayName");
   const taggedGroups = groups.filter(isTagged);
   for (const group of taggedGroups) {

@@ -29,7 +29,8 @@ export async function runScan(options: ScanOptions): Promise<void> {
     await writeFile(options.out, json, "utf8");
     console.error(
       `Wrote ${report.settingCount} settings (${report.conflictCount} conflicts, ${report.belowBaselineCount} below baseline) from ${report.policyCount} configuration policies, ` +
-        `${report.compliancePolicies.length} compliance policies, and ${report.enrollmentConfigurations.length} enrollment configs to ${options.out}`,
+        `${report.legacyPolicyCount} legacy device configuration profiles, ${report.compliancePolicies.length} compliance policies, and ` +
+        `${report.enrollmentConfigurations.length} enrollment configs to ${options.out}`,
     );
   } else {
     console.log(json);

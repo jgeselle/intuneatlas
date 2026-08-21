@@ -61,17 +61,46 @@ export type AssignmentTarget =
   | { kind: "allDevices" }
   | { kind: "allLicensedUsers" };
 
+function toGraphTarget(target: AssignmentTarget) {
+  return target.kind === "group"
+    ? { "@odata.type": "#microsoft.graph.groupAssignmentTarget", groupId: target.groupId }
+    : { "@odata.type": `#microsoft.graph.${target.kind}AssignmentTarget` };
+}
+
 export async function assignPolicy(client: SeedClient, policyId: string, targets: AssignmentTarget[]): Promise<void> {
   await client.post(
     `/deviceManagement/configurationPolicies/${policyId}/assign`,
-    {
-      assignments: targets.map((target) => ({
-        target:
-          target.kind === "group"
-            ? { "@odata.type": "#microsoft.graph.groupAssignmentTarget", groupId: target.groupId }
-            : { "@odata.type": `#microsoft.graph.${target.kind}AssignmentTarget` },
-      })),
-    },
+    { assignments: targets.map((target) => ({ target: toGraphTarget(target) })) },
     GRAPH_BETA_BASE,
   );
+}
+
+export interface CreatedDeviceConfiguration {
+  id: string;
+  name: string;
+}
+
+/**
+ * Creates a legacy (pre-Settings-Catalog) deviceConfigurations profile —
+ * a stable v1.0 resource, not beta like configurationPolicies. `properties`
+ * are the type-specific fields (e.g. cameraBlocked) alongside the
+ * @odata.type discriminator.
+ */
+export async function createDeviceConfiguration(
+  client: SeedClient,
+  options: { name: string; odataType: string; properties: Record<string, unknown> },
+): Promise<CreatedDeviceConfiguration> {
+  const name = taggedName(options.name);
+  const created = await client.post<{ id: string }>("/deviceManagement/deviceConfigurations", {
+    "@odata.type": options.odataType,
+    displayName: name,
+    ...options.properties,
+  });
+  return { id: created?.id ?? "dry-run-deviceconfig-id", name };
+}
+
+export async function assignDeviceConfiguration(client: SeedClient, configId: string, targets: AssignmentTarget[]): Promise<void> {
+  await client.post(`/deviceManagement/deviceConfigurations/${configId}/assign`, {
+    assignments: targets.map((target) => ({ target: toGraphTarget(target) })),
+  });
 }

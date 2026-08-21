@@ -72,8 +72,14 @@ same way as the first).
   of settings, for scale/UI testing.
 - `multiPlatform` — one policy per platform (Windows, iOS, macOS,
   Android), each in its own group.
-- `teardown` — deletes every group and configuration policy this toolkit
-  created (anything tagged `[intuneatlas-test]`), nothing else.
+- `legacyConflict [keyword]` — a real legacy `deviceConfigurations`
+  profile (Device Restrictions) and a real Settings Catalog policy,
+  disagreeing on the same setting, assigned to the same group. Default
+  keyword: `Camera`. Exercises the cross-source merge in
+  `src/scan/deviceConfigurations.ts`.
+- `teardown` — deletes every group, configuration policy, and legacy
+  device configuration profile this toolkit created (anything tagged
+  `[intuneatlas-test]`), nothing else.
 
 Every scenario resolves setting definitions by keyword search at run
 time rather than hardcoding a `settingDefinitionId` — there's no way to

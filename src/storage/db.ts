@@ -28,7 +28,8 @@ export function getDb(): DatabaseSync {
       flow TEXT NOT NULL,
       tenant TEXT NOT NULL,
       tenant_name TEXT,
-      policy_count INTEGER NOT NULL
+      policy_count INTEGER NOT NULL,
+      legacy_policy_count INTEGER NOT NULL DEFAULT 0
     );
 
     CREATE TABLE IF NOT EXISTS settings_snapshot (
@@ -135,5 +136,12 @@ function migrate(db: DatabaseSync): void {
   // separate column.
   if (!stagedChangesColumns.some((c) => c.name === "staged_by_name")) {
     db.exec(`ALTER TABLE staged_changes ADD COLUMN staged_by_name TEXT NOT NULL DEFAULT ''`);
+  }
+
+  // legacy_policy_count — existing scan rows predate legacy deviceConfigurations
+  // scanning entirely; DEFAULT 0 is accurate for them (they genuinely didn't
+  // scan any), not a placeholder.
+  if (!scanColumns.some((c) => c.name === "legacy_policy_count")) {
+    db.exec(`ALTER TABLE scans ADD COLUMN legacy_policy_count INTEGER NOT NULL DEFAULT 0`);
   }
 }

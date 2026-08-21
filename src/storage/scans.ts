@@ -9,6 +9,7 @@ interface ScanRow {
   tenant: string;
   tenant_name: string | null;
   policy_count: number;
+  legacy_policy_count: number;
 }
 
 interface SettingsSnapshotRow {
@@ -40,8 +41,10 @@ export function recordScan(report: ScanReport): void {
   db.exec("BEGIN");
   try {
     const scanResult = db
-      .prepare(`INSERT INTO scans (scanned_at, flow, tenant, tenant_name, policy_count) VALUES (?, ?, ?, ?, ?)`)
-      .run(report.scannedAt, report.flow, report.tenant, report.tenantName ?? null, report.policyCount);
+      .prepare(
+        `INSERT INTO scans (scanned_at, flow, tenant, tenant_name, policy_count, legacy_policy_count) VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run(report.scannedAt, report.flow, report.tenant, report.tenantName ?? null, report.policyCount, report.legacyPolicyCount);
     const scanId = scanResult.lastInsertRowid;
 
     const insertSetting = db.prepare(`
@@ -130,6 +133,7 @@ export function getLatestScan(tenant?: string): ScanReport | undefined {
     tenant: scan.tenant,
     ...(scan.tenant_name ? { tenantName: scan.tenant_name } : {}),
     policyCount: scan.policy_count,
+    legacyPolicyCount: scan.legacy_policy_count,
     settingCount: settings.length,
     conflictCount: settings.filter((s) => s.conflict).length,
     belowBaselineCount: settings.filter((s) => s.state === "Below baseline").length,
