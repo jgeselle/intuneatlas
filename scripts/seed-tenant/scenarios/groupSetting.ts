@@ -1,9 +1,11 @@
 // A policy built from a real group/nested setting definition — reproduces
 // finding #1 against real data: src/scan/configurationPolicies.ts's
 // extractValue() has no case for group settings and falls back to the
-// literal string "(group setting)". This is the least-verified payload
-// shape in this toolkit (see the comment on groupSettingCollectionInstance
-// in settingsCatalog.ts) — if creation fails, that's the place to adjust.
+// literal string "(group setting)". The payload shape is confirmed
+// against Microsoft's schema docs (see the comment on
+// groupSettingCollectionInstance in settingsCatalog.ts); what's not yet
+// confirmed is whether this scenario's guessed child values pass that
+// specific group definition's own validation on a live tenant.
 import type { SeedClient } from "../client.js";
 import { assignPolicy, createConfigurationPolicy, createTestGroup } from "../objects.js";
 import {

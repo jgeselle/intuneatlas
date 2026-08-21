@@ -21,10 +21,10 @@ export interface SettingDefinition {
   baseUri: string;
   offsetUri: string;
   options?: Array<{ itemId: string; displayName: string }>;
-  // Comma-separated flag string, e.g. "windows10" or "iOS, iPadOS" — used
-  // only by the multiPlatform scenario's platform filter below. Shape
-  // unverified against a live tenant; adjust the substring match in
-  // findFirstSimpleOrChoiceForPlatform() if a real run shows it's wrong.
+  // Confirmed via Microsoft's schema doc: applicability.platform is a
+  // free-form String (Graph's docs don't enumerate its exact flag-string
+  // format, e.g. whether multi-platform settings are comma-joined) — used
+  // only by the multiPlatform scenario's substring platform filter below.
   applicability?: { platform?: string; technologies?: string };
 }
 
@@ -156,12 +156,13 @@ export function choiceSettingInstance(definitionId: string, optionItemId: string
  * A group-collection instance, e.g. a compound/nested setting made of
  * several child settings under one instance. This is the shape finding #1
  * (`src/scan/configurationPolicies.ts`'s `extractValue()` falling back to
- * `"(group setting)"`) needs a real policy to exercise — least verified
- * shape in this toolkit against a live tenant, since group-type settings
- * vary in their child structure. If a real seed run rejects this payload,
- * start here: `GET /deviceManagement/configurationSettings/{id}` for the
- * group definition itself often documents its expected children shape
- * better than the generic collection endpoint does.
+ * `"(group setting)"`) needs a real policy to exercise. Shape confirmed
+ * against Microsoft's own schema doc (learn.microsoft.com, resource
+ * deviceManagementConfigurationGroupSettingCollectionInstance):
+ * groupSettingCollectionValue is an array of `{ children: [...] }`. Not
+ * yet confirmed against a *live* tenant — a real create call may still
+ * reject a specific child combination depending on that group's own
+ * validation rules, which the schema doc doesn't fully capture.
  */
 export function groupSettingCollectionInstance(definitionId: string, childInstances: unknown[]) {
   return {

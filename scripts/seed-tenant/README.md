@@ -48,9 +48,11 @@ by search) without calling Graph.
 - `conflict [keyword]` — two policies, same setting, different values,
   assigned to the same group. Default keyword: `Camera`.
 - `groupSetting [keyword]` — a policy built from a real group/nested
-  setting definition. Default keyword: `BitLocker`. This is the
-  least-verified payload shape in this toolkit — see the comment on
-  `groupSettingCollectionInstance` in `settingsCatalog.ts` if it fails.
+  setting definition. Default keyword: `BitLocker`. The payload shape is
+  confirmed against Microsoft's schema docs; a specific group definition's
+  own validation on child values is the part only a live run can confirm
+  — see the comment on `groupSettingCollectionInstance` in
+  `settingsCatalog.ts` if it fails.
 - `belowBaseline [keyword]` — a policy that should trip the bundled
   `update.quality-deferral` baseline rule. Default keyword: `Defer`.
 - `volume [count]` — many policies (default 200) spread across a handful
