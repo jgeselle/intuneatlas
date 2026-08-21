@@ -61,6 +61,3 @@ Write-Host "    intuneatlas ui --persist --host 0.0.0.0 --tenant <your-tenant>.o
 Write-Host "    intuneatlas ui --stop" -ForegroundColor Gray -NoNewline
 Write-Host "   (to remove it)" -ForegroundColor DarkGray
 Write-Host ""
-Write-Host "  First run shows a Windows SmartScreen warning (unsigned binary) -" -ForegroundColor DarkGray
-Write-Host "  click 'More info' then 'Run anyway'." -ForegroundColor DarkGray
-Write-Host ""
