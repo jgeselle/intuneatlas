@@ -15,6 +15,11 @@ interface SettingDefinitionResponse {
   options?: SettingDefinitionOption[];
 }
 
+interface CategoryResponse {
+  id: string;
+  displayName: string;
+}
+
 export interface ResolvedDefinition {
   name: string;
   cspPath: string;
@@ -38,6 +43,30 @@ export interface ResolvedDefinition {
  * settingDefinitionId, and this is the highest-volume call in a scan.
  */
 const cache = new Map<string, ResolvedDefinition>();
+const categoryCache = new Map<string, string>();
+
+/**
+ * Resolves a category id to its friendly display name (e.g. "Windows
+ * Update For Business"). Confirmed against a live tenant: the
+ * deviceManagementConfigurationCategory resource's `name` property is
+ * null — `displayName` is the one that's actually populated, same
+ * convention as every other setting-catalog resource in this file.
+ * Cached per process, same reasoning as resolveSettingDefinition below:
+ * many settings share a category.
+ */
+async function resolveCategoryName(token: string, categoryId: string): Promise<string> {
+  const cached = categoryCache.get(categoryId);
+  if (cached) return cached;
+
+  const category = await graphGet<CategoryResponse>(
+    token,
+    `/deviceManagement/configurationCategories/${categoryId}`,
+    GRAPH_BETA_BASE,
+  );
+
+  categoryCache.set(categoryId, category.displayName);
+  return category.displayName;
+}
 
 export async function resolveSettingDefinition(
   token: string,
@@ -55,9 +84,7 @@ export async function resolveSettingDefinition(
   const resolved: ResolvedDefinition = {
     name: definition.displayName,
     cspPath: `${definition.baseUri}${definition.offsetUri}`,
-    // Friendly category names need a second beta lookup
-    // (deviceManagementConfigurationCategory) — deferred, use the raw id.
-    category: definition.categoryId,
+    category: await resolveCategoryName(token, definition.categoryId),
     ...(definition.options
       ? { options: new Map(definition.options.map((o) => [o.itemId, o.displayName])) }
       : {}),
