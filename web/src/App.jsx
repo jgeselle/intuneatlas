@@ -1056,8 +1056,13 @@ function AccountMenu({ session, tenant, up = false, full = false, textClassName 
         <CaretDown
           weight="bold"
           className={
-            "h-3.5 w-3.5 shrink-0 text-teal-300 transition-[transform,opacity] duration-150 " +
-            (open ? "rotate-180 " : "") +
+            "h-3.5 w-3.5 shrink-0 text-teal-300 transition-[rotate,opacity] duration-150 " +
+            // This trigger's popover opens upward (`up`), so the resting
+            // chevron should point toward where it'll appear — up, not
+            // down — and rotate back to neutral once it's actually open.
+            // The plain dropdown placement keeps the usual convention:
+            // down at rest, flips up once expanded.
+            ((up ? !open : open) ? "rotate-180 " : "") +
             textClassName
           }
         />
@@ -1148,7 +1153,11 @@ export default function App({ initialReport, session }) {
   // whole blocks by display instead, for exactly that case).
   function railDim(extra = "") {
     if (!railCollapsed) return extra;
-    return extra + (menuPinned ? " lg:opacity-100" : " lg:opacity-0 lg:group-hover:opacity-100");
+    // Same delay pattern as the rail's own width (see the `aside` className
+    // below): instant to fade in on hover, but a `lg:delay-200` grace period
+    // on the resting/fade-out state so the text doesn't vanish before the
+    // rail even starts shrinking back.
+    return extra + (menuPinned ? " lg:opacity-100 lg:delay-0" : " lg:opacity-0 lg:delay-200 lg:group-hover:opacity-100 lg:group-hover:delay-0");
   }
 
   // Whether the sync control's full block (vs. its icon-only strip form)
@@ -1173,6 +1182,7 @@ export default function App({ initialReport, session }) {
   const syncRevealTimer = useRef(null);
   function onRailMouseEnter() {
     if (!railCollapsed) return;
+    window.clearTimeout(syncRevealTimer.current);
     syncRevealTimer.current = window.setTimeout(() => {
       setSyncRevealed(true);
       requestAnimationFrame(() => requestAnimationFrame(() => setSyncStatusFaded(true)));
@@ -1180,8 +1190,14 @@ export default function App({ initialReport, session }) {
   }
   function onRailMouseLeave() {
     window.clearTimeout(syncRevealTimer.current);
-    setSyncRevealed(false);
-    setSyncStatusFaded(false);
+    // Matches the rail's own `delay-200` before it starts shrinking back —
+    // otherwise the rail would stay wide for that extra beat while the
+    // sync block (on its own, un-delayed timer) had already vanished,
+    // leaving a wide-but-empty-looking strip for a moment.
+    syncRevealTimer.current = window.setTimeout(() => {
+      setSyncRevealed(false);
+      setSyncStatusFaded(false);
+    }, 200);
   }
   const syncFullShown = !railCollapsed || menuPinned || syncRevealed;
   const syncStatusVisible = !railCollapsed || menuPinned || syncStatusFaded;
@@ -1333,10 +1349,21 @@ export default function App({ initialReport, session }) {
         onMouseEnter={onRailMouseEnter}
         onMouseLeave={onRailMouseLeave}
         className={
-          "group flex shrink-0 flex-col bg-teal-900 transition-[width] duration-200 ease-out " +
+          "group flex shrink-0 flex-col bg-teal-900 transition-[width] duration-150 ease-out " +
           (railCollapsed
             ? "overflow-hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-40 " +
-              (menuPinned ? "lg:w-60 lg:shadow-2xl" : "lg:w-16 lg:hover:w-60 lg:hover:shadow-2xl")
+              (menuPinned
+                ? // A deliberate pin (menu opened while collapsed), not a
+                  // hover — snap open immediately, same as the hover-enter
+                  // case below.
+                  "lg:w-60 lg:shadow-2xl lg:delay-0"
+                : // Resting: a beat before shrinking back on mouse-leave
+                  // (`lg:delay-200`, on the *base* classes — that's what
+                  // governs the transition back to this state) so a quick
+                  // pass-over doesn't collapse it instantly. Hovering
+                  // overrides that to `lg:hover:delay-0` so expanding stays
+                  // snappy.
+                  "lg:w-16 lg:delay-200 lg:hover:w-60 lg:hover:shadow-2xl lg:hover:delay-0")
             : "lg:w-60")
         }
       >
