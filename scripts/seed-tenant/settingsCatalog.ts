@@ -1,0 +1,172 @@
+// Settings Catalog schema knowledge lives here, isolated from the generic
+// transport in client.ts — same split src/scan/ already makes between
+// graph.ts (transport) and settingDefinitions.ts (schema). Kept minimal:
+// enough to find real setting definitions and build valid instance
+// payloads, not a full model of the catalog.
+import { GRAPH_BETA_BASE, type SeedClient } from "./client.js";
+
+const SIMPLE = "#microsoft.graph.deviceManagementConfigurationSimpleSettingDefinition";
+const SIMPLE_COLLECTION = "#microsoft.graph.deviceManagementConfigurationSimpleSettingCollectionDefinition";
+const CHOICE = "#microsoft.graph.deviceManagementConfigurationChoiceSettingDefinition";
+const CHOICE_COLLECTION = "#microsoft.graph.deviceManagementConfigurationChoiceSettingCollectionDefinition";
+const GROUP = "#microsoft.graph.deviceManagementConfigurationGroupSettingDefinition";
+const GROUP_COLLECTION = "#microsoft.graph.deviceManagementConfigurationGroupSettingCollectionDefinition";
+
+export interface SettingDefinition {
+  id: string;
+  displayName: string;
+  "@odata.type": string;
+  categoryId: string;
+  rootDefinitionId?: string;
+  baseUri: string;
+  offsetUri: string;
+  options?: Array<{ itemId: string; displayName: string }>;
+  // Comma-separated flag string, e.g. "windows10" or "iOS, iPadOS" — used
+  // only by the multiPlatform scenario's platform filter below. Shape
+  // unverified against a live tenant; adjust the substring match in
+  // findFirstSimpleOrChoiceForPlatform() if a real run shows it's wrong.
+  applicability?: { platform?: string; technologies?: string };
+}
+
+/**
+ * Searches the live Settings Catalog by display name. Deliberately not
+ * hardcoding settingDefinitionIds anywhere in this toolkit — this repo has
+ * no way to confirm an id is current/correct without live tenant access,
+ * so scenario builders look settings up by keyword at seed time instead.
+ *
+ * `contains()` filters on this Graph resource need the eventual-consistency
+ * header, same as other Graph resources backed by an index that doesn't
+ * guarantee immediate consistency.
+ */
+export async function findSettingDefinitions(client: SeedClient, keyword: string): Promise<SettingDefinition[]> {
+  const escaped = keyword.replace(/'/g, "''");
+  return client.getAll<SettingDefinition>(
+    `/deviceManagement/configurationSettings?$filter=contains(displayName,'${escaped}')&$top=50`,
+    GRAPH_BETA_BASE,
+    { ConsistencyLevel: "eventual" },
+  );
+}
+
+/** Every child setting definition nested under a group/group-collection definition. */
+export async function findChildDefinitions(client: SeedClient, rootDefinitionId: string): Promise<SettingDefinition[]> {
+  const escaped = rootDefinitionId.replace(/'/g, "''");
+  return client.getAll<SettingDefinition>(
+    `/deviceManagement/configurationSettings?$filter=rootDefinitionId eq '${escaped}'&$top=200`,
+    GRAPH_BETA_BASE,
+  );
+}
+
+export function isSimpleOrChoice(def: SettingDefinition): boolean {
+  return [SIMPLE, SIMPLE_COLLECTION, CHOICE, CHOICE_COLLECTION].includes(def["@odata.type"]);
+}
+
+export function isGroup(def: SettingDefinition): boolean {
+  return def["@odata.type"] === GROUP || def["@odata.type"] === GROUP_COLLECTION;
+}
+
+export function isChoice(def: SettingDefinition): boolean {
+  return def["@odata.type"] === CHOICE || def["@odata.type"] === CHOICE_COLLECTION;
+}
+
+/** First simple or choice definition matching keyword — the common, easy-to-build-a-value-for case. */
+export async function findFirstSimpleOrChoice(client: SeedClient, keyword: string): Promise<SettingDefinition> {
+  const matches = await findSettingDefinitions(client, keyword);
+  const match = matches.find(isSimpleOrChoice);
+  if (!match) {
+    throw new Error(
+      `No simple/choice setting definition found matching "${keyword}". Try a different keyword — ` +
+        `run findSettingDefinitions() directly to see what's actually in this tenant's catalog.`,
+    );
+  }
+  return match;
+}
+
+/** Like findFirstSimpleOrChoice, but restricted to definitions applicable to a given platform token. */
+export async function findFirstSimpleOrChoiceForPlatform(
+  client: SeedClient,
+  keyword: string,
+  platformToken: string,
+): Promise<SettingDefinition> {
+  const matches = await findSettingDefinitions(client, keyword);
+  const match = matches.find(
+    (d) => isSimpleOrChoice(d) && (d.applicability?.platform ?? "").toLowerCase().includes(platformToken.toLowerCase()),
+  );
+  if (!match) {
+    throw new Error(
+      `No simple/choice setting definition found matching "${keyword}" applicable to platform "${platformToken}".`,
+    );
+  }
+  return match;
+}
+
+/** First group or group-collection definition matching keyword, with its children resolved. */
+export async function findFirstGroup(
+  client: SeedClient,
+  keyword: string,
+): Promise<{ definition: SettingDefinition; children: SettingDefinition[] }> {
+  const matches = await findSettingDefinitions(client, keyword);
+  const match = matches.find(isGroup);
+  if (!match) {
+    throw new Error(
+      `No group/group-collection setting definition found matching "${keyword}". Try a different keyword.`,
+    );
+  }
+  const children = await findChildDefinitions(client, match.id);
+  return { definition: match, children };
+}
+
+/** A simple string-valued setting instance, e.g. a free-text policy value. */
+export function stringSettingInstance(definitionId: string, value: string) {
+  return {
+    "@odata.type": "#microsoft.graph.deviceManagementConfigurationSimpleSettingInstance",
+    settingDefinitionId: definitionId,
+    simpleSettingValue: {
+      "@odata.type": "#microsoft.graph.deviceManagementConfigurationStringSettingValue",
+      value,
+    },
+  };
+}
+
+/** A simple integer-valued setting instance. */
+export function integerSettingInstance(definitionId: string, value: number) {
+  return {
+    "@odata.type": "#microsoft.graph.deviceManagementConfigurationSimpleSettingInstance",
+    settingDefinitionId: definitionId,
+    simpleSettingValue: {
+      "@odata.type": "#microsoft.graph.deviceManagementConfigurationIntegerSettingValue",
+      value,
+    },
+  };
+}
+
+/** optionItemId is one of `definition.options[].itemId` — the opaque `{definitionId}_{index}` form. */
+export function choiceSettingInstance(definitionId: string, optionItemId: string) {
+  return {
+    "@odata.type": "#microsoft.graph.deviceManagementConfigurationChoiceSettingInstance",
+    settingDefinitionId: definitionId,
+    choiceSettingValue: {
+      "@odata.type": "#microsoft.graph.deviceManagementConfigurationChoiceSettingValue",
+      value: optionItemId,
+      children: [] as unknown[],
+    },
+  };
+}
+
+/**
+ * A group-collection instance, e.g. a compound/nested setting made of
+ * several child settings under one instance. This is the shape finding #1
+ * (`src/scan/configurationPolicies.ts`'s `extractValue()` falling back to
+ * `"(group setting)"`) needs a real policy to exercise — least verified
+ * shape in this toolkit against a live tenant, since group-type settings
+ * vary in their child structure. If a real seed run rejects this payload,
+ * start here: `GET /deviceManagement/configurationSettings/{id}` for the
+ * group definition itself often documents its expected children shape
+ * better than the generic collection endpoint does.
+ */
+export function groupSettingCollectionInstance(definitionId: string, childInstances: unknown[]) {
+  return {
+    "@odata.type": "#microsoft.graph.deviceManagementConfigurationGroupSettingCollectionInstance",
+    settingDefinitionId: definitionId,
+    groupSettingCollectionValue: [{ children: childInstances }],
+  };
+}
