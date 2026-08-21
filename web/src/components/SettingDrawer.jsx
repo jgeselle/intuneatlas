@@ -1,6 +1,6 @@
 import { Warning, WarningCircle, CheckCircle, ArrowCounterClockwise } from "@phosphor-icons/react";
 import { DrawerShell } from "./DrawerShell.jsx";
-import { Chip, Diff, RefPath, NoteThread } from "./bits.jsx";
+import { Chip, Diff, RefPath, NoteThread, ValueDisplay, SourceRow } from "./bits.jsx";
 import { STATE_STYLE, SEVERITY_STYLE } from "../lib/styles.js";
 import { platformLabel, refLabel } from "../lib/format.js";
 
@@ -33,20 +33,29 @@ function SettingDrawer({ entry, notes, onAddNote, onClose, change, onStage, onRe
                 predictable.
               </p>
             </div>
-            <ul className="mt-3 space-y-1.5">
+            <ul className="mt-3 space-y-2">
               {entry.sources.map((s, n) => (
-                <li key={n} className="flex items-center justify-between gap-3 text-xs">
-                  <span className="truncate text-red-900">{s.policyName}</span>
-                  <span className="shrink-0 rounded border border-red-200 bg-white px-1.5 py-0.5 font-medium text-red-800">
-                    {s.value}
-                  </span>
+                <li key={n} className="text-xs">
+                  <SourceRow policyName={s.policyName} value={s.value} tone="alert" />
                 </li>
               ))}
             </ul>
           </div>
         ) : (
           <div className="mt-2 rounded-md border border-stone-200 p-3">
-            <div className="text-sm font-medium">{entry.values.join(", ")}</div>
+            {entry.values.length > 1 ? (
+              <ul className="space-y-2">
+                {entry.values.map((v, n) => (
+                  <li key={n} className="text-sm font-medium">
+                    <ValueDisplay value={v} />
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <div className="text-sm font-medium">
+                <ValueDisplay value={entry.values[0] ?? ""} />
+              </div>
+            )}
             {entry.state === "Not deployed" && (
               <p className="mt-1 text-xs text-stone-500">
                 Configured but not reaching any device, because the policy holding it has no group assigned.
@@ -123,12 +132,7 @@ function SettingDrawer({ entry, notes, onAddNote, onClose, change, onStage, onRe
         <ul className="mt-2 space-y-2">
           {entry.sources.map((s, n) => (
             <li key={n} className="rounded-md border border-stone-200 p-3">
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0 truncate text-sm font-medium">{s.policyName}</div>
-                <span className="shrink-0 rounded border border-stone-200 bg-stone-50 px-1.5 py-0.5 text-xs text-stone-700">
-                  {s.value}
-                </span>
-              </div>
+              <SourceRow policyName={s.policyName} value={s.value} />
               <div className="mt-2 text-xs text-stone-500">
                 {s.deployed ? "Deployed" : <span className="text-stone-400">Not deployed to any group</span>}
               </div>

@@ -55,6 +55,95 @@ function RefPath({ value, label }) {
   );
 }
 
+/**
+ * A single value line, wrapping instead of overflowing (long unbroken
+ * strings — base64 blobs, GUIDs — have no spaces to wrap at without
+ * break-words) and truncated-with-toggle past a length that stops being
+ * skimmable rather than dumped in full every time.
+ */
+function ExpandableText({ text, compact = false }) {
+  const [expanded, setExpanded] = useState(false);
+  const isLong = text.length > 180;
+  const shown = isLong && !expanded ? text.slice(0, 180) + "…" : text;
+
+  return (
+    <span className={"break-words " + (compact ? "text-xs" : "text-sm")}>
+      {shown}
+      {isLong && (
+        <button
+          onClick={() => setExpanded((e) => !e)}
+          className="ml-1.5 whitespace-nowrap text-xs font-medium text-teal-700 hover:underline focus:outline-none"
+        >
+          {expanded ? "Show less" : "Show more"}
+        </button>
+      )}
+    </span>
+  );
+}
+
+/**
+ * A setting value, which — unlike the plain string this used to be
+ * treated as everywhere — can be several discrete things joined by a
+ * newline (a group setting's children, a dependent choice's child, a
+ * collection's items). Rendered as a real list instead of one run-on
+ * string, so a real conflict between two 1,000+ character group settings
+ * is actually legible instead of an unreadable comma-joined blob.
+ */
+function ValueDisplay({ value, compact = false }) {
+  const lines = String(value ?? "")
+    .split("\n")
+    .filter((l) => l.length > 0);
+
+  if (lines.length <= 1) {
+    return <ExpandableText text={lines[0] ?? ""} compact={compact} />;
+  }
+  return (
+    <ul className={compact ? "space-y-1" : "space-y-1.5"}>
+      {lines.map((line, i) => (
+        <li key={i}>
+          <ExpandableText text={line} compact={compact} />
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/**
+ * One "policy name -> value" row, used for both a conflict's disagreeing
+ * sources and the plain "set by" list. A short, single-line value stays
+ * as the original compact inline pill; anything longer or multi-line
+ * switches to a stacked layout instead of forcing a pill (meant for
+ * "Enabled", not a 1,000-character blob) to hold it.
+ */
+function SourceRow({ policyName, value, tone = "default" }) {
+  const isSimple = typeof value === "string" && !value.includes("\n") && value.length <= 50;
+  const alert = tone === "alert";
+
+  if (isSimple) {
+    return (
+      <div className="flex items-center justify-between gap-3">
+        <span className={"truncate text-xs " + (alert ? "text-red-900" : "")}>{policyName}</span>
+        <span
+          className={
+            "shrink-0 rounded border px-1.5 py-0.5 text-xs font-medium " +
+            (alert ? "border-red-200 bg-white text-red-800" : "border-stone-200 bg-stone-50 text-stone-700")
+          }
+        >
+          {value}
+        </span>
+      </div>
+    );
+  }
+  return (
+    <div>
+      <div className={"text-xs font-medium " + (alert ? "text-red-900" : "")}>{policyName}</div>
+      <div className="mt-1">
+        <ValueDisplay value={value} compact />
+      </div>
+    </div>
+  );
+}
+
 function NoteThread({ notes = [], onAdd, readOnly = false }) {
   const [draft, setDraft] = useState("");
 
@@ -131,4 +220,4 @@ function NotAvailableYet({ title, children }) {
   );
 }
 
-export { Chip, Diff, RefPath, NoteThread, Stat, NotAvailableYet };
+export { Chip, Diff, RefPath, NoteThread, Stat, NotAvailableYet, ValueDisplay, SourceRow };

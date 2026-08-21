@@ -184,7 +184,7 @@ test("fetchConfigurationPolicies — a choice setting's dependent child", async 
   assert.equal(setting.name, "Block Flash activation");
   assert.equal(
     setting.value,
-    "Enabled (Block Flash Action: Block all activation)",
+    "Enabled\nBlock Flash Action: Block all activation",
     "a choice setting's dependent child must not be silently dropped",
   );
 });

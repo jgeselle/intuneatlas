@@ -90,6 +90,18 @@ async function fetchPolicySettings(token: string, policyId: string): Promise<Raw
  * not arbitrarily nested, but the recursive call handles deeper nesting
  * too if a real tenant ever has it.
  *
+ * Any compound value (a collection's items, a group's children, a
+ * dependent child) is newline-joined rather than comma/semicolon-joined
+ * or parenthesized. Confirmed against real data that this matters, not
+ * just cosmetic: a group with several children easily runs well past a
+ * thousand characters, and the web UI splits on "\n" to render each part
+ * as its own line instead of one unreadable run-on string — the previous
+ * comma/paren joining made that impossible to do downstream. Every level
+ * of nesting still produces one line per child ("ChildName: value"), so
+ * a child whose own value is itself multi-line doesn't collapse back
+ * into an unreadable blob — each of its lines gets the child's name
+ * prefixed too.
+ *
  * Choice values come back from Graph as opaque `{definitionId}_{index}`
  * strings, not human-readable text — resolved through the definition's
  * options map when available, falling back to the raw id otherwise (never
@@ -106,40 +118,44 @@ async function extractValue(
   if (instance.choiceSettingValue) {
     const resolved = resolveOption(instance.choiceSettingValue.value);
     const children = instance.choiceSettingValue.children;
-    if (children?.length) return `${resolved} (${await summarizeChildInstances(token, children)})`;
+    if (children?.length) return [resolved, ...(await childInstanceLines(token, children))].join("\n");
     return resolved;
   }
   if (instance.simpleSettingCollectionValue) {
-    return instance.simpleSettingCollectionValue.map((v) => String(v.value)).join(", ");
+    return instance.simpleSettingCollectionValue.map((v) => String(v.value)).join("\n");
   }
   if (instance.choiceSettingCollectionValue) {
-    return instance.choiceSettingCollectionValue.map((v) => resolveOption(v.value)).join(", ");
+    return instance.choiceSettingCollectionValue.map((v) => resolveOption(v.value)).join("\n");
   }
   if (instance.groupSettingValue) {
-    return summarizeGroups(token, [instance.groupSettingValue]);
+    return (await childInstanceLines(token, instance.groupSettingValue.children)).join("\n");
   }
   if (instance.groupSettingCollectionValue) {
-    return summarizeGroups(token, instance.groupSettingCollectionValue);
+    return summarizeGroupCollection(token, instance.groupSettingCollectionValue);
   }
   return "(unsupported setting type)";
 }
 
-async function summarizeChildInstances(token: string, children: GraphSettingInstance[]): Promise<string> {
-  const parts = await Promise.all(
+/** One line per child, "ChildName: value" — a multi-line child value gets the name prefixed onto each of its own lines. */
+async function childInstanceLines(token: string, children: GraphSettingInstance[]): Promise<string[]> {
+  const perChild = await Promise.all(
     children.map(async (child) => {
       const childDefinition = await resolveSettingDefinition(token, child.settingDefinitionId);
       const childValue = await extractValue(token, child, childDefinition);
-      return `${childDefinition.name}: ${childValue}`;
+      return childValue.split("\n").map((line) => `${childDefinition.name}: ${line}`);
     }),
   );
-  return parts.join(", ");
+  return perChild.flat();
 }
 
-async function summarizeGroups(token: string, groups: Array<{ children: GraphSettingInstance[] }>): Promise<string> {
-  const groupSummaries = await Promise.all(groups.map((group) => summarizeChildInstances(token, group.children)));
+async function summarizeGroupCollection(token: string, groups: Array<{ children: GraphSettingInstance[] }>): Promise<string> {
+  if (groups.length === 1) {
+    return (await childInstanceLines(token, groups[0].children)).join("\n");
+  }
   // Multiple instances (e.g. several configured ASR rules) get numbered so
-  // they don't read as one run-on value.
-  return groupSummaries.length === 1
-    ? groupSummaries[0]
-    : groupSummaries.map((s, i) => `[${i + 1}] ${s}`).join("; ");
+  // they're distinguishable rather than reading as one flat list.
+  const numbered = await Promise.all(
+    groups.map(async (group, i) => (await childInstanceLines(token, group.children)).map((line) => `[${i + 1}] ${line}`)),
+  );
+  return numbered.flat().join("\n");
 }
