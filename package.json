@@ -1,6 +1,6 @@
 {
   "name": "intuneatlas",
-  "version": "0.0.19",
+  "version": "0.0.20",
   "description": "Flatten every Intune profile into one settings index, keyed on the CSP path.",
   "license": "MIT",
   "type": "module",
