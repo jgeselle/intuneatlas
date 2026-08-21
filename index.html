@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>IntuneAtlas · flatten your Intune tenant into a list of settings</title>
-<meta name="description" content="Open-source CLI and web UI that merges every Intune profile into one settings index, keyed on CSP path. Finds conflicts, coverage gaps, and drift from CIS or Microsoft baselines. MIT licensed.">
+<meta name="description" content="Open-source CLI and web UI that merges every Intune profile into one settings index, matched by the real setting. Finds conflicts, coverage gaps, and drift from CIS or Microsoft baselines. MIT licensed.">
 <meta name="color-scheme" content="light">
 <link rel="canonical" href="https://intuneatlas.com/">
 
@@ -12,7 +12,7 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="IntuneAtlas">
 <meta property="og:title" content="IntuneAtlas · flatten your Intune tenant into a settings index">
-<meta property="og:description" content="Merges every Intune profile into one settings index keyed on CSP path, then shows the conflicts, coverage gaps, and drift from CIS or Microsoft baselines. MIT licensed, runs on your machine.">
+<meta property="og:description" content="Merges every Intune profile into one settings index matched by the real setting, then shows the conflicts, coverage gaps, and drift from CIS or Microsoft baselines. MIT licensed, runs on your machine.">
 <meta property="og:url" content="https://intuneatlas.com/">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="IntuneAtlas · flatten your Intune tenant into a settings index">
@@ -31,7 +31,7 @@
       "@id": "https://intuneatlas.com/#website",
       "url": "https://intuneatlas.com/",
       "name": "IntuneAtlas",
-      "description": "Open-source CLI and web UI that merges every Intune profile into one settings index, keyed on CSP path."
+      "description": "Open-source CLI and web UI that merges every Intune profile into one settings index, matched by the real setting."
     },
     {
       "@type": "SoftwareApplication",
@@ -39,7 +39,7 @@
       "name": "IntuneAtlas",
       "url": "https://intuneatlas.com/",
       "codeRepository": "https://github.com/jgeselle/intuneatlas",
-      "description": "Flattens every Microsoft Intune profile into one settings index keyed on CSP path, surfacing conflicts, coverage gaps, and drift from CIS or Microsoft security baselines. Reads a tenant read-only via the Graph API.",
+      "description": "Flattens every Microsoft Intune profile into one settings index matched by the real setting, surfacing conflicts, coverage gaps, and drift from CIS or Microsoft security baselines. Reads a tenant read-only via the Graph API.",
       "applicationCategory": "DeveloperApplication",
       "operatingSystem": "Windows, macOS, Linux",
       "license": "https://opensource.org/licenses/MIT",
@@ -345,7 +345,7 @@
     <div class="wrap">
       <h1>Track every setting against its&nbsp;<span class="accent">baseline</span></h1>
       <p class="tagline">
-        Merges every Intune policy into one searchable index, keyed on CSP path. Catches conflicts and baseline
+        Merges every Intune policy into one searchable index, matched by the real setting. Catches conflicts and baseline
         drift automatically. <span class="highlight">Free and open source.</span>
       </p>
 

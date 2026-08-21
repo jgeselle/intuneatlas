@@ -2,13 +2,14 @@
 
 **[intuneatlas.com](https://intuneatlas.com)**
 
-Flatten every Intune profile into one settings index, keyed on the CSP path.
+Flatten every Intune profile into one settings index, matched by the real
+setting — not just a shared name.
 
 The Intune portal is organised around policies. Devices apply a merged set of
 settings. IntuneAtlas is meant to read a tenant read-only, rebuild that merge,
-and serve it as something you can actually search: grouped by category, keyed
-by CSP path, with conflicts, coverage gaps, and baseline drift surfaced
-instead of buried in per-policy views.
+and serve it as something you can actually search: grouped by category, each
+setting resolved to its real CSP path, with conflicts, coverage gaps, and
+baseline drift surfaced instead of buried in per-policy views.
 
 <p>
   <img src="./screenshots/overview.png" width="49%" alt="IntuneAtlas overview page, sidebar expanded — stats and a fix-these-first list" />
@@ -48,7 +49,7 @@ clone instead: `npm install && npm run build && node dist/cli.js ui`.
 
 ## The idea
 
-- **Conflicts** — two profiles set the same CSP path to different values with
+- **Conflicts** — two profiles set the same setting to different values with
   overlapping assignment.
 - **Below baseline** — a setting is weaker than whichever benchmark you point
   it at (Microsoft security baselines, CIS, or your own house rules as YAML).
@@ -95,7 +96,7 @@ than opening a public issue.
 ## Roadmap
 
 - [x] Graph API read-only scan of Intune policies (Windows Settings Catalog, compliance, enrollment)
-- [x] CSP path merge + conflict/coverage detection
+- [x] Cross-policy setting merge + conflict/coverage detection
 - [x] `intuneatlas ui` — web UI over the generated index, solo or shared with a team (`--host`), everyone signing in with their own Microsoft account
 - [x] Baseline rule engine (YAML) with a real starter pack
 - [x] Review-gated change log (stage a recommendation, require a reason and a signed-in reviewer)

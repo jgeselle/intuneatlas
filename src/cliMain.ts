@@ -9,7 +9,7 @@ const program = new Command();
 
 program
   .name("intuneatlas")
-  .description("Flatten every Intune profile into one settings index, keyed on the CSP path.")
+  .description("Flatten every Intune profile into one settings index, matched by the real setting — not just a shared name.")
   // Keep in sync with package.json's "version" — not read dynamically
   // because the packaged exe doesn't ship package.json alongside it.
   .version("0.0.21");
