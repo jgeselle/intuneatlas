@@ -3,3 +3,7 @@ dist/
 build/
 .env
 *.local
+
+# Personal working/progress notes — not project documentation, kept
+# locally only. See project history for why this stopped being tracked.
+NEXT_STEPS.txt
