@@ -10,71 +10,31 @@ and serve it as something you can actually search: grouped by category, keyed
 by CSP path, with conflicts, coverage gaps, and baseline drift surfaced
 instead of buried in per-policy views.
 
-**Status: early, but real.** The CLI authenticates to a real tenant, scans
-Windows Settings Catalog / compliance / enrollment policies via Graph, and
-serves a web UI over the result — solo on your own machine or shared with a
-team, everyone signing in with their own Microsoft account. Baselines and a
-review-gated change log are real; actually deploying a change back to the
-tenant, and platform coverage beyond Windows, don't exist yet — see the
-roadmap below. Backed by a real (if not exhaustive) test suite — the merge
-and conflict logic, the baseline engine, and the auth/authorization layer all
-have real regression tests, not just typechecking; see
-[`test/`](./test) and the [Test workflow](.github/workflows/test.yml).
+<p>
+  <img src="./screenshots/overview.png" width="49%" alt="IntuneAtlas overview page, sidebar expanded — stats and a fix-these-first list" />
+  <img src="./screenshots/settings.png" width="49%" alt="IntuneAtlas settings list, sidebar collapsed — a conflict and settings below baseline, grouped by category" />
+</p>
 
-## Using it
+**Status: early, but real.** Baselines and a review-gated change log are
+real; write-back to the tenant and platform coverage beyond Windows aren't —
+see the roadmap below. Backed by a real test suite, not just typechecking —
+see [`test/`](./test).
 
-Windows (no Node.js required — downloads a standalone binary):
-```
-irm https://intuneatlas.com/install.ps1 | iex
-```
+## Getting started
 
-Linux (no Node.js required — downloads a standalone binary):
 ```
-curl -fsSL https://intuneatlas.com/install.sh | bash
+irm https://intuneatlas.com/install.ps1 | iex          # Windows
+curl -fsSL https://intuneatlas.com/install.sh | bash    # Linux
+```
+```
+intuneatlas ui --tenant <your-tenant>.onmicrosoft.com
 ```
 
-Or from a clone, on any platform:
-```
-npm install
-npm run build
-node dist/cli.js ui
-```
-
-**Before first sign-in**, register an Entra app for it to sign in with — every
-install brings its own, there's no bundled shared client. It's a five-minute,
-one-time setup: [intuneatlas.com/docs/#register-app](https://intuneatlas.com/docs/#register-app)
-walks through it. Run any command afterward without `--client-id` and, in a
-real terminal, you'll be prompted for it once — the answer is saved
-(`~/.intuneatlas`) so every command after that, on any tenant, just works.
-Pass `--client-id` explicitly to skip the prompt or change the saved value
-later; scripts/CI should always pass it (or set `INTUNEATLAS_CLIENT_ID`,
-a per-run override that isn't saved) since the prompt only ever appears in
-an interactive terminal.
-
-`ui` opens the web UI and always signs you in with your own Microsoft
-account first — that's the identity behind every note and change review, and
-it's what runs any scan you trigger from the page. `--tenant <domain>` is
-needed the first time (or to switch tenants); after that it's remembered,
-so reopening it later goes straight to what you already have, with a silent,
-cached sign-in rather than a fresh prompt. `--report <file>` loads a saved
-report instead of the last scan. `--host <address>` (default `127.0.0.1`,
-this machine only) turns it into a shared instance a whole team can point a
-browser at — everyone signs in with their own account, and what they can do
-once signed in follows the [Entra App Role](https://intuneatlas.com/docs/#register-app)
-you assign them (Viewer, Contributor, or Admin — enforced server-side, on
-every action, not just hidden in the UI). Sharing it needs a real HTTPS
-reverse proxy in front — the app itself only ever speaks plain HTTP, and
-Entra's own sign-in redirect rules mean it can't work without one anyway;
-never expose `--host` directly to a network. `--persist` registers that
-exact command to run in the background — a Scheduled Task on Windows, a
-systemd service on Linux — starting at boot and restarting itself on failure,
-for a shared instance on a dedicated machine (needs an elevated/root shell);
-`--stop` undoes it. `login`/`scan` (headless) also exist directly, with
-`--device-code` (interactive fallback) and `--client-secret` (unattended,
-client-credentials flow) available there for scripted/CI use — `scan` from
-the CLI is subject to the same Admin-role check as triggering one from the
-UI (client-credentials sign-in is exempt: it authenticates as the app
-itself, not a person, so there's no per-user role to check).
+That's it for a solo run. The **[Getting started guide](https://intuneatlas.com/docs/)**
+covers the one-time Entra app registration the first sign-in needs, sharing
+it with a team and assigning roles, and has the full
+[CLI reference](https://intuneatlas.com/docs/cli.html). Building from a
+clone instead: `npm install && npm run build && node dist/cli.js ui`.
 
 ## What's in this repo
 
@@ -131,7 +91,9 @@ explicit about what's actually verifiable, rather than asking for trust:
   tenant — see [`test/`](./test) for the regression suite covering the merge
   logic that decides what you see.
 - **Access is enforced server-side, not just hidden in the UI.** Entra App
-  Roles gate every mutating action — see the `--host` note above.
+  Roles (Viewer / Contributor / Admin) gate every mutating action, in the
+  web UI and the CLI alike — see the
+  [Getting started guide](https://intuneatlas.com/docs/) for assigning them.
 
 ## Maintenance expectations
 
