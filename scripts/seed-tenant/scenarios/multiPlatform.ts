@@ -4,7 +4,7 @@
 // ever cover Windows.
 import type { SeedClient } from "../client.js";
 import { assignPolicy, createConfigurationPolicy, createTestGroup } from "../objects.js";
-import { choiceSettingInstance, findFirstSimpleOrChoiceForPlatform } from "../settingsCatalog.js";
+import { choiceSettingInstance, findFirstSimpleOrChoice } from "../settingsCatalog.js";
 
 interface PlatformEntry {
   platforms: string; // value expected by POST /deviceManagement/configurationPolicies
@@ -12,17 +12,20 @@ interface PlatformEntry {
   keyword: string;
 }
 
+// "Camera" doesn't resolve any android-platform setting in a real
+// catalog — confirmed against a live tenant, android entries use a
+// different keyword than the other three platforms as a result.
 const ENTRIES: PlatformEntry[] = [
   { platforms: "windows10", applicabilityToken: "windows10", keyword: "Camera" },
   { platforms: "iOS", applicabilityToken: "iOS", keyword: "Camera" },
   { platforms: "macOS", applicabilityToken: "macOS", keyword: "Camera" },
-  { platforms: "androidWorkProfile", applicabilityToken: "android", keyword: "Camera" },
+  { platforms: "androidEnterprise", applicabilityToken: "androidEnterprise", keyword: "Location" },
 ];
 
 export async function seedMultiPlatform(client: SeedClient): Promise<void> {
   for (const entry of ENTRIES) {
     try {
-      const definition = await findFirstSimpleOrChoiceForPlatform(client, entry.keyword, entry.applicabilityToken);
+      const definition = await findFirstSimpleOrChoice(client, entry.keyword, entry.applicabilityToken);
       if (!definition.options?.length) {
         console.log(`multiPlatform: "${entry.platforms}" — "${definition.displayName}" has no choice options, skipped.`);
         continue;

@@ -16,7 +16,7 @@ export async function seedVolume(client: SeedClient, count = 200): Promise<void>
   const definitions = [];
   for (const keyword of KEYWORDS) {
     try {
-      definitions.push(await findFirstSimpleOrChoice(client, keyword));
+      definitions.push(await findFirstSimpleOrChoice(client, keyword, "windows10"));
     } catch {
       // Keyword didn't resolve in this tenant's catalog — skip it, the
       // remaining keywords are enough for volume purposes.

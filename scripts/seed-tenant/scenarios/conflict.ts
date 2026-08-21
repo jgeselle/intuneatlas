@@ -5,7 +5,7 @@ import { assignPolicy, createConfigurationPolicy, createTestGroup } from "../obj
 import { choiceSettingInstance, findFirstSimpleOrChoice, isChoice } from "../settingsCatalog.js";
 
 export async function seedConflict(client: SeedClient, keyword = "Camera"): Promise<void> {
-  const definition = await findFirstSimpleOrChoice(client, keyword);
+  const definition = await findFirstSimpleOrChoice(client, keyword, "windows10");
   if (!isChoice(definition) || (definition.options?.length ?? 0) < 2) {
     throw new Error(
       `"${keyword}" resolved to a setting definition without at least two choice options — ` +

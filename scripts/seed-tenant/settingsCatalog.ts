@@ -9,8 +9,13 @@ const SIMPLE = "#microsoft.graph.deviceManagementConfigurationSimpleSettingDefin
 const SIMPLE_COLLECTION = "#microsoft.graph.deviceManagementConfigurationSimpleSettingCollectionDefinition";
 const CHOICE = "#microsoft.graph.deviceManagementConfigurationChoiceSettingDefinition";
 const CHOICE_COLLECTION = "#microsoft.graph.deviceManagementConfigurationChoiceSettingCollectionDefinition";
-const GROUP = "#microsoft.graph.deviceManagementConfigurationGroupSettingDefinition";
-const GROUP_COLLECTION = "#microsoft.graph.deviceManagementConfigurationGroupSettingCollectionDefinition";
+// Confirmed against a real tenant's catalog — these are "SettingGroup",
+// not "GroupSetting" (the word order doesn't match the *instance* types
+// used when building a policy, e.g. deviceManagementConfiguration-
+// GroupSettingCollectionInstance, which really is "GroupSetting"-first).
+// Getting this backwards here made isGroup() match nothing.
+const GROUP = "#microsoft.graph.deviceManagementConfigurationSettingGroupDefinition";
+const GROUP_COLLECTION = "#microsoft.graph.deviceManagementConfigurationSettingGroupCollectionDefinition";
 
 export interface SettingDefinition {
   id: string;
@@ -68,47 +73,46 @@ export function isChoice(def: SettingDefinition): boolean {
   return def["@odata.type"] === CHOICE || def["@odata.type"] === CHOICE_COLLECTION;
 }
 
-/** First simple or choice definition matching keyword — the common, easy-to-build-a-value-for case. */
-export async function findFirstSimpleOrChoice(client: SeedClient, keyword: string): Promise<SettingDefinition> {
-  const matches = await findSettingDefinitions(client, keyword);
-  const match = matches.find(isSimpleOrChoice);
-  if (!match) {
-    throw new Error(
-      `No simple/choice setting definition found matching "${keyword}". Try a different keyword — ` +
-        `run findSettingDefinitions() directly to see what's actually in this tenant's catalog.`,
-    );
-  }
-  return match;
+function matchesPlatform(def: SettingDefinition, platformToken: string): boolean {
+  return (def.applicability?.platform ?? "").toLowerCase().includes(platformToken.toLowerCase());
 }
 
-/** Like findFirstSimpleOrChoice, but restricted to definitions applicable to a given platform token. */
-export async function findFirstSimpleOrChoiceForPlatform(
+/**
+ * First simple or choice definition matching keyword, restricted to a
+ * given platform. Required, not optional: a keyword like "Camera" matches
+ * across every platform's catalog (Windows, iOS, macOS, ...), and a
+ * platform-unfiltered lookup can silently hand back e.g. an Apple ADE
+ * Setup Assistant setting for a policy declared `platforms: "windows10"`
+ * — confirmed for real against the live catalog (`ade_setupassistant_
+ * camerabutton` for keyword "Camera"), not just a theoretical risk.
+ */
+export async function findFirstSimpleOrChoice(
   client: SeedClient,
   keyword: string,
   platformToken: string,
 ): Promise<SettingDefinition> {
   const matches = await findSettingDefinitions(client, keyword);
-  const match = matches.find(
-    (d) => isSimpleOrChoice(d) && (d.applicability?.platform ?? "").toLowerCase().includes(platformToken.toLowerCase()),
-  );
+  const match = matches.find((d) => isSimpleOrChoice(d) && matchesPlatform(d, platformToken));
   if (!match) {
     throw new Error(
-      `No simple/choice setting definition found matching "${keyword}" applicable to platform "${platformToken}".`,
+      `No simple/choice setting definition found matching "${keyword}" applicable to platform "${platformToken}". ` +
+        `Try a different keyword — run findSettingDefinitions() directly to see what's actually in this tenant's catalog.`,
     );
   }
   return match;
 }
 
-/** First group or group-collection definition matching keyword, with its children resolved. */
+/** First group or group-collection definition matching keyword and platform, with its children resolved. */
 export async function findFirstGroup(
   client: SeedClient,
   keyword: string,
+  platformToken: string,
 ): Promise<{ definition: SettingDefinition; children: SettingDefinition[] }> {
   const matches = await findSettingDefinitions(client, keyword);
-  const match = matches.find(isGroup);
+  const match = matches.find((d) => isGroup(d) && matchesPlatform(d, platformToken));
   if (!match) {
     throw new Error(
-      `No group/group-collection setting definition found matching "${keyword}". Try a different keyword.`,
+      `No group/group-collection setting definition found matching "${keyword}" applicable to platform "${platformToken}".`,
     );
   }
   const children = await findChildDefinitions(client, match.id);

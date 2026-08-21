@@ -26,8 +26,12 @@ function buildChildInstance(child: SettingDefinition): unknown {
   return stringSettingInstance(child.id, "1");
 }
 
-export async function seedGroupSetting(client: SeedClient, keyword = "BitLocker"): Promise<void> {
-  const { definition, children } = await findFirstGroup(client, keyword);
+// "BitLocker" resolves plenty of settings in a real catalog, but none are
+// group-type — confirmed against a live tenant. "Attack Surface" reliably
+// hits "Attack Surface Reduction Rules", a real
+// deviceManagementConfigurationSettingGroupCollectionDefinition.
+export async function seedGroupSetting(client: SeedClient, keyword = "Attack Surface"): Promise<void> {
+  const { definition, children } = await findFirstGroup(client, keyword, "windows10");
   if (children.length === 0) {
     throw new Error(`Group setting "${definition.displayName}" resolved with no child definitions found.`);
   }
