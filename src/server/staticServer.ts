@@ -181,7 +181,14 @@ export async function startServer(options: StartServerOptions): Promise<{ url: s
       }
 
       await serveStatic(req, res, () => currentReport, viewer);
-    } catch {
+    } catch (err) {
+      // serveStatic's readFile throwing ENOENT for a genuinely missing
+      // static asset is the routine, expected case this 404 exists for —
+      // not worth logging. Anything else reaching here is a real bug
+      // (in this handler or something it calls) masquerading as a plain
+      // 404 with zero visibility into what actually happened.
+      const isMissingAsset = typeof err === "object" && err !== null && "code" in err && err.code === "ENOENT";
+      if (!isMissingAsset) logRequestError(err);
       res.writeHead(404, { "Content-Type": "text/plain" });
       res.end("Not found");
     }
@@ -309,10 +316,28 @@ async function handleScanRequest(
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify(report));
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    res.writeHead(500, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ error: message }));
+    sendApiError(res, err);
   }
+}
+
+// Same INTUNEATLAS_DEBUG convention cli.ts's own error handling uses.
+// PayloadTooLargeError isn't logged — that one's an expected, correctly-
+// handled condition (see readRequestBody), not a bug to go looking for.
+function logRequestError(err: unknown): void {
+  if (err instanceof PayloadTooLargeError) return;
+  if (process.env.INTUNEATLAS_DEBUG) {
+    console.error(err);
+  } else {
+    console.error(`intuneatlas: request error — ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+/** Shared by every JSON API handler's catch block — a too-large body gets its own status, everything else stays a 500. */
+function sendApiError(res: ServerResponse, err: unknown): void {
+  logRequestError(err);
+  const message = err instanceof Error ? err.message : String(err);
+  res.writeHead(err instanceof PayloadTooLargeError ? 413 : 500, { "Content-Type": "application/json" });
+  res.end(JSON.stringify({ error: message }));
 }
 
 async function handleNoteRequest(
@@ -341,9 +366,7 @@ async function handleNoteRequest(
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify(notes));
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    res.writeHead(500, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ error: message }));
+    sendApiError(res, err);
   }
 }
 
@@ -372,9 +395,7 @@ async function handleStageChange(
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify(change));
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    res.writeHead(500, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ error: message }));
+    sendApiError(res, err);
   }
 }
 
@@ -405,9 +426,7 @@ async function handleUpdateChange(
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify(change));
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    res.writeHead(500, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ error: message }));
+    sendApiError(res, err);
   }
 }
 
@@ -429,17 +448,46 @@ async function handleRevertChange(
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ reverted: Boolean(targetKey) }));
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    res.writeHead(500, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ error: message }));
+    sendApiError(res, err);
   }
 }
+
+// Notes/change payloads are a few short strings — nowhere near this. Purely
+// a memory ceiling: without one, any signed-in viewer (even one with zero
+// Intune rights — this app deliberately lets that person browse an existing
+// report) could POST/PATCH an arbitrarily large body to /api/notes,
+// /api/changes, or /api/changes/:id and the server would just keep
+// concatenating it into one growing string until the process runs out of
+// memory.
+const MAX_REQUEST_BODY_BYTES = 1_000_000;
+
+export class PayloadTooLargeError extends Error {}
 
 function readRequestBody(req: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
     let data = "";
-    req.on("data", (chunk) => (data += chunk));
-    req.on("end", () => resolve(data));
+    let bytes = 0;
+    let rejected = false;
+    req.on("data", (chunk) => {
+      if (rejected) return; // still draining the rest of an over-limit body — see below
+      bytes += chunk.length;
+      if (bytes > MAX_REQUEST_BODY_BYTES) {
+        // Not req.destroy() — that tears down the shared socket, which
+        // means the 413 the caller's about to write can never actually
+        // reach the client; they'd just see the connection reset instead.
+        // Drop what we've buffered and stop growing it, but let the
+        // request finish draining normally so the response can still go
+        // out over the same connection.
+        rejected = true;
+        data = "";
+        reject(new PayloadTooLargeError(`Request body exceeds the ${MAX_REQUEST_BODY_BYTES}-byte limit.`));
+        return;
+      }
+      data += chunk;
+    });
+    req.on("end", () => {
+      if (!rejected) resolve(data);
+    });
     req.on("error", reject);
   });
 }
