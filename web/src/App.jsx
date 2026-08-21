@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   SquaresFour,
   Sliders,
@@ -974,7 +974,7 @@ function ConnectScreen({ onConnected, session }) {
 
 /* ----------------------------------------------------- sync & identity --- */
 
-function SyncControl({ syncing, syncedAgo, onSync, compact = false, textClassName = "" }) {
+function SyncControl({ syncing, syncedAgo, onSync, compact = false, statusVisible = true }) {
   const dot = syncing ? "bg-teal-300" : syncedAgo >= 60 ? "bg-amber-400" : "bg-teal-400";
 
   if (compact) {
@@ -984,30 +984,27 @@ function SyncControl({ syncing, syncedAgo, onSync, compact = false, textClassNam
         disabled={syncing}
         aria-label={syncing ? "Syncing" : "Sync tenant"}
         title={syncing ? "Reading tenant…" : "Synced " + sinceLabel(syncedAgo)}
-        className="rounded-md p-1.5 text-teal-100 hover:bg-teal-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300 disabled:text-teal-400"
+        className="relative rounded-md p-1.5 text-teal-100 hover:bg-teal-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300 disabled:text-teal-400"
       >
-        <ArrowsClockwise className={"h-4 w-4 " + (syncing ? "animate-spin" : "")} />
+        <ArrowsClockwise weight="bold" className={"h-4 w-4 " + (syncing ? "animate-spin" : "")} />
+        <span className={"absolute right-0.5 top-0.5 h-2 w-2 rounded-full border-2 border-teal-900 " + dot} />
       </button>
     );
   }
 
   return (
     <div>
-      {/* The dot stays put (it's the icon-strip's "status at a glance"),
-          only the label text fades in the collapsed rail. */}
-      <div className="flex items-center gap-2 px-1">
+      <div className={"flex items-center gap-2 px-1 transition-opacity duration-200 " + (statusVisible ? "opacity-100" : "opacity-0")}>
         <span className={"h-1.5 w-1.5 shrink-0 rounded-full " + dot} />
-        <span className={"min-w-0 truncate text-xs text-teal-300 transition-opacity duration-150 " + textClassName}>
-          {syncing ? "Reading tenant…" : "Synced " + sinceLabel(syncedAgo)}
-        </span>
+        <span className="min-w-0 truncate text-xs text-teal-300">{syncing ? "Reading tenant…" : "Synced " + sinceLabel(syncedAgo)}</span>
       </div>
       <button
         onClick={onSync}
         disabled={syncing}
         className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-teal-50 ring-1 ring-inset ring-teal-700 hover:bg-teal-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300 disabled:cursor-not-allowed disabled:text-teal-400"
       >
-        <ArrowsClockwise className={"h-3.5 w-3.5 shrink-0 " + (syncing ? "animate-spin" : "")} />
-        <span className={"transition-opacity duration-150 " + textClassName}>{syncing ? "Syncing" : "Sync now"}</span>
+        <ArrowsClockwise weight="bold" className={"h-3.5 w-3.5 shrink-0 " + (syncing ? "animate-spin" : "")} />
+        {syncing ? "Syncing" : "Sync now"}
       </button>
     </div>
   );
@@ -1041,7 +1038,7 @@ function AccountMenu({ session, tenant, up = false, full = false, textClassName 
         aria-haspopup="true"
         aria-expanded={open}
         title={textClassName ? session.name : undefined}
-        className={"flex items-center gap-2 rounded-md py-1 pl-1 pr-1.5 hover:bg-teal-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300 " + (full ? "w-full" : "")}
+        className={"flex items-center gap-2 rounded-md py-1 pl-[5px] pr-1.5 hover:bg-teal-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300 " + (full ? "w-full" : "")}
       >
         {/* The avatar is the "icon" here — like a nav icon it stays fully
             visible in the collapsed rail; only the surrounding text fades. */}
@@ -1057,6 +1054,7 @@ function AccountMenu({ session, tenant, up = false, full = false, textClassName 
           <span className="hidden text-sm text-teal-50 sm:block">{session.name}</span>
         )}
         <CaretDown
+          weight="bold"
           className={
             "h-3.5 w-3.5 shrink-0 text-teal-300 transition-[transform,opacity] duration-150 " +
             (open ? "rotate-180 " : "") +
@@ -1143,10 +1141,50 @@ export default function App({ initialReport, session }) {
 
   // Opacity classes for text that should hide in the icon-only strip but
   // reveal on hover (CSS) or while the account menu is pinned open (JS).
+  // Only for elements whose *layout* doesn't depend on being centered —
+  // opacity alone still reserves the element's full width, which is fine
+  // for a label sitting next to a fixed-position icon, but fights any
+  // `justify-center` on the row (see `syncFullShown` below, which swaps
+  // whole blocks by display instead, for exactly that case).
   function railDim(extra = "") {
     if (!railCollapsed) return extra;
     return extra + (menuPinned ? " lg:opacity-100" : " lg:opacity-0 lg:group-hover:opacity-100");
   }
+
+  // Whether the sync control's full block (vs. its icon-only strip form)
+  // should be showing. Driven by JS with a short setTimeout, not CSS
+  // `:hover` — a `hidden`→`block` swap can't be delayed or animated by CSS
+  // (an element can't transition in *from* display:none, and a plain
+  // `:hover` swap has no way to wait a beat first), and the alternative of
+  // keeping it always-rendered with a delayed opacity fade solves that but
+  // reserves its full height even while collapsed, leaving a dead gap above
+  // the account menu. A few milliseconds of JS timing gets both: no
+  // reserved space when collapsed, and a short pause before it pops in so
+  // it doesn't render into a rail that's still mid-width-transition.
+  const [syncRevealed, setSyncRevealed] = useState(false);
+  // A beat behind `syncRevealed` — drives just the status row's (dot +
+  // "Synced…" text) opacity fade. It has to be a separate, later flip: the
+  // block only actually exists once `syncRevealed` flips it to
+  // display:block, so setting its opacity in that same tick still wouldn't
+  // animate (nothing to transition *from* yet). The double rAF waits for
+  // that first real paint, then flips the opacity class on its own — now
+  // there's a rendered "before" state, so it genuinely fades in.
+  const [syncStatusFaded, setSyncStatusFaded] = useState(false);
+  const syncRevealTimer = useRef(null);
+  function onRailMouseEnter() {
+    if (!railCollapsed) return;
+    syncRevealTimer.current = window.setTimeout(() => {
+      setSyncRevealed(true);
+      requestAnimationFrame(() => requestAnimationFrame(() => setSyncStatusFaded(true)));
+    }, 80);
+  }
+  function onRailMouseLeave() {
+    window.clearTimeout(syncRevealTimer.current);
+    setSyncRevealed(false);
+    setSyncStatusFaded(false);
+  }
+  const syncFullShown = !railCollapsed || menuPinned || syncRevealed;
+  const syncStatusVisible = !railCollapsed || menuPinned || syncStatusFaded;
 
   function toggleRailCollapsed() {
     setRailCollapsed((collapsed) => {
@@ -1292,6 +1330,8 @@ export default function App({ initialReport, session }) {
       {railCollapsed && <div className="hidden shrink-0 lg:block lg:w-16" aria-hidden="true" />}
 
       <aside
+        onMouseEnter={onRailMouseEnter}
+        onMouseLeave={onRailMouseLeave}
         className={
           "group flex shrink-0 flex-col bg-teal-900 transition-[width] duration-200 ease-out " +
           (railCollapsed
@@ -1300,8 +1340,8 @@ export default function App({ initialReport, session }) {
             : "lg:w-60")
         }
       >
-        <div className="flex items-center gap-2.5 px-4 py-4">
-          <Compass className="h-6 w-6 shrink-0 text-teal-300" />
+        <div className="flex items-center gap-2.5 pl-[20px] pr-4 py-4">
+          <Compass weight="bold" className="h-6 w-6 shrink-0 text-teal-300" />
           <div className={"min-w-0 transition-opacity duration-150 " + railDim()}>
             <div className="truncate text-sm font-semibold leading-tight text-white">IntuneAtlas</div>
             <div className="truncate text-xs leading-tight text-teal-300" title={report.tenant}>
@@ -1323,11 +1363,14 @@ export default function App({ initialReport, session }) {
             aria-label={railCollapsed ? "Expand sidebar" : "Collapse sidebar"}
             className={"ml-auto hidden shrink-0 rounded-md p-1.5 text-teal-300 transition-opacity duration-150 hover:bg-teal-800 hover:text-teal-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300 lg:block " + railDim()}
           >
-            <CaretDoubleLeft className={"h-4 w-4 transition-transform duration-200 " + (railCollapsed ? "rotate-180" : "")} />
+            <CaretDoubleLeft
+              weight="bold"
+              className={"h-4 w-4 transition-transform duration-200 " + (railCollapsed ? "rotate-180" : "")}
+            />
           </button>
         </div>
 
-        <nav className="flex gap-1 overflow-x-auto px-2 pb-3 lg:flex-col lg:overflow-visible lg:pb-4">
+        <nav className="flex gap-1 overflow-x-auto px-3 pb-3 lg:flex-col lg:overflow-visible lg:pb-4">
           {nav.map((n) => {
             const Icon = n.icon;
             const active = view === n.id;
@@ -1336,11 +1379,11 @@ export default function App({ initialReport, session }) {
                 key={n.id}
                 onClick={() => setView(n.id)}
                 className={
-                  "flex shrink-0 items-center gap-2 rounded-md px-3 py-2 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300 lg:w-full " +
+                  "flex shrink-0 items-center gap-2 rounded-md py-2 pl-3 pr-3 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300 lg:w-full " +
                   (active ? "bg-teal-800 font-medium text-white" : "text-teal-100 hover:bg-teal-800")
                 }
               >
-                <Icon className="h-4 w-4 shrink-0" />
+                <Icon weight="bold" className="h-4 w-4 shrink-0" />
                 <span className={"whitespace-nowrap transition-opacity duration-150 " + railDim()}>{n.label}</span>
                 <span
                   className={
@@ -1359,7 +1402,12 @@ export default function App({ initialReport, session }) {
 
         {/* wide layouts: sync and identity settle at the foot of the rail */}
         <div className="mt-auto hidden border-t border-teal-800 px-3 py-3 lg:block">
-          <SyncControl syncing={syncing} syncedAgo={syncedAgo} onSync={resync} textClassName={railDim()} />
+          <div className={"justify-center " + (railCollapsed && !syncFullShown ? "flex" : "hidden")}>
+            <SyncControl syncing={syncing} syncedAgo={syncedAgo} onSync={resync} compact />
+          </div>
+          <div className={railCollapsed && !syncFullShown ? "hidden" : ""}>
+            <SyncControl syncing={syncing} syncedAgo={syncedAgo} onSync={resync} statusVisible={syncStatusVisible} />
+          </div>
           {session && (
             <div className="mt-3 border-t border-teal-800 pt-3">
               <AccountMenu
