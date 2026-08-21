@@ -96,6 +96,14 @@ export function updateReason(id: number, reason: string): StagedChange {
   return updateField(id, "reason", reason);
 }
 
+// Display name is correct here today — reviewedBy is attribution, not an
+// authorization input (nothing currently checks "is the reviewer allowed
+// to review," only "is a reviewer present"). That stops being true the
+// moment write-back gets a four-eyes rule (can't approve your own staged
+// change): comparing reviewedBy against stagedBy to enforce that would hit
+// the exact same bug fixed for ownership — display names collide and
+// change, stable ids don't. When that lands, this needs viewer.id too, the
+// same way stageChange's stagedBy does.
 export function updateReviewer(id: number, reviewedBy: string): StagedChange {
   return updateField(id, "reviewed_by", reviewedBy);
 }
