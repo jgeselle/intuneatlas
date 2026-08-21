@@ -16,7 +16,7 @@ with these Application permissions (admin-consented):
 
 - `DeviceManagementConfiguration.ReadWrite.All`
 - `Group.ReadWrite.All`
-- `Organization.Read.All` (for the tenant-match safety check)
+- `Organization.Read.All` (so it can show you which tenant it connected to)
 
 Point it only at your test tenant. Never reuse a production-tenant
 credential here.
@@ -31,7 +31,6 @@ them:
 | `SEED_TENANT` | Test tenant id or domain to authenticate against |
 | `SEED_CLIENT_ID` | The write app registration's client id |
 | `SEED_CLIENT_SECRET` | That app's client secret |
-| `SEED_EXPECTED_TENANT` | Tenant id or verified domain you expect to land on — checked independently against a live `/organization` call before any write. Deliberately redundant with `SEED_TENANT`: it catches a wrong-tenant credential, which re-deriving the check from `SEED_TENANT` alone can't. |
 
 ## Usage
 
@@ -42,6 +41,13 @@ npx tsx scripts/seed-tenant/index.ts <scenario> [arg] [--dry-run]
 Always try `--dry-run` first for a new scenario or a new tenant — it logs
 every write it would make (including the setting definitions it resolved
 by search) without calling Graph.
+
+Before any real (non-dry-run) write, the tool resolves the tenant it
+actually connected to via a live `/organization` call, prints it, and
+asks you to type `yes` to confirm — that's the safety check, done at the
+moment it matters against what Graph actually reports, rather than a
+second tenant identifier you'd have to pre-type (and could get wrong the
+same way as the first).
 
 ### Scenarios
 

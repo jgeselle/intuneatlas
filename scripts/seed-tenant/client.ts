@@ -7,19 +7,21 @@
 // just by the bundler happening not to find it.
 //
 // Required environment variables (never write these to a file):
-//   SEED_TENANT           tenant id or domain to authenticate against
-//   SEED_CLIENT_ID        a SEPARATE app registration from IntuneAtlas's own,
-//                          with write Application permissions
-//                          (DeviceManagementConfiguration.ReadWrite.All,
-//                          Group.ReadWrite.All)
-//   SEED_CLIENT_SECRET    that app's client secret
-//   SEED_EXPECTED_TENANT  tenant id or verified domain you expect to land
-//                          on — independent of SEED_TENANT, checked against
-//                          a live /organization call before any write. This
-//                          is deliberately redundant with SEED_TENANT: it
-//                          catches "the app registration/secret I grabbed
-//                          belongs to the wrong tenant," which re-deriving
-//                          from SEED_TENANT alone can't catch.
+//   SEED_TENANT         tenant id or domain to authenticate against
+//   SEED_CLIENT_ID      a SEPARATE app registration from IntuneAtlas's own,
+//                        with write Application permissions
+//                        (DeviceManagementConfiguration.ReadWrite.All,
+//                        Group.ReadWrite.All)
+//   SEED_CLIENT_SECRET  that app's client secret
+//
+// Safety net for a wrong-tenant credential lives in the flow, not a second
+// env var: before any real write, this resolves the *actual* connected
+// tenant from a live /organization call and makes you confirm it
+// interactively. A second pre-typed "expected tenant" env var was tried
+// and dropped — it's just as easy to fat-finger as SEED_TENANT itself, so
+// it wouldn't catch the mistake it exists to catch. Showing you what
+// Graph actually resolved, in the moment, does.
+import { createInterface } from "node:readline/promises";
 import { createClientCredentialsAuth } from "../../src/auth/clientCredentials.js";
 
 export const GRAPH_V1_BASE = "https://graph.microsoft.com/v1.0";
@@ -57,21 +59,31 @@ function requiredEnv(name: string): string {
 
 /**
  * Builds a write-capable client, or a dry-run stand-in that logs every
- * mutating call instead of making it. Always resolves a real token and
- * runs the tenant-match check first, even in dry-run mode — the check
- * itself is read-only and cheap, and catching a wrong-tenant credential
- * before you'd have made the mistake for real is the point.
+ * mutating call instead of making it. Always resolves the real connected
+ * tenant first (a read-only /organization call) and prints it; for a
+ * real (non-dry-run) run, also requires you to type "yes" to confirm
+ * that's the tenant you meant before returning a client capable of
+ * writing anything.
  */
 export async function createSeedClient(options: { dryRun: boolean }): Promise<SeedClient> {
   const tenant = requiredEnv("SEED_TENANT");
   const clientId = requiredEnv("SEED_CLIENT_ID");
   const clientSecret = requiredEnv("SEED_CLIENT_SECRET");
-  const expectedTenant = requiredEnv("SEED_EXPECTED_TENANT");
 
   const auth = createClientCredentialsAuth({ tenantId: tenant, clientId, clientSecret });
   const token = await auth.getToken();
 
-  await verifyTenant(token, expectedTenant);
+  const org = await resolveOrganization(token);
+  console.log(`Connected tenant: id ${org.id}, domains: ${org.domains.join(", ") || "none"}`);
+
+  if (!options.dryRun) {
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    const answer = await rl.question('This will make real writes to the tenant above. Type "yes" to continue: ');
+    rl.close();
+    if (answer.trim().toLowerCase() !== "yes") {
+      throw new Error("Aborted — tenant not confirmed.");
+    }
+  }
 
   async function request<T>(
     method: string,
@@ -138,25 +150,17 @@ interface OrganizationResponse {
   value: Array<{ id: string; verifiedDomains?: Array<{ name: string }> }>;
 }
 
-async function verifyTenant(token: string, expected: string): Promise<void> {
+async function resolveOrganization(token: string): Promise<{ id: string; domains: string[] }> {
   const res = await fetch(`${GRAPH_V1_BASE}/organization`, {
     headers: { Authorization: `Bearer ${token}` },
   });
   if (!res.ok) {
-    throw new Error(`Tenant verification failed: GET /organization returned ${res.status} ${res.statusText}`);
+    throw new Error(`Tenant resolution failed: GET /organization returned ${res.status} ${res.statusText}`);
   }
   const body = (await res.json()) as OrganizationResponse;
   const org = body.value[0];
   if (!org) {
-    throw new Error("Tenant verification failed: /organization returned no tenant.");
+    throw new Error("Tenant resolution failed: /organization returned no tenant.");
   }
-  const domains = org.verifiedDomains?.map((d) => d.name.toLowerCase()) ?? [];
-  const matches = org.id.toLowerCase() === expected.toLowerCase() || domains.includes(expected.toLowerCase());
-  if (!matches) {
-    throw new Error(
-      `Refusing to run: connected tenant (id ${org.id}, domains ${domains.join(", ") || "none"}) ` +
-        `does not match SEED_EXPECTED_TENANT (${expected}). This check exists specifically to stop ` +
-        `a wrong-tenant credential from ever reaching a write call.`,
-    );
-  }
+  return { id: org.id, domains: org.verifiedDomains?.map((d) => d.name) ?? [] };
 }
