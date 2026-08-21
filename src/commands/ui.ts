@@ -62,6 +62,15 @@ export async function runUi(options: UiOptions): Promise<void> {
     await open(url);
   } else {
     console.log("Share that URL with your team — everyone signs in with their own Microsoft account.");
+    // The app itself only ever speaks plain HTTP — no built-in TLS — and
+    // session cookies are deliberately not marked Secure to match (a Secure
+    // cookie over plain HTTP just gets silently dropped by the browser).
+    // Entra's own redirect-URI rule (https:// or exactly localhost) means
+    // sign-in can't complete at all without a real TLS-terminating proxy in
+    // front of this, but there's nothing here to catch a misconfigured one
+    // — say so explicitly rather than relying on someone having already
+    // read the docs.
+    console.log("This must sit behind a real HTTPS reverse proxy (see intuneatlas.com/docs) — never expose it directly.");
   }
 }
 
