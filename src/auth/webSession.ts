@@ -5,18 +5,39 @@ import { createMsalCachePlugin } from "./tokenCache.js";
 import { type Role, effectiveRole } from "./roles.js";
 
 /**
- * Identifies who's looking at a `ui` instance — used for note authorship,
- * staged-change review attribution, and authorization. `role` is resolved
- * once from the ID token's `roles` claim (an Entra App Role assignment),
- * not the raw claim array — callers should never need to re-derive it.
- * `null` means signed in but unassigned any App Role, which grants zero
- * capabilities (see src/auth/roles.ts) rather than falling back to full
- * access.
+ * Identifies who's looking at a `ui` instance. `id` is the Entra object ID
+ * (`AccountInfo.localAccountId`, mapped from the `oid` claim) — immutable
+ * and unique per user per tenant, and the only field ownership/authorization
+ * checks (e.g. "did this Contributor stage this change") should ever
+ * compare against. `name` is a *display* value only — Entra display names
+ * are neither unique (two people can share one) nor stable (renaming a
+ * user doesn't change their `id`) — never use it for anything but showing
+ * text to a human. `role` is resolved once from the ID token's `roles`
+ * claim (an Entra App Role assignment), not the raw claim array — callers
+ * should never need to re-derive it. `null` means signed in but unassigned
+ * any App Role, which grants zero capabilities (see src/auth/roles.ts)
+ * rather than falling back to full access.
  */
 export interface ViewerIdentity {
+  id: string;
   name: string;
   email: string;
   role: Role | null;
+}
+
+/**
+ * Pure account-to-identity mapping — exported (rather than kept as a
+ * closure-local helper) specifically so it's directly unit-testable
+ * without a real MSAL sign-in: see test/auth/webSession.test.ts, which
+ * pins `id` coming from `localAccountId`, not `name`.
+ */
+export function identityFromAccount(account: AccountInfo): ViewerIdentity {
+  return {
+    id: account.localAccountId,
+    name: account.name ?? account.username,
+    email: account.username,
+    role: effectiveRole(account.idTokenClaims?.roles as string[] | undefined),
+  };
 }
 
 interface Session {
@@ -109,14 +130,6 @@ export async function createWebSessionManager(tenantId: string, clientId: string
     for (const [state, login] of pendingLogins) {
       if (login.createdAt < cutoff) pendingLogins.delete(state);
     }
-  }
-
-  function identityFromAccount(account: AccountInfo): ViewerIdentity {
-    return {
-      name: account.name ?? account.username,
-      email: account.username,
-      role: effectiveRole(account.idTokenClaims?.roles as string[] | undefined),
-    };
   }
 
   function startSession(account: AccountInfo): { sessionId: string; identity: ViewerIdentity } {

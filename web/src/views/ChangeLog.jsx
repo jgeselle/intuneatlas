@@ -7,7 +7,9 @@ function ChangeCard({ change, onUpdateField, onRevert, viewer }) {
   const reviewedByMe = change.reviewedBy === viewer.name;
   // Contributors can only touch changes they staged themselves; Admins can
   // touch any — mirrors the server-side editChange/revertChange check.
-  const canEdit = viewer.role === "admin" || (viewer.role === "contributor" && change.stagedBy === viewer.name);
+  // Compared by id (Entra object ID), not display name — names aren't
+  // unique or stable.
+  const canEdit = viewer.role === "admin" || (viewer.role === "contributor" && change.stagedBy === viewer.id);
 
   return (
     <li className="rounded-lg border border-stone-200 bg-white p-4">
@@ -17,7 +19,7 @@ function ChangeCard({ change, onUpdateField, onRevert, viewer }) {
             <Chip className={change.ready ? "bg-teal-50 text-teal-700 ring-teal-200" : "bg-amber-50 text-amber-800 ring-amber-200"}>
               {change.ready ? "Ready" : "Needs review"}
             </Chip>
-            {change.stagedBy && <span className="text-xs text-stone-400">staged by {change.stagedBy}</span>}
+            {change.stagedByName && <span className="text-xs text-stone-400">staged by {change.stagedByName}</span>}
           </div>
           <h3 className="mt-2 text-sm font-medium">{change.targetName}</h3>
         </div>

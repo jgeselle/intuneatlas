@@ -78,6 +78,7 @@ export function getDb(): DatabaseSync {
       reason TEXT NOT NULL DEFAULT '',
       reviewed_by TEXT NOT NULL DEFAULT '',
       staged_by TEXT NOT NULL DEFAULT '',
+      staged_by_name TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
@@ -114,11 +115,25 @@ function migrate(db: DatabaseSync): void {
   }
 
   // staged_by (role-based access control) — rows from before this column
-  // existed get '', which never matches a real signed-in name, so they
+  // existed get '', which never matches a real signed-in id, so they
   // become admin-only to edit/revert rather than owned by no one in
   // particular. Fail-closed, not a bug.
   const stagedChangesColumns = db.prepare(`PRAGMA table_info(staged_changes)`).all() as Array<{ name: string }>;
   if (!stagedChangesColumns.some((c) => c.name === "staged_by")) {
     db.exec(`ALTER TABLE staged_changes ADD COLUMN staged_by TEXT NOT NULL DEFAULT ''`);
+  }
+
+  // staged_by_name — display-only counterpart to staged_by. staged_by
+  // itself started out holding the signed-in user's Entra *display name*
+  // (a real bug: display names aren't unique or stable, so two same-named
+  // users — or one renamed user — could touch each other's staged
+  // changes). It now holds the Entra object ID instead, which breaks
+  // nothing for ownership (a non-matching leftover display-name value in
+  // an existing row just falls back to admin-only, same fail-closed
+  // behavior as the empty-string case above), but the UI still needs
+  // something human-readable to show as "staged by ___", hence this
+  // separate column.
+  if (!stagedChangesColumns.some((c) => c.name === "staged_by_name")) {
+    db.exec(`ALTER TABLE staged_changes ADD COLUMN staged_by_name TEXT NOT NULL DEFAULT ''`);
   }
 }

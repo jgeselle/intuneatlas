@@ -53,7 +53,7 @@ export async function runUi(options: UiOptions): Promise<void> {
     session,
     onScanRequest: async (graphToken) => enrichReport(await runViewerTriggeredScan(tenantId, baselinePath, graphToken)),
     onNoteRequest: (body, viewer) => addNote(body.targetKey, viewer.name, body.text),
-    onStageChange: (body: StageChangeRequestBody, viewer) => stageChange(body, viewer.name),
+    onStageChange: (body: StageChangeRequestBody, viewer) => stageChange(body, viewer.id, viewer.name),
     onUpdateChange: (id: number, body: UpdateChangeRequestBody, viewer) => {
       // "Reviewed by" always names the real signed-in viewer, never
       // client-supplied text — otherwise anyone could type any name into

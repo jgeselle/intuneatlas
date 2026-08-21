@@ -34,7 +34,7 @@ test("can: viewer -> view only", () => {
   assert.equal(can("viewer", "note"), false);
   assert.equal(can("viewer", "stage"), false);
   assert.equal(can("viewer", "scan"), false);
-  assert.equal(can("viewer", "editChange", { stagedBy: "alice", viewerName: "alice" }), false);
+  assert.equal(can("viewer", "editChange", { stagedBy: "alice", viewerId: "alice" }), false);
 });
 
 test("can: contributor -> view/note/stage, but not scan", () => {
@@ -45,10 +45,10 @@ test("can: contributor -> view/note/stage, but not scan", () => {
 });
 
 test("can: contributor editChange/revertChange only on their own staged changes", () => {
-  assert.equal(can("contributor", "editChange", { stagedBy: "alice", viewerName: "alice" }), true);
-  assert.equal(can("contributor", "editChange", { stagedBy: "bob", viewerName: "alice" }), false);
-  assert.equal(can("contributor", "revertChange", { stagedBy: "alice", viewerName: "alice" }), true);
-  assert.equal(can("contributor", "revertChange", { stagedBy: "bob", viewerName: "alice" }), false);
+  assert.equal(can("contributor", "editChange", { stagedBy: "alice", viewerId: "alice" }), true);
+  assert.equal(can("contributor", "editChange", { stagedBy: "bob", viewerId: "alice" }), false);
+  assert.equal(can("contributor", "revertChange", { stagedBy: "alice", viewerId: "alice" }), true);
+  assert.equal(can("contributor", "revertChange", { stagedBy: "bob", viewerId: "alice" }), false);
 });
 
 test("can: contributor editChange/revertChange with no context -> false", () => {
@@ -57,16 +57,16 @@ test("can: contributor editChange/revertChange with no context -> false", () => 
 });
 
 test("can: contributor editChange/revertChange on a pre-migration row (stagedBy = '') is never owned", () => {
-  assert.equal(can("contributor", "editChange", { stagedBy: "", viewerName: "alice" }), false);
+  assert.equal(can("contributor", "editChange", { stagedBy: "", viewerId: "alice" }), false);
   // Not even by someone whose own name happens to be empty-ish/unset.
-  assert.equal(can("contributor", "editChange", { stagedBy: "", viewerName: "" }), false);
+  assert.equal(can("contributor", "editChange", { stagedBy: "", viewerId: "" }), false);
 });
 
 test("can: admin -> everything, including any change regardless of who staged it", () => {
   for (const capability of ["view", "note", "stage", "scan"] as const) {
     assert.equal(can("admin", capability), true);
   }
-  assert.equal(can("admin", "editChange", { stagedBy: "bob", viewerName: "alice" }), true);
-  assert.equal(can("admin", "revertChange", { stagedBy: "bob", viewerName: "alice" }), true);
+  assert.equal(can("admin", "editChange", { stagedBy: "bob", viewerId: "alice" }), true);
+  assert.equal(can("admin", "revertChange", { stagedBy: "bob", viewerId: "alice" }), true);
   assert.equal(can("admin", "editChange"), true);
 });

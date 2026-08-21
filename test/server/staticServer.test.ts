@@ -41,7 +41,7 @@ test("resolveStaticPath: a sibling directory sharing dist as a string prefix is 
 // ------------------------------------------------------------------------
 
 function mockSession(overrides: Partial<WebSessionManager> = {}): WebSessionManager & { silentLoginCalls: number } {
-  const identity: ViewerIdentity = { name: "Test User", email: "test@x.com", role: "admin" };
+  const identity: ViewerIdentity = { id: "oid-test-user", name: "Test User", email: "test@x.com", role: "admin" };
   const manager = {
     silentLoginCalls: 0,
     async loginRedirectUrl() {

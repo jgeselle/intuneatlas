@@ -9,7 +9,10 @@ export interface StagedChange {
   to: string;
   reason: string;
   reviewedBy: string;
+  /** Entra object ID of whoever staged this — the ownership key; never display this. */
   stagedBy: string;
+  /** Display name only, for "staged by ___" UI text — never use for ownership checks. */
+  stagedByName: string;
   createdAt: string;
   updatedAt: string;
   /** Derived, not stored — true once both a reason and a named reviewer are present. */
@@ -26,6 +29,7 @@ interface ChangeRow {
   reason: string;
   reviewed_by: string;
   staged_by: string;
+  staged_by_name: string;
   created_at: string;
   updated_at: string;
 }
@@ -41,6 +45,7 @@ function toStagedChange(r: ChangeRow): StagedChange {
     reason: r.reason,
     reviewedBy: r.reviewed_by,
     stagedBy: r.staged_by,
+    stagedByName: r.staged_by_name,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
     ready: Boolean(r.reason.trim() && r.reviewed_by.trim()),
@@ -55,15 +60,15 @@ export interface StageChangeInput {
   to: string;
 }
 
-/** Only ever originates from an existing baseline recommendation — no freeform change creation. Replaces any existing staged change for the same key; restaging transfers ownership to whoever just restaged it, same as reason/reviewedBy resetting. */
-export function stageChange(input: StageChangeInput, stagedBy: string): StagedChange {
+/** Only ever originates from an existing baseline recommendation — no freeform change creation. Replaces any existing staged change for the same key; restaging transfers ownership to whoever just restaged it, same as reason/reviewedBy resetting. `stagedBy` must be a stable id (Entra object ID), not a display name — see ViewerIdentity.id; `stagedByName` is display-only. */
+export function stageChange(input: StageChangeInput, stagedBy: string, stagedByName: string): StagedChange {
   const db = getDb();
   const now = new Date().toISOString();
 
   db.prepare(
     `
-    INSERT INTO staged_changes (target_key, target_name, rule_id, from_value, to_value, staged_by, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO staged_changes (target_key, target_name, rule_id, from_value, to_value, staged_by, staged_by_name, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(target_key) DO UPDATE SET
       target_name = excluded.target_name,
       rule_id = excluded.rule_id,
@@ -72,9 +77,10 @@ export function stageChange(input: StageChangeInput, stagedBy: string): StagedCh
       reason = '',
       reviewed_by = '',
       staged_by = excluded.staged_by,
+      staged_by_name = excluded.staged_by_name,
       updated_at = excluded.updated_at
   `,
-  ).run(input.targetKey, input.targetName, input.ruleId, input.from, input.to, stagedBy, now, now);
+  ).run(input.targetKey, input.targetName, input.ruleId, input.from, input.to, stagedBy, stagedByName, now, now);
 
   const row = db.prepare(`SELECT * FROM staged_changes WHERE target_key = ?`).get(input.targetKey) as unknown as ChangeRow;
   return toStagedChange(row);

@@ -8,7 +8,7 @@ function SettingDrawer({ entry, notes, onAddNote, onClose, change, onStage, onRe
   const rec = entry.rec;
   const canNote = viewer?.role === "contributor" || viewer?.role === "admin";
   const canStage = viewer?.role === "contributor" || viewer?.role === "admin";
-  const canRevertThis = viewer?.role === "admin" || (viewer?.role === "contributor" && change?.stagedBy === viewer?.name);
+  const canRevertThis = viewer?.role === "admin" || (viewer?.role === "contributor" && change?.stagedBy === viewer?.id);
 
   return (
     <DrawerShell

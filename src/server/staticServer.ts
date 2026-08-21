@@ -460,7 +460,7 @@ async function handleUpdateChange(
     res.end(JSON.stringify({ error: `No staged change with id ${id}.` }));
     return;
   }
-  if (!can(viewer.role, "editChange", { stagedBy: existing.stagedBy, viewerName: viewer.name })) {
+  if (!can(viewer.role, "editChange", { stagedBy: existing.stagedBy, viewerId: viewer.id })) {
     res.writeHead(403, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "You can only edit changes you staged yourself, unless you're an Admin." }));
     return;
@@ -503,7 +503,7 @@ async function handleRevertChange(
     res.end(JSON.stringify({ error: `No staged change with id ${id}.` }));
     return;
   }
-  if (!can(viewer.role, "revertChange", { stagedBy: existing.stagedBy, viewerName: viewer.name })) {
+  if (!can(viewer.role, "revertChange", { stagedBy: existing.stagedBy, viewerId: viewer.id })) {
     res.writeHead(403, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "You can only revert changes you staged yourself, unless you're an Admin." }));
     return;
