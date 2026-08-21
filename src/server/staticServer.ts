@@ -117,9 +117,16 @@ export async function startServer(options: StartServerOptions): Promise<{ url: s
       }
 
       let viewer = session.getSession(req.headers.cookie);
-      if (!viewer && req.method === "GET") {
+      if (!viewer && req.method === "GET" && LOOPBACK_HOSTS.has(host)) {
         // A returning solo user shouldn't have to click through a visible
         // sign-in every launch — try the OS-cached account first, silently.
+        // Loopback-only: trySilentLogin() reads from a single server-process-
+        // wide cache (whoever last signed in on this machine), not anything
+        // tied to the calling browser. Off loopback that's the whole tenant's
+        // network reachability away from an anonymous visitor's very first
+        // GET silently minting them a session as the operator, with the
+        // operator's real Graph token behind it — exactly the "everyone
+        // signs in individually" guarantee shared mode is supposed to give.
         const silent = await session.trySilentLogin();
         if (silent) {
           res.writeHead(302, { Location: req.url ?? "/", "Set-Cookie": session.sessionCookie(silent.sessionId) });
