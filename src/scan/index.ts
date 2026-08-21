@@ -10,18 +10,30 @@ interface IndexBucket {
 }
 
 /**
- * Ported from intuneatlas.jsx's buildSettingIndex (lines 616-669): flattens
- * every configuration policy's settings into one tenant-wide index keyed by
- * `cspPath::platform`, and flags a conflict when ≥2 deployed sources
- * disagree on the value. Baseline-derived states ("Below baseline" /
- * "Staged" / "Dismissed") don't exist yet — that's phase 3.
+ * Flattens every configuration policy's settings into one tenant-wide
+ * index keyed by `settingDefinitionId::platform`, and flags a conflict
+ * when ≥2 deployed sources disagree on the value. The merge/conflict
+ * mechanic here has diverged from intuneatlas.jsx's original
+ * buildSettingIndex (lines 616-669, keyed on `name::platform`) in the
+ * one respect that matters most — this is no longer a straight port.
+ * Baseline-derived states ("Below baseline" / "Staged" / "Dismissed")
+ * don't exist yet — that's phase 3.
  *
- * Keyed on cspPath, not name: confirmed by inspecting every existing test
- * fixture that they all happened to pair name↔cspPath 1:1, which is why
- * this was keyed on `name::platform` for a while without anything
- * catching it — a display name isn't guaranteed unique the way a CSP
- * path is, so two genuinely different settings sharing a name could
- * merge into one (false) conflict, or the reverse.
+ * Keyed on settingDefinitionId, not cspPath or name: a display name
+ * isn't guaranteed unique (confirmed against a live tenant's catalog),
+ * and neither is cspPath — Graph's definition-level cspPath is a
+ * template (`{0}`/`[{0}]` placeholders for collection items), so
+ * distinct sibling definitions in a parameterized group can share the
+ * literal same displayed path string (confirmed live: 16 real
+ * collisions between different, fully-populated settingDefinitionIds in
+ * a ~2,000-definition sample, e.g. an app-level and a Safari-specific
+ * camera-permission setting both rendering as
+ * "Privacy/PermissionDefaults/{0}/Camera"). settingDefinitionId is the
+ * one field Graph actually guarantees unique per setting — it's the
+ * literal id used to look the definition up — and it's always populated
+ * on RawSetting, no empty-field risk the way cspPath has (~20% of a
+ * live sample, mostly macOS/iOS preference-domain settings, had an
+ * empty baseUri). cspPath stays on the index purely for display.
  */
 export function buildSettingIndex(policies: RawPolicy[]): SettingIndexEntry[] {
   const buckets = new Map<string, IndexBucket>();
@@ -30,7 +42,7 @@ export function buildSettingIndex(policies: RawPolicy[]): SettingIndexEntry[] {
     const deployed = isDeployed(policy.assignments);
 
     for (const setting of policy.settings) {
-      const key = `${setting.cspPath}::${policy.platform}`;
+      const key = `${setting.settingDefinitionId}::${policy.platform}`;
       if (!buckets.has(key)) {
         buckets.set(key, {
           name: setting.name,
@@ -71,5 +83,7 @@ export function buildSettingIndex(policies: RawPolicy[]): SettingIndexEntry[] {
         state,
       };
     })
-    .sort((a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name));
+    .sort(
+      (a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name) || a.key.localeCompare(b.key),
+    );
 }

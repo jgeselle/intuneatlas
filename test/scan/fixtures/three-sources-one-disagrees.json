@@ -25,7 +25,7 @@
   ],
   "expect": [
     {
-      "key": "./Vendor/MSFT/Policy/Config/System/AllowStorageCard::windows10",
+      "key": "def-usb::windows10",
       "state": "Conflict",
       "conflict": true,
       "values": ["0", "1"]

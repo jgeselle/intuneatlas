@@ -21,7 +21,7 @@
     }
   ],
   "expect": [
-    { "key": "./Vendor/MSFT/DeviceLock/DevicePasswordEnabled::windows10", "state": "Baseline", "conflict": false, "values": ["1"] },
-    { "key": "com.apple.mobiledevice.passwordpolicy.forcePIN::ios", "state": "Baseline", "conflict": false, "values": ["0"] }
+    { "key": "def-win-lock::windows10", "state": "Baseline", "conflict": false, "values": ["1"] },
+    { "key": "def-ios-lock::ios", "state": "Baseline", "conflict": false, "values": ["0"] }
   ]
 }

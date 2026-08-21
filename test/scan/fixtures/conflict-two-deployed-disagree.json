@@ -34,7 +34,7 @@
   ],
   "expect": [
     {
-      "key": "./Vendor/MSFT/BitLocker/RequireDeviceEncryption::windows10",
+      "key": "def-bitlocker::windows10",
       "name": "Require BitLocker",
       "state": "Conflict",
       "conflict": true,

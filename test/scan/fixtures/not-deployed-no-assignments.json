@@ -13,7 +13,7 @@
   ],
   "expect": [
     {
-      "key": "./Vendor/MSFT/Policy/Config/Storage/RemovableDiskDenyWriteAccess::windows10",
+      "key": "def-usb::windows10",
       "state": "Not deployed",
       "conflict": false,
       "values": ["1"]

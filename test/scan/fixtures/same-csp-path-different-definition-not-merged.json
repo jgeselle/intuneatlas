@@ -1,0 +1,39 @@
+{
+  "description": "Two genuinely different settings (different settingDefinitionId) that happen to compute the same cspPath must NOT be merged — confirmed for real against a live tenant's catalog: Graph's definition-level cspPath is templated ({0}/[{0}] placeholders for collection items), so distinct sibling definitions in a parameterized group can render the identical literal path (e.g. an app-level and a Safari-specific camera-permission setting both showing as \"Privacy/PermissionDefaults/{0}/Camera\"). Keyed on settingDefinitionId specifically so this doesn't produce a false conflict.",
+  "policies": [
+    {
+      "id": "policy-app",
+      "name": "App Privacy Baseline",
+      "platform": "ios",
+      "assignments": [{ "kind": "allDevices" }],
+      "settings": [
+        { "settingDefinitionId": "app_privacy_permissiondefaults_generickey_camera", "name": "Camera", "cspPath": "Privacy/PermissionDefaults/{0}/Camera", "category": "Privacy", "value": "Allow" }
+      ]
+    },
+    {
+      "id": "policy-safari",
+      "name": "Safari Privacy Baseline",
+      "platform": "ios",
+      "assignments": [{ "kind": "allDevices" }],
+      "settings": [
+        { "settingDefinitionId": "safari_privacy_permissiondefaults_generickey_camera", "name": "Camera", "cspPath": "Privacy/PermissionDefaults/{0}/Camera", "category": "Privacy", "value": "Deny" }
+      ]
+    }
+  ],
+  "expect": [
+    {
+      "key": "app_privacy_permissiondefaults_generickey_camera::ios",
+      "name": "Camera",
+      "state": "Baseline",
+      "conflict": false,
+      "values": ["Allow"]
+    },
+    {
+      "key": "safari_privacy_permissiondefaults_generickey_camera::ios",
+      "name": "Camera",
+      "state": "Baseline",
+      "conflict": false,
+      "values": ["Deny"]
+    }
+  ]
+}
