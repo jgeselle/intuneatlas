@@ -26,10 +26,11 @@ export interface SettingDefinition {
   baseUri: string;
   offsetUri: string;
   options?: Array<{ itemId: string; displayName: string }>;
-  // Confirmed via Microsoft's schema doc: applicability.platform is a
-  // free-form String (Graph's docs don't enumerate its exact flag-string
-  // format, e.g. whether multi-platform settings are comma-joined) — used
-  // only by the multiPlatform scenario's substring platform filter below.
+  // Both free-form Strings (Graph's docs don't enumerate their exact
+  // flag-string format, e.g. how multi-value settings are joined —
+  // confirmed comma-separated for platform, e.g. "iOS,macOS"). platform
+  // is used by every scenario's platform filter; technologies by the
+  // "usable with an mdm policy" filter below.
   applicability?: { platform?: string; technologies?: string };
 }
 
@@ -52,13 +53,21 @@ export async function findSettingDefinitions(client: SeedClient, keyword: string
   );
 }
 
-/** Every child setting definition nested under a group/group-collection definition. */
+/**
+ * Every descendant setting definition nested under a group/group-collection
+ * definition — the whole subtree, not just direct children. Confirmed
+ * against a live tenant: a top-level definition's own rootDefinitionId
+ * equals its own id (see isTopLevel below), so it satisfies this same
+ * filter and would otherwise come back as if it were its own child —
+ * excluded here explicitly.
+ */
 export async function findChildDefinitions(client: SeedClient, rootDefinitionId: string): Promise<SettingDefinition[]> {
   const escaped = rootDefinitionId.replace(/'/g, "''");
-  return client.getAll<SettingDefinition>(
+  const results = await client.getAll<SettingDefinition>(
     `/deviceManagement/configurationSettings?$filter=rootDefinitionId eq '${escaped}'&$top=200`,
     GRAPH_BETA_BASE,
   );
+  return results.filter((d) => d.id !== rootDefinitionId);
 }
 
 export function isSimpleOrChoice(def: SettingDefinition): boolean {
@@ -75,6 +84,22 @@ export function isChoice(def: SettingDefinition): boolean {
 
 function matchesPlatform(def: SettingDefinition, platformToken: string): boolean {
   return (def.applicability?.platform ?? "").toLowerCase().includes(platformToken.toLowerCase());
+}
+
+/**
+ * A policy's own `technologies` must match its settings' — confirmed for
+ * real against a live tenant: an Edge setting needing "EdgeMAM" rejected
+ * with "Setting with technology applicability EdgeMAM does not match
+ * with the policy's technology applicability MDM", same for an iOS ADE
+ * setting needing "enrollment". Every scenario defaults to "mdm" (most
+ * Windows settings use it), but that's not universal — confirmed for
+ * real that most of a live catalog's top-level iOS settings are
+ * "enrollment"-only, and Android Enterprise settings are "android"-only.
+ * Filtering by the actual required technology up front avoids picking a
+ * setting the policy it's going into can never accept.
+ */
+function usableWithPolicyTechnology(def: SettingDefinition, technologyToken: string): boolean {
+  return (def.applicability?.technologies ?? "").toLowerCase().includes(technologyToken.toLowerCase());
 }
 
 /**
@@ -104,13 +129,21 @@ export async function findFirstSimpleOrChoice(
   client: SeedClient,
   keyword: string,
   platformToken: string,
+  technologyToken = "mdm",
 ): Promise<SettingDefinition> {
   const matches = await findSettingDefinitions(client, keyword);
-  const match = matches.find((d) => isSimpleOrChoice(d) && matchesPlatform(d, platformToken) && isTopLevel(d));
+  const match = matches.find(
+    (d) =>
+      isSimpleOrChoice(d) &&
+      matchesPlatform(d, platformToken) &&
+      isTopLevel(d) &&
+      usableWithPolicyTechnology(d, technologyToken),
+  );
   if (!match) {
     throw new Error(
-      `No top-level simple/choice setting definition found matching "${keyword}" applicable to platform "${platformToken}". ` +
-        `Try a different keyword — run findSettingDefinitions() directly to see what's actually in this tenant's catalog.`,
+      `No top-level simple/choice setting definition found matching "${keyword}" applicable to platform ` +
+        `"${platformToken}" and technology "${technologyToken}". Try a different keyword — run ` +
+        `findSettingDefinitions() directly to see what's actually in this tenant's catalog.`,
     );
   }
   return match;
@@ -123,7 +156,7 @@ export async function findFirstGroup(
   platformToken: string,
 ): Promise<{ definition: SettingDefinition; children: SettingDefinition[] }> {
   const matches = await findSettingDefinitions(client, keyword);
-  const match = matches.find((d) => isGroup(d) && matchesPlatform(d, platformToken));
+  const match = matches.find((d) => isGroup(d) && matchesPlatform(d, platformToken) && usableWithPolicyTechnology(d, "mdm"));
   if (!match) {
     throw new Error(
       `No group/group-collection setting definition found matching "${keyword}" applicable to platform "${platformToken}".`,

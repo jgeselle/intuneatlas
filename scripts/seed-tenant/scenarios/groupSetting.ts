@@ -1,30 +1,22 @@
 // A policy built from a real group/nested setting definition — reproduces
 // finding #1 against real data: src/scan/configurationPolicies.ts's
 // extractValue() has no case for group settings and falls back to the
-// literal string "(group setting)". The payload shape is confirmed
-// against Microsoft's schema docs (see the comment on
-// groupSettingCollectionInstance in settingsCatalog.ts); what's not yet
-// confirmed is whether this scenario's guessed child values pass that
-// specific group definition's own validation on a live tenant.
+// literal string "(group setting)". The wrapping payload shape
+// (groupSettingCollectionValue: [{ children: [...] }]) is confirmed
+// against Microsoft's schema docs.
+//
+// Picking valid children is the hard part, confirmed the hard way: Attack
+// Surface Reduction Rules' children are actually a flat set of independent
+// (choice rule, optional collection-of-strings exclusions) sibling pairs,
+// not one shared bag — a real create call rejected mixing two different
+// rules' children together ("SettingGroupValues contains different
+// setting group instances ... Expected setting group instance ..."). So
+// this uses exactly one child (the first choice-type one, with its first
+// option) rather than guessing how many/which children belong together —
+// the smallest instance that's unambiguously valid.
 import type { SeedClient } from "../client.js";
 import { assignPolicy, createConfigurationPolicy, createTestGroup } from "../objects.js";
-import {
-  choiceSettingInstance,
-  findFirstGroup,
-  groupSettingCollectionInstance,
-  isChoice,
-  stringSettingInstance,
-  type SettingDefinition,
-} from "../settingsCatalog.js";
-
-function buildChildInstance(child: SettingDefinition): unknown {
-  if (isChoice(child) && (child.options?.length ?? 0) > 0) {
-    return choiceSettingInstance(child.id, child.options![0].itemId);
-  }
-  // Best-effort default for non-choice children — a real run may need to
-  // special-case a particular child by name if this guess doesn't fit.
-  return stringSettingInstance(child.id, "1");
-}
+import { choiceSettingInstance, findFirstGroup, groupSettingCollectionInstance, isChoice } from "../settingsCatalog.js";
 
 // "BitLocker" resolves plenty of settings in a real catalog, but none are
 // group-type — confirmed against a live tenant. "Attack Surface" reliably
@@ -32,23 +24,24 @@ function buildChildInstance(child: SettingDefinition): unknown {
 // deviceManagementConfigurationSettingGroupCollectionDefinition.
 export async function seedGroupSetting(client: SeedClient, keyword = "Attack Surface"): Promise<void> {
   const { definition, children } = await findFirstGroup(client, keyword, "windows10");
-  if (children.length === 0) {
-    throw new Error(`Group setting "${definition.displayName}" resolved with no child definitions found.`);
+  const child = children.find((c) => isChoice(c) && (c.options?.length ?? 0) > 0);
+  if (!child) {
+    throw new Error(`Group setting "${definition.displayName}" has no choice-type child with options to use.`);
   }
 
   const group = await createTestGroup(client, `group setting target (${keyword})`);
-  const childInstances = children.slice(0, 3).map(buildChildInstance);
+  const childInstance = choiceSettingInstance(child.id, child.options![0].itemId);
 
   const policy = await createConfigurationPolicy(client, {
     name: `group setting (${definition.displayName})`,
     platforms: "windows10",
-    settings: [groupSettingCollectionInstance(definition.id, childInstances)],
+    settings: [groupSettingCollectionInstance(definition.id, [childInstance])],
   });
 
   await assignPolicy(client, policy.id, [{ kind: "group", groupId: group.id }]);
 
   console.log(
     `groupSetting: policy "${policy.name}" using group definition "${definition.displayName}" ` +
-      `(${children.length} children found, ${childInstances.length} used) assigned to "${group.displayName}".`,
+      `(child: "${child.displayName}"), assigned to "${group.displayName}".`,
   );
 }
