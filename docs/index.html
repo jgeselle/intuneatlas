@@ -73,8 +73,15 @@
   .cmd-label:first-of-type{margin-top:14px}
 
   .copy-btn{font-family:var(--mono);font-size:.6875rem;cursor:pointer;transition:.15s;border-radius:6px}
-  .pre-wrap .copy-btn{position:absolute;top:9px;right:9px;border:1px solid var(--line);background:#fff;color:var(--muted);padding:4px 9px}
+  .pre-wrap .copy-btn{position:absolute;top:50%;right:9px;transform:translateY(-50%);border:1px solid var(--line);background:#fff;color:var(--muted);padding:4px 9px}
   .pre-wrap .copy-btn:hover{border-color:var(--faint);color:var(--text)}
+  /* Hidden until hover/focus, but only on devices that actually have a
+     hover-capable pointer — a touch device would otherwise never be able
+     to reveal or use it. */
+  @media (hover:hover){
+    .pre-wrap .copy-btn{opacity:0}
+    .pre-wrap:hover .copy-btn,.pre-wrap .copy-btn:focus-visible{opacity:1}
+  }
   .cmd .copy-btn{flex:none;border:1px solid rgba(255,255,255,.2);background:transparent;color:#9FCFC7;padding:5px 10px}
   .cmd .copy-btn:hover{border-color:rgba(255,255,255,.5);color:#fff}
 
