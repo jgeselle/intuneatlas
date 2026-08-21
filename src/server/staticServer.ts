@@ -221,6 +221,25 @@ async function handleCallback(
   }
 }
 
+/**
+ * JSON.stringify for embedding straight into a `<script>` block. Plain
+ * JSON.stringify doesn't escape angle brackets, so a value containing a
+ * literal script-closing sequence — e.g. a policy display name, which is
+ * free text the tenant controls, not something this app validates —
+ * closes the script tag early as far as the HTML *parser* is concerned
+ * (it doesn't know or care that the text was inside a JS string literal),
+ * letting whatever follows open a new, real script tag of its own.
+ * Replacing every "<" with its six-character unicode escape round-trips
+ * through JSON.parse to the identical string at runtime, but the HTML
+ * parser never sees a literal "<" to act on. Confirmed live: without
+ * this, a report containing a policy name built from a closing script
+ * tag followed by a new opening one executed arbitrary JS in a real
+ * browser loading this page.
+ */
+function jsonForScriptTag(value: unknown): string {
+  return JSON.stringify(value).replace(/</g, "\\u003c");
+}
+
 async function serveStatic(
   req: IncomingMessage,
   res: ServerResponse,
@@ -255,8 +274,8 @@ async function serveStatic(
 
   if (extname(targetPath) === ".html") {
     const injectedScript =
-      `<script>window.__INTUNEATLAS_REPORT__ = ${JSON.stringify(getReport())};` +
-      `window.__INTUNEATLAS_SESSION__ = ${JSON.stringify(viewer)};</script>`;
+      `<script>window.__INTUNEATLAS_REPORT__ = ${jsonForScriptTag(getReport())};` +
+      `window.__INTUNEATLAS_SESSION__ = ${jsonForScriptTag(viewer)};</script>`;
     body = Buffer.from(body.toString("utf8").replace("</head>", `${injectedScript}</head>`));
   }
 
