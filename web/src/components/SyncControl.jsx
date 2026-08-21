@@ -1,16 +1,18 @@
 import { ArrowsClockwise } from "@phosphor-icons/react";
 import { sinceLabel } from "../lib/format.js";
 
-function SyncControl({ syncing, syncedAgo, onSync, compact = false, statusVisible = true }) {
+function SyncControl({ syncing, syncedAgo, onSync, compact = false, statusVisible = true, canSync = true }) {
   const dot = syncing ? "bg-teal-300" : syncedAgo >= 60 ? "bg-amber-400" : "bg-teal-400";
+  const disabled = syncing || !canSync;
+  const deniedTitle = "Only the Admin role can trigger a tenant scan.";
 
   if (compact) {
     return (
       <button
         onClick={onSync}
-        disabled={syncing}
+        disabled={disabled}
         aria-label={syncing ? "Syncing" : "Sync tenant"}
-        title={syncing ? "Reading tenant…" : "Synced " + sinceLabel(syncedAgo)}
+        title={!canSync ? deniedTitle : syncing ? "Reading tenant…" : "Synced " + sinceLabel(syncedAgo)}
         className="relative rounded-md p-1.5 text-teal-100 hover:bg-teal-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300 disabled:text-teal-400"
       >
         <ArrowsClockwise weight="bold" className={"h-4 w-4 " + (syncing ? "animate-spin" : "")} />
@@ -27,7 +29,8 @@ function SyncControl({ syncing, syncedAgo, onSync, compact = false, statusVisibl
       </div>
       <button
         onClick={onSync}
-        disabled={syncing}
+        disabled={disabled}
+        title={!canSync ? deniedTitle : undefined}
         className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-teal-50 ring-1 ring-inset ring-teal-700 hover:bg-teal-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300 disabled:cursor-not-allowed disabled:text-teal-400"
       >
         <ArrowsClockwise weight="bold" className={"h-3.5 w-3.5 shrink-0 " + (syncing ? "animate-spin" : "")} />

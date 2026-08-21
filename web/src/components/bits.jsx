@@ -55,7 +55,7 @@ function RefPath({ value, label }) {
   );
 }
 
-function NoteThread({ notes = [], onAdd }) {
+function NoteThread({ notes = [], onAdd, readOnly = false }) {
   const [draft, setDraft] = useState("");
 
   function submit() {
@@ -85,22 +85,24 @@ function NoteThread({ notes = [], onAdd }) {
         </ul>
       )}
 
-      <div className="mt-2">
-        <textarea
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          rows={2}
-          placeholder={notes.length ? "Add to the thread" : "Why is it set this way? Write it down for whoever looks next."}
-          className="w-full resize-none rounded-md border border-stone-300 bg-white p-2.5 text-xs placeholder-stone-400 focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600"
-        />
-        <button
-          onClick={submit}
-          disabled={!draft.trim()}
-          className="mt-1.5 rounded-md px-2.5 py-1 text-xs font-medium text-stone-600 ring-1 ring-inset ring-stone-300 hover:bg-stone-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 disabled:cursor-not-allowed disabled:text-stone-300 disabled:ring-stone-200"
-        >
-          Add note
-        </button>
-      </div>
+      {!readOnly && (
+        <div className="mt-2">
+          <textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            rows={2}
+            placeholder={notes.length ? "Add to the thread" : "Why is it set this way? Write it down for whoever looks next."}
+            className="w-full resize-none rounded-md border border-stone-300 bg-white p-2.5 text-xs placeholder-stone-400 focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600"
+          />
+          <button
+            onClick={submit}
+            disabled={!draft.trim()}
+            className="mt-1.5 rounded-md px-2.5 py-1 text-xs font-medium text-stone-600 ring-1 ring-inset ring-stone-300 hover:bg-stone-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 disabled:cursor-not-allowed disabled:text-stone-300 disabled:ring-stone-200"
+          >
+            Add note
+          </button>
+        </div>
+      )}
     </section>
   );
 }

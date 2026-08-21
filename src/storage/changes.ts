@@ -9,6 +9,7 @@ export interface StagedChange {
   to: string;
   reason: string;
   reviewedBy: string;
+  stagedBy: string;
   createdAt: string;
   updatedAt: string;
   /** Derived, not stored — true once both a reason and a named reviewer are present. */
@@ -24,6 +25,7 @@ interface ChangeRow {
   to_value: string;
   reason: string;
   reviewed_by: string;
+  staged_by: string;
   created_at: string;
   updated_at: string;
 }
@@ -38,6 +40,7 @@ function toStagedChange(r: ChangeRow): StagedChange {
     to: r.to_value,
     reason: r.reason,
     reviewedBy: r.reviewed_by,
+    stagedBy: r.staged_by,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
     ready: Boolean(r.reason.trim() && r.reviewed_by.trim()),
@@ -52,15 +55,15 @@ export interface StageChangeInput {
   to: string;
 }
 
-/** Only ever originates from an existing baseline recommendation — no freeform change creation. Replaces any existing staged change for the same key. */
-export function stageChange(input: StageChangeInput): StagedChange {
+/** Only ever originates from an existing baseline recommendation — no freeform change creation. Replaces any existing staged change for the same key; restaging transfers ownership to whoever just restaged it, same as reason/reviewedBy resetting. */
+export function stageChange(input: StageChangeInput, stagedBy: string): StagedChange {
   const db = getDb();
   const now = new Date().toISOString();
 
   db.prepare(
     `
-    INSERT INTO staged_changes (target_key, target_name, rule_id, from_value, to_value, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO staged_changes (target_key, target_name, rule_id, from_value, to_value, staged_by, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(target_key) DO UPDATE SET
       target_name = excluded.target_name,
       rule_id = excluded.rule_id,
@@ -68,12 +71,19 @@ export function stageChange(input: StageChangeInput): StagedChange {
       to_value = excluded.to_value,
       reason = '',
       reviewed_by = '',
+      staged_by = excluded.staged_by,
       updated_at = excluded.updated_at
   `,
-  ).run(input.targetKey, input.targetName, input.ruleId, input.from, input.to, now, now);
+  ).run(input.targetKey, input.targetName, input.ruleId, input.from, input.to, stagedBy, now, now);
 
   const row = db.prepare(`SELECT * FROM staged_changes WHERE target_key = ?`).get(input.targetKey) as unknown as ChangeRow;
   return toStagedChange(row);
+}
+
+/** Single-row lookup, used to check ownership before allowing an edit/revert. */
+export function getChangeById(id: number): StagedChange | undefined {
+  const row = getDb().prepare(`SELECT * FROM staged_changes WHERE id = ?`).get(id) as unknown as ChangeRow | undefined;
+  return row ? toStagedChange(row) : undefined;
 }
 
 export function updateReason(id: number, reason: string): StagedChange {

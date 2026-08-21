@@ -2,18 +2,21 @@ import { randomBytes } from "node:crypto";
 import { type AccountInfo, CryptoProvider, PublicClientApplication } from "@azure/msal-node";
 import { DELEGATED_SCOPES } from "../config.js";
 import { createMsalCachePlugin } from "./tokenCache.js";
+import { type Role, effectiveRole } from "./roles.js";
 
 /**
- * Identifies who's looking at a `ui` instance — used for note authorship and
- * staged-change review attribution. There's only one kind of sign-in: this
- * is the same delegated identity (and the same Graph scopes) used to run a
- * scan, not a reduced-permission "viewer" tier — see project plan. Someone
- * without Intune rights can still sign in and browse an already-scanned
- * report (that never calls Graph at all); they just can't trigger a new scan.
+ * Identifies who's looking at a `ui` instance — used for note authorship,
+ * staged-change review attribution, and authorization. `role` is resolved
+ * once from the ID token's `roles` claim (an Entra App Role assignment),
+ * not the raw claim array — callers should never need to re-derive it.
+ * `null` means signed in but unassigned any App Role, which grants zero
+ * capabilities (see src/auth/roles.ts) rather than falling back to full
+ * access.
  */
 export interface ViewerIdentity {
   name: string;
   email: string;
+  role: Role | null;
 }
 
 interface Session {
@@ -42,8 +45,17 @@ export interface WebSessionManager {
    * cached (the common single-person-per-machine case); undefined otherwise.
    */
   trySilentLogin(): Promise<{ sessionId: string; identity: ViewerIdentity } | undefined>;
-  /** Reads the caller's session cookie, if any, and returns who they are. */
-  getSession(cookieHeader: string | undefined): ViewerIdentity | undefined;
+  /**
+   * Reads the caller's session cookie, if any, and returns who they are.
+   * Opportunistically re-derives `role` from a silent token refresh on
+   * every call — cheap when the cached access token hasn't expired (a
+   * local cache read, no network), and bounds how long a role change in
+   * Entra takes to actually apply for an already-signed-in browser to
+   * roughly the access-token lifetime instead of the full session
+   * cookie lifetime. Falls back to the last-known identity on any
+   * refresh failure rather than failing the request.
+   */
+  getSession(cookieHeader: string | undefined): Promise<ViewerIdentity | undefined>;
   /** A live Graph access token for the signed-in viewer, refreshed silently — undefined if there's no valid session. */
   getGraphToken(cookieHeader: string | undefined): Promise<string | undefined>;
   /**
@@ -67,13 +79,19 @@ export interface WebSessionManager {
  * desktop interactive flow already uses (src/config.ts) — PKCE stands in for
  * a client secret here, same as any SPA/mobile auth-code flow.
  *
- * The only mode there is: local solo use and a shared team deployment both
- * go through this exact same sign-in. What differs is just where the server
- * binds (see src/server/staticServer.ts) and, for a solo user, that a cached
- * sign-in skips the visible browser step (trySilentLogin below).
+ * Local solo use and a shared team deployment both go through this exact
+ * same sign-in; what differs is just where the server binds (see
+ * src/server/staticServer.ts) and, for a solo user, that a cached sign-in
+ * skips the visible browser step (trySilentLogin below). What every
+ * account gets to *do* once signed in depends on their Entra App Role
+ * assignment (src/auth/roles.ts) — sign-in alone grants nothing beyond
+ * an identity.
  */
 export async function createWebSessionManager(tenantId: string, clientId: string): Promise<WebSessionManager> {
-  const cachePlugin = await createMsalCachePlugin(`websession-${tenantId}-${clientId}.bin`);
+  // Same cache file src/auth/interactive.ts uses for the CLI's sign-in —
+  // one sign-in shared by `ui`, `scan`, and `login`, not a disjoint cache
+  // per entry point.
+  const cachePlugin = await createMsalCachePlugin(`${tenantId}-${clientId}.bin`);
   const msal = new PublicClientApplication({
     auth: { clientId, authority: `https://login.microsoftonline.com/${tenantId}` },
     cache: cachePlugin ? { cachePlugin } : undefined,
@@ -93,8 +111,16 @@ export async function createWebSessionManager(tenantId: string, clientId: string
     }
   }
 
+  function identityFromAccount(account: AccountInfo): ViewerIdentity {
+    return {
+      name: account.name ?? account.username,
+      email: account.username,
+      role: effectiveRole(account.idTokenClaims?.roles as string[] | undefined),
+    };
+  }
+
   function startSession(account: AccountInfo): { sessionId: string; identity: ViewerIdentity } {
-    const identity: ViewerIdentity = { name: account.name ?? account.username, email: account.username };
+    const identity = identityFromAccount(account);
     const sessionId = randomBytes(24).toString("hex");
     sessions.set(sessionId, { identity, account });
     return { sessionId, identity };
@@ -155,9 +181,21 @@ export async function createWebSessionManager(tenantId: string, clientId: string
       }
     },
 
-    getSession(cookieHeader) {
+    async getSession(cookieHeader) {
       const sessionId = readCookie(cookieHeader, SESSION_COOKIE);
-      return sessionId ? sessions.get(sessionId)?.identity : undefined;
+      const session = sessionId ? sessions.get(sessionId) : undefined;
+      if (!session) return undefined;
+      try {
+        const result = await msal.acquireTokenSilent({ account: session.account, scopes: DELEGATED_SCOPES });
+        if (result?.account) {
+          session.account = result.account;
+          session.identity = identityFromAccount(result.account);
+        }
+      } catch {
+        // Refresh failed (offline, revoked, transient) — fall back to the
+        // identity already on file rather than failing the request.
+      }
+      return session.identity;
     },
 
     async getGraphToken(cookieHeader) {

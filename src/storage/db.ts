@@ -77,6 +77,7 @@ export function getDb(): DatabaseSync {
       to_value TEXT NOT NULL,
       reason TEXT NOT NULL DEFAULT '',
       reviewed_by TEXT NOT NULL DEFAULT '',
+      staged_by TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
@@ -110,5 +111,14 @@ function migrate(db: DatabaseSync): void {
   const scanColumns = db.prepare(`PRAGMA table_info(scans)`).all() as Array<{ name: string }>;
   if (!scanColumns.some((c) => c.name === "tenant_name")) {
     db.exec(`ALTER TABLE scans ADD COLUMN tenant_name TEXT`);
+  }
+
+  // staged_by (role-based access control) — rows from before this column
+  // existed get '', which never matches a real signed-in name, so they
+  // become admin-only to edit/revert rather than owned by no one in
+  // particular. Fail-closed, not a bug.
+  const stagedChangesColumns = db.prepare(`PRAGMA table_info(staged_changes)`).all() as Array<{ name: string }>;
+  if (!stagedChangesColumns.some((c) => c.name === "staged_by")) {
+    db.exec(`ALTER TABLE staged_changes ADD COLUMN staged_by TEXT NOT NULL DEFAULT ''`);
   }
 }

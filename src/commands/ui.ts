@@ -7,7 +7,15 @@ import { buildReport, type ScanReport } from "../scan/report.js";
 import { LOOPBACK_HOSTS, startServer, type StageChangeRequestBody, type UpdateChangeRequestBody } from "../server/staticServer.js";
 import { addNote, getAllNotes, type Note } from "../storage/notes.js";
 import { getLatestScan, recordScan } from "../storage/scans.js";
-import { getAllChanges, revertChange, stageChange, updateReason, updateReviewer, type StagedChange } from "../storage/changes.js";
+import {
+  getAllChanges,
+  getChangeById,
+  revertChange,
+  stageChange,
+  updateReason,
+  updateReviewer,
+  type StagedChange,
+} from "../storage/changes.js";
 
 export interface UiOptions {
   tenant?: string;
@@ -45,7 +53,7 @@ export async function runUi(options: UiOptions): Promise<void> {
     session,
     onScanRequest: async (graphToken) => enrichReport(await runViewerTriggeredScan(tenantId, baselinePath, graphToken)),
     onNoteRequest: (body, viewer) => addNote(body.targetKey, viewer.name, body.text),
-    onStageChange: (body: StageChangeRequestBody) => stageChange(body),
+    onStageChange: (body: StageChangeRequestBody, viewer) => stageChange(body, viewer.name),
     onUpdateChange: (id: number, body: UpdateChangeRequestBody, viewer) => {
       // "Reviewed by" always names the real signed-in viewer, never
       // client-supplied text — otherwise anyone could type any name into
@@ -55,6 +63,7 @@ export async function runUi(options: UiOptions): Promise<void> {
       throw new Error("reason or reviewedBy is required");
     },
     onRevertChange: (id: number) => revertChange(id),
+    getChangeById: (id: number) => getChangeById(id),
   });
   console.log(`intuneatlas ui — ${url}`);
   if (!staticReport) console.log("No report yet — sign in, then scan from the page that just opened.");

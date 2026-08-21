@@ -3,6 +3,7 @@ import { readFile } from "node:fs/promises";
 import { extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { resolveAppPath } from "../packagedPaths.js";
 import type { ViewerIdentity, WebSessionManager } from "../auth/webSession.js";
+import { can } from "../auth/roles.js";
 
 export const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "::1"]);
 
@@ -65,11 +66,13 @@ export interface StartServerOptions {
   /** Backs the note-adding UI; returns the updated note list for that key. */
   onNoteRequest?: (body: NoteRequestBody, viewer: ViewerIdentity) => unknown[];
   /** Stages a change; must return the created record including its targetKey. */
-  onStageChange?: (body: StageChangeRequestBody) => WithTargetKey;
+  onStageChange?: (body: StageChangeRequestBody, viewer: ViewerIdentity) => WithTargetKey;
   /** Updates reason/reviewer on a staged change; must return the updated record including its targetKey. */
   onUpdateChange?: (id: number, body: UpdateChangeRequestBody, viewer: ViewerIdentity) => WithTargetKey;
   /** Reverts a staged change; returns the targetKey that was removed, or undefined if it didn't exist. */
   onRevertChange?: (id: number) => string | undefined;
+  /** Looks up who staged a change, for the editChange/revertChange ownership check — undefined if the id doesn't exist. */
+  getChangeById?: (id: number) => { stagedBy: string } | undefined;
 }
 
 export async function startServer(options: StartServerOptions): Promise<{ url: string; server: Server }> {
@@ -116,7 +119,7 @@ export async function startServer(options: StartServerOptions): Promise<{ url: s
         return;
       }
 
-      let viewer = session.getSession(req.headers.cookie);
+      let viewer = await session.getSession(req.headers.cookie);
       if (!viewer && req.method === "GET" && LOOPBACK_HOSTS.has(host)) {
         // A returning solo user shouldn't have to click through a visible
         // sign-in every launch — try the OS-cached account first, silently.
@@ -146,7 +149,7 @@ export async function startServer(options: StartServerOptions): Promise<{ url: s
       }
 
       if (req.method === "POST" && req.url === "/api/scan") {
-        await handleScanRequest(req, res, options.onScanRequest, session, (report) => {
+        await handleScanRequest(req, res, options.onScanRequest, session, viewer, (report) => {
           currentReport = report;
         });
         return;
@@ -164,19 +167,25 @@ export async function startServer(options: StartServerOptions): Promise<{ url: s
       }
 
       if (req.method === "POST" && req.url === "/api/changes") {
-        await handleStageChange(req, res, options.onStageChange, (change) => setChange(change.targetKey, change));
+        await handleStageChange(req, res, options.onStageChange, viewer, (change) => setChange(change.targetKey, change));
         return;
       }
 
       const changeIdMatch = req.url?.match(/^\/api\/changes\/(\d+)$/);
       if (changeIdMatch && req.method === "PATCH") {
-        await handleUpdateChange(req, res, Number(changeIdMatch[1]), options.onUpdateChange, viewer, (change) =>
-          setChange(change.targetKey, change),
+        await handleUpdateChange(
+          req,
+          res,
+          Number(changeIdMatch[1]),
+          options.onUpdateChange,
+          options.getChangeById,
+          viewer,
+          (change) => setChange(change.targetKey, change),
         );
         return;
       }
       if (changeIdMatch && req.method === "DELETE") {
-        await handleRevertChange(res, Number(changeIdMatch[1]), options.onRevertChange, removeChange);
+        await handleRevertChange(res, Number(changeIdMatch[1]), options.onRevertChange, options.getChangeById, viewer, removeChange);
         return;
       }
 
@@ -247,6 +256,35 @@ function jsonForScriptTag(value: unknown): string {
   return JSON.stringify(value).replace(/</g, "\\u003c");
 }
 
+/**
+ * Given a request path, resolves which file under `dist` to actually
+ * serve — pulled out as its own pure function so the security-critical
+ * part (never resolving outside `dist`) is unit-testable without a real
+ * built `web/dist` on disk. join()/resolve() alone don't stop `..` from
+ * walking outside `dist` — a browser normalizes that out of a URL before
+ * it's ever sent, but a bare HTTP client (curl --path-as-is, or worse)
+ * won't, and this route only requires *a* valid session, not any Intune
+ * permission. Without this check, a signed-in-but-otherwise-unprivileged
+ * viewer could read anything else readable by the host process — the
+ * local scan/notes DB, the MSAL token cache. relative() (not a plain
+ * startsWith(dist)) so a sibling directory that happens to share `dist`
+ * as a string prefix (e.g. a `dist-secrets` folder next to `dist`) isn't
+ * misjudged as "inside" it. Not resolving deep client-side routes either
+ * — this is a single-page app with no router, so anything unrecognized
+ * (including anything that tried to escape `dist`) just falls back to
+ * index.html.
+ */
+export function resolveStaticPath(dist: string, requestPath: string): string {
+  const filePath = requestPath === "/" ? "index.html" : requestPath.replace(/^\/+/, "");
+  const fullPath = resolve(dist, filePath);
+
+  const rel = relative(dist, fullPath);
+  const escapesDist = rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel);
+
+  const isAsset = extname(filePath) !== "" && !escapesDist;
+  return isAsset ? fullPath : join(dist, "index.html");
+}
+
 async function serveStatic(
   req: IncomingMessage,
   res: ServerResponse,
@@ -255,33 +293,18 @@ async function serveStatic(
 ): Promise<void> {
   const dist = webDist();
   const requestPath = (req.url ?? "/").split("?")[0];
-  const filePath = requestPath === "/" ? "index.html" : requestPath.replace(/^\/+/, "");
-  const fullPath = resolve(dist, filePath);
-
-  // join()/resolve() alone don't stop `..` from walking outside `dist` — a
-  // browser normalizes that out of a URL before it's ever sent, but a bare
-  // HTTP client (curl --path-as-is, or worse) won't, and this route only
-  // requires *a* valid session, not any Intune permission. Without this
-  // check, a signed-in-but-otherwise-unprivileged viewer could read
-  // anything else readable by the host process — the local scan/notes DB,
-  // the MSAL token cache. relative() (not a plain startsWith(dist)) so a
-  // sibling directory that happens to share `dist` as a string prefix
-  // (e.g. a `dist-secrets` folder next to `dist`) isn't misjudged as
-  // "inside" it.
-  const rel = relative(dist, fullPath);
-  const escapesDist = rel === ".." || rel.startsWith(`..${sep}`) || isAbsolute(rel);
-
-  // Not resolving deep client-side routes — this is a single-page app with
-  // no router, so anything unrecognized just falls back to index.html.
-  const isAsset = extname(filePath) !== "" && !escapesDist;
-  const targetPath = isAsset ? fullPath : join(dist, "index.html");
+  const targetPath = resolveStaticPath(dist, requestPath);
 
   let body = await readFile(targetPath);
   const contentType = CONTENT_TYPES[extname(targetPath)] ?? "application/octet-stream";
 
   if (extname(targetPath) === ".html") {
+    // A signed-in-but-unassigned viewer (no Entra App Role) still gets the
+    // SPA shell — it needs to load to render the "no role assigned"
+    // screen — but never the actual report contents.
+    const report = can(viewer.role, "view") ? getReport() : null;
     const injectedScript =
-      `<script>window.__INTUNEATLAS_REPORT__ = ${jsonForScriptTag(getReport())};` +
+      `<script>window.__INTUNEATLAS_REPORT__ = ${jsonForScriptTag(report)};` +
       `window.__INTUNEATLAS_SESSION__ = ${jsonForScriptTag(viewer)};</script>`;
     body = Buffer.from(body.toString("utf8").replace("</head>", `${injectedScript}</head>`));
   }
@@ -295,11 +318,17 @@ async function handleScanRequest(
   res: ServerResponse,
   onScanRequest: StartServerOptions["onScanRequest"],
   session: WebSessionManager,
+  viewer: ViewerIdentity,
   setReport: (report: unknown) => void,
 ): Promise<void> {
   if (!onScanRequest) {
     res.writeHead(501, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "Live scanning isn't available from this session." }));
+    return;
+  }
+  if (!can(viewer.role, "scan")) {
+    res.writeHead(403, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Your role doesn't include scanning the tenant. Ask an Admin." }));
     return;
   }
 
@@ -352,6 +381,11 @@ async function handleNoteRequest(
     res.end(JSON.stringify({ error: "Notes aren't available from this session." }));
     return;
   }
+  if (!can(viewer.role, "note")) {
+    res.writeHead(403, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Your role doesn't include adding notes." }));
+    return;
+  }
 
   try {
     const body = JSON.parse(await readRequestBody(req)) as NoteRequestBody;
@@ -374,11 +408,17 @@ async function handleStageChange(
   req: IncomingMessage,
   res: ServerResponse,
   onStageChange: StartServerOptions["onStageChange"],
+  viewer: ViewerIdentity,
   onSaved: (change: WithTargetKey) => void,
 ): Promise<void> {
   if (!onStageChange) {
     res.writeHead(501, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "Staging changes isn't available from this session." }));
+    return;
+  }
+  if (!can(viewer.role, "stage")) {
+    res.writeHead(403, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Your role doesn't include staging changes." }));
     return;
   }
 
@@ -390,7 +430,7 @@ async function handleStageChange(
       return;
     }
 
-    const change = onStageChange(body);
+    const change = onStageChange(body, viewer);
     onSaved(change);
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify(change));
@@ -404,12 +444,25 @@ async function handleUpdateChange(
   res: ServerResponse,
   id: number,
   onUpdateChange: StartServerOptions["onUpdateChange"],
+  getChangeById: StartServerOptions["getChangeById"],
   viewer: ViewerIdentity,
   onSaved: (change: WithTargetKey) => void,
 ): Promise<void> {
   if (!onUpdateChange) {
     res.writeHead(501, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "Updating changes isn't available from this session." }));
+    return;
+  }
+
+  const existing = getChangeById?.(id);
+  if (!existing) {
+    res.writeHead(404, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: `No staged change with id ${id}.` }));
+    return;
+  }
+  if (!can(viewer.role, "editChange", { stagedBy: existing.stagedBy, viewerName: viewer.name })) {
+    res.writeHead(403, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "You can only edit changes you staged yourself, unless you're an Admin." }));
     return;
   }
 
@@ -434,11 +487,25 @@ async function handleRevertChange(
   res: ServerResponse,
   id: number,
   onRevertChange: StartServerOptions["onRevertChange"],
+  getChangeById: StartServerOptions["getChangeById"],
+  viewer: ViewerIdentity,
   onReverted: (targetKey: string) => void,
 ): Promise<void> {
   if (!onRevertChange) {
     res.writeHead(501, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "Reverting changes isn't available from this session." }));
+    return;
+  }
+
+  const existing = getChangeById?.(id);
+  if (!existing) {
+    res.writeHead(404, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: `No staged change with id ${id}.` }));
+    return;
+  }
+  if (!can(viewer.role, "revertChange", { stagedBy: existing.stagedBy, viewerName: viewer.name })) {
+    res.writeHead(403, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "You can only revert changes you staged yourself, unless you're an Admin." }));
     return;
   }
 

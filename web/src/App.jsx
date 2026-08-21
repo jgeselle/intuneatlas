@@ -10,6 +10,7 @@ import {
   CaretDoubleLeft,
 } from "@phosphor-icons/react";
 import { ConnectScreen } from "./ConnectScreen.jsx";
+import { NoRoleScreen } from "./NoRoleScreen.jsx";
 import { SyncControl } from "./components/SyncControl.jsx";
 import { AccountMenu } from "./components/AccountMenu.jsx";
 import { SettingDrawer } from "./components/SettingDrawer.jsx";
@@ -166,6 +167,10 @@ export default function App({ initialReport, session }) {
     return () => window.clearInterval(t);
   }, []);
 
+  if (session && !session.role) {
+    return <NoRoleScreen session={session} />;
+  }
+
   if (!report) {
     return <ConnectScreen onConnected={setReport} session={session} />;
   }
@@ -308,7 +313,7 @@ export default function App({ initialReport, session }) {
           {/* narrow layouts: the sidebar collapses into a top bar, so these ride along here */}
           {session && (
             <div className="ml-auto flex shrink-0 items-center gap-1 lg:hidden">
-              <SyncControl syncing={syncing} syncedAgo={syncedAgo} onSync={resync} compact />
+              <SyncControl syncing={syncing} syncedAgo={syncedAgo} onSync={resync} canSync={session?.role === "admin"} compact />
               <AccountMenu session={session} tenant={report.tenantName || report.tenant} />
             </div>
           )}
@@ -359,10 +364,10 @@ export default function App({ initialReport, session }) {
         {/* wide layouts: sync and identity settle at the foot of the rail */}
         <div className="mt-auto hidden border-t border-teal-800 px-3 py-3 lg:block">
           <div className={"justify-center " + (railCollapsed && !syncFullShown ? "flex" : "hidden")}>
-            <SyncControl syncing={syncing} syncedAgo={syncedAgo} onSync={resync} compact />
+            <SyncControl syncing={syncing} syncedAgo={syncedAgo} onSync={resync} canSync={session?.role === "admin"} compact />
           </div>
           <div className={railCollapsed && !syncFullShown ? "hidden" : ""}>
-            <SyncControl syncing={syncing} syncedAgo={syncedAgo} onSync={resync} statusVisible={syncStatusVisible} />
+            <SyncControl syncing={syncing} syncedAgo={syncedAgo} onSync={resync} statusVisible={syncStatusVisible} canSync={session?.role === "admin"} />
           </div>
           {session && (
             <div className="mt-3 border-t border-teal-800 pt-3">
@@ -449,6 +454,7 @@ export default function App({ initialReport, session }) {
           change={changes[openSetting.key]}
           onStage={() => stageEntryChange(openSetting)}
           onRevert={(id) => revertEntryChange(id, openSetting.key)}
+          viewer={session}
         />
       )}
       {openCompliance && (
@@ -458,6 +464,7 @@ export default function App({ initialReport, session }) {
           notes={notes[openCompliance.id] || []}
           onAddNote={(text) => addNote(openCompliance.id, text)}
           onClose={() => setOpen(null)}
+          viewer={session}
         />
       )}
       {openEnrollment && (
@@ -467,6 +474,7 @@ export default function App({ initialReport, session }) {
           notes={notes[openEnrollment.id] || []}
           onAddNote={(text) => addNote(openEnrollment.id, text)}
           onClose={() => setOpen(null)}
+          viewer={session}
         />
       )}
 

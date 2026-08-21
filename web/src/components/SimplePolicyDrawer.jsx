@@ -2,7 +2,8 @@ import { DrawerShell } from "./DrawerShell.jsx";
 import { Chip, NoteThread } from "./bits.jsx";
 import { platformLabel } from "../lib/format.js";
 
-function SimplePolicyDrawer({ item, kindLabel, notes, onAddNote, onClose }) {
+function SimplePolicyDrawer({ item, kindLabel, notes, onAddNote, onClose, viewer }) {
+  const canNote = viewer?.role === "contributor" || viewer?.role === "admin";
   return (
     <DrawerShell
       eyebrow={kindLabel}
@@ -23,7 +24,7 @@ function SimplePolicyDrawer({ item, kindLabel, notes, onAddNote, onClose }) {
       <p className="rounded-md border border-stone-200 bg-stone-50 p-3 text-xs leading-relaxed text-stone-600">
         Per-setting detail for {kindLabel.toLowerCase()} policies isn't scanned yet — this shows identity and deployment status only.
       </p>
-      <NoteThread notes={notes} onAdd={onAddNote} />
+      <NoteThread notes={notes} onAdd={onAddNote} readOnly={!canNote} />
     </DrawerShell>
   );
 }

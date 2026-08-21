@@ -5,6 +5,9 @@ import { Chip, Diff } from "../components/bits.jsx";
 function ChangeCard({ change, onUpdateField, onRevert, viewer }) {
   const [reason, setReason] = useState(change.reason);
   const reviewedByMe = change.reviewedBy === viewer.name;
+  // Contributors can only touch changes they staged themselves; Admins can
+  // touch any — mirrors the server-side editChange/revertChange check.
+  const canEdit = viewer.role === "admin" || (viewer.role === "contributor" && change.stagedBy === viewer.name);
 
   return (
     <li className="rounded-lg border border-stone-200 bg-white p-4">
@@ -14,16 +17,19 @@ function ChangeCard({ change, onUpdateField, onRevert, viewer }) {
             <Chip className={change.ready ? "bg-teal-50 text-teal-700 ring-teal-200" : "bg-amber-50 text-amber-800 ring-amber-200"}>
               {change.ready ? "Ready" : "Needs review"}
             </Chip>
+            {change.stagedBy && <span className="text-xs text-stone-400">staged by {change.stagedBy}</span>}
           </div>
           <h3 className="mt-2 text-sm font-medium">{change.targetName}</h3>
         </div>
-        <button
-          onClick={() => onRevert(change.id, change.targetKey)}
-          className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-stone-600 ring-1 ring-inset ring-stone-300 hover:bg-stone-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
-        >
-          <ArrowCounterClockwise className="h-3.5 w-3.5" />
-          Revert
-        </button>
+        {canEdit && (
+          <button
+            onClick={() => onRevert(change.id, change.targetKey)}
+            className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-stone-600 ring-1 ring-inset ring-stone-300 hover:bg-stone-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+          >
+            <ArrowCounterClockwise className="h-3.5 w-3.5" />
+            Revert
+          </button>
+        )}
       </div>
 
       <div className="mt-3">
@@ -38,8 +44,9 @@ function ChangeCard({ change, onUpdateField, onRevert, viewer }) {
             onChange={(e) => setReason(e.target.value)}
             onBlur={() => reason !== change.reason && onUpdateField(change.id, "reason", reason)}
             rows={2}
+            disabled={!canEdit}
             placeholder="Why is this change needed?"
-            className="mt-1 w-full resize-none rounded-md border border-stone-300 bg-white p-2 text-xs placeholder-stone-400 focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600"
+            className="mt-1 w-full resize-none rounded-md border border-stone-300 bg-white p-2 text-xs placeholder-stone-400 focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600 disabled:cursor-not-allowed disabled:bg-stone-50 disabled:text-stone-400"
           />
         </label>
         <div>
@@ -47,12 +54,14 @@ function ChangeCard({ change, onUpdateField, onRevert, viewer }) {
           <button
             type="button"
             onClick={() => onUpdateField(change.id, "reviewedBy", viewer.name)}
-            disabled={reviewedByMe}
+            disabled={reviewedByMe || !canEdit}
             className={
-              "mt-1 flex w-full items-center justify-center gap-1.5 rounded-md p-2 text-xs font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 " +
+              "mt-1 flex w-full items-center justify-center gap-1.5 rounded-md p-2 text-xs font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 disabled:cursor-not-allowed " +
               (reviewedByMe
                 ? "cursor-default bg-teal-50 text-teal-700 ring-1 ring-inset ring-teal-200"
-                : "bg-stone-100 text-stone-700 hover:bg-stone-200")
+                : canEdit
+                  ? "bg-stone-100 text-stone-700 hover:bg-stone-200"
+                  : "bg-stone-50 text-stone-300")
             }
           >
             <Check className="h-3.5 w-3.5" />

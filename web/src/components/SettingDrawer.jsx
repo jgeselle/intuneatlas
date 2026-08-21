@@ -4,8 +4,11 @@ import { Chip, Diff, RefPath, NoteThread } from "./bits.jsx";
 import { STATE_STYLE, SEVERITY_STYLE } from "../lib/styles.js";
 import { platformLabel, refLabel } from "../lib/format.js";
 
-function SettingDrawer({ entry, notes, onAddNote, onClose, change, onStage, onRevert }) {
+function SettingDrawer({ entry, notes, onAddNote, onClose, change, onStage, onRevert, viewer }) {
   const rec = entry.rec;
+  const canNote = viewer?.role === "contributor" || viewer?.role === "admin";
+  const canStage = viewer?.role === "contributor" || viewer?.role === "admin";
+  const canRevertThis = viewer?.role === "admin" || (viewer?.role === "contributor" && change?.stagedBy === viewer?.name);
 
   return (
     <DrawerShell
@@ -65,17 +68,19 @@ function SettingDrawer({ entry, notes, onAddNote, onClose, change, onStage, onRe
             <Diff from={change.from} to={change.to} />
           </div>
           <p className="mt-2 text-xs text-teal-700">Edit the reason and reviewer from the Change log tab.</p>
-          <button
-            onClick={() => onRevert(change.id)}
-            className="mt-3 inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-stone-600 ring-1 ring-inset ring-stone-300 hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
-          >
-            <ArrowCounterClockwise className="h-3.5 w-3.5" />
-            Revert
-          </button>
+          {canRevertThis && (
+            <button
+              onClick={() => onRevert(change.id)}
+              className="mt-3 inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-stone-600 ring-1 ring-inset ring-stone-300 hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+            >
+              <ArrowCounterClockwise className="h-3.5 w-3.5" />
+              Revert
+            </button>
+          )}
         </section>
       )}
 
-      {rec && !change && (
+      {rec && !change && canStage && (
         <section className="rounded-md border border-stone-200 p-3">
           <div className="flex items-center gap-2">
             <WarningCircle className="h-4 w-4 shrink-0 text-amber-500" />
@@ -97,6 +102,13 @@ function SettingDrawer({ entry, notes, onAddNote, onClose, change, onStage, onRe
             Staging doesn't touch the tenant — it just queues this for review. Deploying needs write-back, which isn't built yet.
           </p>
         </section>
+      )}
+
+      {rec && !change && !canStage && (
+        <p className="flex items-start gap-2 rounded-md border border-stone-200 bg-stone-50 p-3 text-xs leading-relaxed text-stone-600">
+          <WarningCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+          Differs from the baseline. Ask a Contributor or Admin to stage the recommended change.
+        </p>
       )}
 
       {!rec && !entry.conflict && (
@@ -130,7 +142,7 @@ function SettingDrawer({ entry, notes, onAddNote, onClose, change, onStage, onRe
         )}
       </section>
 
-      <NoteThread notes={notes} onAdd={onAddNote} />
+      <NoteThread notes={notes} onAdd={onAddNote} readOnly={!canNote} />
     </DrawerShell>
   );
 }

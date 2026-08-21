@@ -171,6 +171,16 @@
             host <code>localhost</code>.
           </li>
           <li>
+            Add a second Custom redirect URI, on the same platform, with no port and no path:
+            <pre>http://localhost</pre>
+            This is what <code>intuneatlas login</code> and <code>intuneatlas scan</code> use for
+            their own one-off sign-in prompt — a temporary listener on whatever port happens to
+            be free, not the fixed one <code>ui</code> uses above. Entra ignores the port for
+            <code>localhost</code> redirect URIs, but not the path, so it needs its own entry
+            separate from <code>/auth/callback</code>. Not needed if you only ever use
+            <code>--device-code</code>, which doesn't use a redirect URI at all.
+          </li>
+          <li>
             <b>API permissions</b> → <b>Add a permission</b> → <b>Microsoft Graph</b> →
             <b>Delegated permissions</b> → add these four, all read-only:
             <code>DeviceManagementConfiguration.Read.All</code>,
@@ -179,6 +189,26 @@
             <code>DeviceManagementServiceConfig.Read.All</code>. If you're a Global or Intune
             admin, click <b>Grant admin consent</b> now — otherwise the first sign-in will
             prompt for it instead.
+          </li>
+          <li>
+            <b>App roles</b> → <b>Create app role</b>, three times, one for each of:
+            <code>viewer</code> (browse only), <code>contributor</code> (+ notes, staging and
+            managing your own changes), and <code>admin</code> (+ triggering scans, managing
+            everyone's changes). For each: <b>Allowed member types</b> → <b>Users/Groups</b>,
+            and set <b>Value</b> to exactly the lowercase name above — that's the literal
+            string IntuneAtlas reads back out of the sign-in token, so it has to match.
+          </li>
+          <li>
+            Go to <b>Microsoft Entra ID</b> → <b>Enterprise applications</b> → your app →
+            <b>Users and groups</b> → <b>Add user/group</b>, and assign yourself (and anyone
+            else who'll use it) to one of the three roles you just created.
+            <b>This step is required, not optional</b> — IntuneAtlas has no fallback: sign in
+            with no role assigned and you'll see a "no role assigned" screen with nothing to
+            do, even for a solo install with nobody else to restrict. While you're on that
+            page, also flip <b>Properties</b> → <b>Assignment required?</b> to <b>Yes</b> — it
+            blocks sign-in itself for anyone you haven't assigned, at Entra, before IntuneAtlas
+            ever sees them. The app role check above still applies either way; this is an
+            extra, stronger layer worth turning on regardless.
           </li>
         </ol>
       </section>
@@ -234,9 +264,11 @@
         <h2>Sharing it with a team</h2>
         <p>
           <code>--host 0.0.0.0</code> turns the same server into a shared instance —
-          everyone who connects signs in with their own Microsoft account, and viewing an
-          already-scanned report needs no Intune permission at all; only triggering a new
-          scan does.
+          everyone who connects signs in with their own Microsoft account, and what they can
+          do once signed in follows the App Role you assigned them
+          (<a href="#register-app">above</a>): Viewers can browse, Contributors can also add
+          notes and manage their own staged changes, and only Admins can trigger a new scan
+          or manage anyone's changes.
         </p>
         <div class="note">
           Shared mode needs a real HTTPS hostname reachable by your teammates' browsers —
