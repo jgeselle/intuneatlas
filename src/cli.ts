@@ -13,7 +13,7 @@ program
   .description("Flatten every Intune profile into one settings index, keyed on the CSP path.")
   // Keep in sync with package.json's "version" — not read dynamically
   // because the packaged exe doesn't ship package.json alongside it.
-  .version("0.0.13");
+  .version("0.0.14");
 
 function withAuthOptions(command: Command): Command {
   return command
