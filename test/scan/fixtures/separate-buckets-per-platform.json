@@ -21,7 +21,7 @@
     }
   ],
   "expect": [
-    { "key": "Require Passcode::windows10", "state": "Baseline", "conflict": false, "values": ["1"] },
-    { "key": "Require Passcode::ios", "state": "Baseline", "conflict": false, "values": ["0"] }
+    { "key": "./Vendor/MSFT/DeviceLock/DevicePasswordEnabled::windows10", "state": "Baseline", "conflict": false, "values": ["1"] },
+    { "key": "com.apple.mobiledevice.passwordpolicy.forcePIN::ios", "state": "Baseline", "conflict": false, "values": ["0"] }
   ]
 }

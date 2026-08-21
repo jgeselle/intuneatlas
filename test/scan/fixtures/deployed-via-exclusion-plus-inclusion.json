@@ -16,7 +16,7 @@
   ],
   "expect": [
     {
-      "key": "Allow Wi-Fi Auto-Connect::windows10",
+      "key": "./Vendor/MSFT/WiFi/AllowAutoConnectToWiFiSenseHotspots::windows10",
       "state": "Baseline",
       "conflict": false,
       "values": ["0"]

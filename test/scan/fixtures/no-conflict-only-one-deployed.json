@@ -22,7 +22,7 @@
   ],
   "expect": [
     {
-      "key": "Screen Lock Timeout::windows10",
+      "key": "./Vendor/MSFT/Policy/Config/DeviceLock/DeviceLockTimeInSeconds::windows10",
       "state": "Baseline",
       "conflict": false,
       "values": ["300", "900"]

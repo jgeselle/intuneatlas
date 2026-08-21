@@ -22,7 +22,7 @@
   ],
   "expect": [
     {
-      "key": "Enable Firewall::windows10",
+      "key": "./Vendor/MSFT/Firewall/DomainProfile/EnableFirewall::windows10",
       "state": "Baseline",
       "conflict": false,
       "values": ["1"]

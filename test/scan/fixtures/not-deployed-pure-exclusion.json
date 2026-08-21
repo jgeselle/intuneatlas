@@ -13,7 +13,7 @@
   ],
   "expect": [
     {
-      "key": "Require PIN::windows10",
+      "key": "./Vendor/MSFT/PassportForWork/Biometrics/UseBiometrics::windows10",
       "state": "Not deployed",
       "conflict": false
     }

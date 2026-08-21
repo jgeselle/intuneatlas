@@ -1,0 +1,39 @@
+{
+  "description": "Two genuinely different settings that happen to share a display name must NOT be merged just because the name matches — CSP paths modeled on two real, distinct Windows Settings Catalog definitions that are this close in practice. Keyed on cspPath specifically so this doesn't produce a false conflict.",
+  "policies": [
+    {
+      "id": "policy-a",
+      "name": "Policy A",
+      "platform": "windows10",
+      "assignments": [{ "kind": "allDevices" }],
+      "settings": [
+        { "settingDefinitionId": "def-camera-1", "name": "Windows Camera", "cspPath": "./Device/Vendor/MSFT/Policy/Config/ApplicationManagement/RemoveDefaultMicrosoftStorePackages/2/WindowsCamera", "category": "Application management", "value": "1" }
+      ]
+    },
+    {
+      "id": "policy-b",
+      "name": "Policy B",
+      "platform": "windows10",
+      "assignments": [{ "kind": "allDevices" }],
+      "settings": [
+        { "settingDefinitionId": "def-camera-2", "name": "Windows Camera", "cspPath": "./Device/Vendor/MSFT/Policy/Config/ApplicationManagement/RemoveDefaultMicrosoftStorePackages/WindowsCamera", "category": "Application management", "value": "0" }
+      ]
+    }
+  ],
+  "expect": [
+    {
+      "key": "./Device/Vendor/MSFT/Policy/Config/ApplicationManagement/RemoveDefaultMicrosoftStorePackages/2/WindowsCamera::windows10",
+      "name": "Windows Camera",
+      "state": "Baseline",
+      "conflict": false,
+      "values": ["1"]
+    },
+    {
+      "key": "./Device/Vendor/MSFT/Policy/Config/ApplicationManagement/RemoveDefaultMicrosoftStorePackages/WindowsCamera::windows10",
+      "name": "Windows Camera",
+      "state": "Baseline",
+      "conflict": false,
+      "values": ["0"]
+    }
+  ]
+}
