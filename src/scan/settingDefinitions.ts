@@ -18,6 +18,7 @@ interface SettingDefinitionResponse {
 interface CategoryResponse {
   id: string;
   displayName: string;
+  description?: string;
 }
 
 export interface ResolvedDefinition {
@@ -51,8 +52,14 @@ const categoryCache = new Map<string, string>();
  * deviceManagementConfigurationCategory resource's `name` property is
  * null — `displayName` is the one that's actually populated, same
  * convention as every other setting-catalog resource in this file.
- * Cached per process, same reasoning as resolveSettingDefinition below:
- * many settings share a category.
+ * BUT confirmed against a much larger real-world corpus (importing ~1500
+ * real settings from a real tenant's exported policies) that displayName
+ * itself is sometimes empty too — every ADMX-derived leaf category seen
+ * so far (Group Policy templates imported into the catalog) has an empty
+ * displayName but a real, useful `description` ("Administrative
+ * Templates"). Falls back through both before giving up to the raw id,
+ * never a blank string. Cached per process, same reasoning as
+ * resolveSettingDefinition below: many settings share a category.
  */
 async function resolveCategoryName(token: string, categoryId: string): Promise<string> {
   const cached = categoryCache.get(categoryId);
@@ -64,8 +71,9 @@ async function resolveCategoryName(token: string, categoryId: string): Promise<s
     GRAPH_BETA_BASE,
   );
 
-  categoryCache.set(categoryId, category.displayName);
-  return category.displayName;
+  const name = category.displayName || category.description || categoryId;
+  categoryCache.set(categoryId, name);
+  return name;
 }
 
 export async function resolveSettingDefinition(

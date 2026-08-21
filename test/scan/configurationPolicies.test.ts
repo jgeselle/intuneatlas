@@ -188,3 +188,60 @@ test("fetchConfigurationPolicies — a choice setting's dependent child", async 
     "a choice setting's dependent child must not be silently dropped",
   );
 });
+
+/**
+ * Covers a fourth real bug, found by importing ~1500 real settings from a
+ * real tenant's exported policies: displayName isn't always populated on
+ * a category even when it resolves successfully — every ADMX-derived
+ * (Group Policy template) leaf category seen live has an empty
+ * displayName but a real, useful description ("Administrative
+ * Templates"). Previously rendered as a blank category with no fallback.
+ */
+test("fetchConfigurationPolicies — a category with an empty displayName falls back to description", async (t) => {
+  const originalFetch = global.fetch;
+  t.after(() => {
+    global.fetch = originalFetch;
+  });
+
+  const DEF_ID = "device_vendor_msft_policy_config_admx_printing2_registerspoolerremoterpcendpoint";
+  const CATEGORY_ID = "cat-admx";
+
+  global.fetch = (async (url: string | URL) => {
+    const u = String(url);
+    if (u.includes("/deviceManagement/configurationPolicies?")) {
+      return jsonResponse({ value: [{ id: "policy-3", name: "Printing policy", platforms: "windows10", assignments: [] }] });
+    }
+    if (u.includes("/deviceManagement/configurationPolicies/policy-3/settings")) {
+      return jsonResponse({
+        value: [
+          {
+            settingInstance: {
+              "@odata.type": "#microsoft.graph.deviceManagementConfigurationChoiceSettingInstance",
+              settingDefinitionId: DEF_ID,
+              choiceSettingValue: { value: `${DEF_ID}_0` },
+            },
+          },
+        ],
+      });
+    }
+    if (u.endsWith(`/deviceManagement/configurationSettings/${DEF_ID}`)) {
+      return jsonResponse({
+        id: DEF_ID,
+        displayName: "Allow Print Spooler to accept client connections",
+        baseUri: "./Device/Vendor/MSFT/Policy/Config/ADMX_Printing2/",
+        offsetUri: "RegisterSpoolerRemoteRpcEndPoint",
+        categoryId: CATEGORY_ID,
+        options: [{ itemId: `${DEF_ID}_0`, displayName: "Disabled" }],
+      });
+    }
+    if (u.endsWith(`/deviceManagement/configurationCategories/${CATEGORY_ID}`)) {
+      // Confirmed live: displayName empty, description populated — not
+      // both empty, and not the more common "both populated" case.
+      return jsonResponse({ id: CATEGORY_ID, name: null, displayName: "", description: "Administrative Templates" });
+    }
+    throw new Error(`unexpected fetch: ${u}`);
+  }) as typeof fetch;
+
+  const policies = await fetchConfigurationPolicies("token");
+  assert.equal(policies[0].settings[0].category, "Administrative Templates");
+});
