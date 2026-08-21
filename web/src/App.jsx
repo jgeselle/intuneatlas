@@ -217,18 +217,15 @@ export default function App({ initialReport, session }) {
     }
   }
 
-  async function stageEntryChange(entry) {
+  // Not just for applying a baseline recommendation — ruleId is "manual"
+  // for a freeform edit with no baseline rule behind it. The server never
+  // required a real rule id; this was always a frontend-only constraint.
+  async function stageChange(entry, { ruleId, from, to }) {
     try {
       const res = await fetch("/api/changes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          targetKey: entry.key,
-          targetName: entry.name,
-          ruleId: entry.rec.ruleId,
-          from: entry.rec.current,
-          to: entry.rec.recommended,
-        }),
+        body: JSON.stringify({ targetKey: entry.key, targetName: entry.name, ruleId, from, to }),
       });
       const change = await res.json();
       if (!res.ok) throw new Error(change.error || "Couldn't stage the change");
@@ -452,7 +449,7 @@ export default function App({ initialReport, session }) {
           onAddNote={(text) => addNote(openSetting.key, text)}
           onClose={() => setOpen(null)}
           change={changes[openSetting.key]}
-          onStage={() => stageEntryChange(openSetting)}
+          onStage={(to, ruleId, from) => stageChange(openSetting, { ruleId, from, to })}
           onRevert={(id) => revertEntryChange(id, openSetting.key)}
           viewer={session}
         />

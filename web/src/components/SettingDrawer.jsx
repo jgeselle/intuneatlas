@@ -1,14 +1,93 @@
-import { Warning, WarningCircle, CheckCircle, ArrowCounterClockwise } from "@phosphor-icons/react";
+import { useState } from "react";
+import { Warning, WarningCircle, CheckCircle, ArrowCounterClockwise, PencilSimple } from "@phosphor-icons/react";
 import { DrawerShell } from "./DrawerShell.jsx";
 import { Chip, Diff, RefPath, NoteThread, ValueDisplay, SourceRow } from "./bits.jsx";
 import { STATE_STYLE, SEVERITY_STYLE } from "../lib/styles.js";
 import { platformLabel, refLabel } from "../lib/format.js";
+
+/**
+ * Stage any new value, not just a baseline's recommended one — the
+ * server never required a real rule id behind a staged change (only
+ * that one be present at all), so this was always a frontend-only
+ * restriction. Pre-fills from the baseline recommendation when there is
+ * one, but it's editable either way; "Use recommended value" just
+ * resets the field if you've typed over it.
+ */
+function EditValueSection({ current, rec, onStage }) {
+  const [value, setValue] = useState(rec?.recommended ?? current);
+  // A single-line input works fine for "Enabled"/"Not allowed." but not
+  // for a long single string value (confirmed live: a 2,300-character
+  // base64 blob) — genuinely simple (one value, not a group/collection),
+  // just too long for one line.
+  const isLong = current.length > 100 || value.length > 100;
+
+  return (
+    <section className="rounded-md border border-stone-200 p-3">
+      {rec && (
+        <>
+          <div className="flex items-center gap-2">
+            <WarningCircle className="h-4 w-4 shrink-0 text-amber-500" />
+            <h3 className="text-sm font-semibold">Recommended change</h3>
+            <Chip className={"ml-auto " + SEVERITY_STYLE[rec.severity].chip}>{SEVERITY_STYLE[rec.severity].label}</Chip>
+          </div>
+          <p className="mt-2 text-xs leading-relaxed text-stone-600">{rec.why}</p>
+          <p className="mt-1 text-xs text-stone-400">Source: {rec.source}</p>
+          {value !== rec.recommended && (
+            <button
+              type="button"
+              onClick={() => setValue(rec.recommended)}
+              className="mt-2 text-xs font-medium text-teal-700 hover:underline focus:outline-none"
+            >
+              Use recommended value ({rec.recommended})
+            </button>
+          )}
+        </>
+      )}
+
+      <label className="mt-3 block">
+        <span className="text-xs font-medium text-stone-500">{rec ? "Value to stage" : "New value"}</span>
+        {isLong ? (
+          <textarea
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            rows={4}
+            className="mt-1 w-full resize-y rounded-md border border-stone-300 bg-white p-2.5 font-mono text-xs focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600"
+          />
+        ) : (
+          <input
+            type="text"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            className="mt-1 w-full rounded-md border border-stone-300 bg-white px-2.5 py-1.5 text-sm focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600"
+          />
+        )}
+      </label>
+
+      <button
+        onClick={() => onStage(value, rec?.ruleId ?? "manual", current)}
+        disabled={!value.trim() || value === current}
+        className="mt-3 rounded-md bg-teal-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-teal-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-400"
+      >
+        Stage this change
+      </button>
+      <p className="mt-2 text-xs text-stone-400">
+        Staging doesn't touch the tenant — it just queues this for review. Deploying needs write-back, which isn't built yet.
+      </p>
+    </section>
+  );
+}
 
 function SettingDrawer({ entry, notes, onAddNote, onClose, change, onStage, onRevert, viewer }) {
   const rec = entry.rec;
   const canNote = viewer?.role === "contributor" || viewer?.role === "admin";
   const canStage = viewer?.role === "contributor" || viewer?.role === "admin";
   const canRevertThis = viewer?.role === "admin" || (viewer?.role === "contributor" && change?.stagedBy === viewer?.id);
+  // Compound values (a group's children, a collection's items, a
+  // dependent choice's child) are newline-joined — editing those means
+  // replacing several discrete things at once, which needs its own UI
+  // this doesn't have yet. Simple/choice settings only, for now.
+  const isSimpleValue = !entry.values.some((v) => v.includes("\n"));
+  const current = entry.values[0] ?? "";
 
   return (
     <DrawerShell
@@ -67,7 +146,7 @@ function SettingDrawer({ entry, notes, onAddNote, onClose, change, onStage, onRe
 
       {entry.cspPath && <RefPath value={entry.cspPath} label={refLabel(entry.platform)} />}
 
-      {rec && change && (
+      {change && (
         <section className="rounded-md border border-teal-200 bg-teal-50 p-3">
           <div className="flex items-center gap-2">
             <Chip className="bg-white text-teal-700 ring-teal-200">{change.ready ? "Ready" : "Staged"}</Chip>
@@ -89,41 +168,21 @@ function SettingDrawer({ entry, notes, onAddNote, onClose, change, onStage, onRe
         </section>
       )}
 
-      {rec && !change && canStage && (
-        <section className="rounded-md border border-stone-200 p-3">
-          <div className="flex items-center gap-2">
-            <WarningCircle className="h-4 w-4 shrink-0 text-amber-500" />
-            <h3 className="text-sm font-semibold">Recommended change</h3>
-            <Chip className={"ml-auto " + SEVERITY_STYLE[rec.severity].chip}>{SEVERITY_STYLE[rec.severity].label}</Chip>
-          </div>
-          <div className="mt-3">
-            <Diff from={rec.current} to={rec.recommended} />
-          </div>
-          <p className="mt-3 text-xs leading-relaxed text-stone-600">{rec.why}</p>
-          <p className="mt-2 text-xs text-stone-400">Source: {rec.source}</p>
-          <button
-            onClick={onStage}
-            className="mt-3 rounded-md bg-teal-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-teal-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
-          >
-            Stage this change
-          </button>
-          <p className="mt-2 text-xs text-stone-400">
-            Staging doesn't touch the tenant — it just queues this for review. Deploying needs write-back, which isn't built yet.
-          </p>
-        </section>
-      )}
+      {!change && isSimpleValue && canStage && <EditValueSection current={current} rec={rec} onStage={onStage} />}
 
-      {rec && !change && !canStage && (
+      {!change && isSimpleValue && !canStage && (
         <p className="flex items-start gap-2 rounded-md border border-stone-200 bg-stone-50 p-3 text-xs leading-relaxed text-stone-600">
-          <WarningCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
-          Differs from the baseline. Ask a Contributor or Admin to stage the recommended change.
+          <PencilSimple className="mt-0.5 h-4 w-4 shrink-0 text-stone-400" />
+          {rec ? "Differs from the baseline. Ask a Contributor or Admin to change it." : "Ask a Contributor or Admin to change this."}
         </p>
       )}
 
-      {!rec && !entry.conflict && (
+      {!change && !isSimpleValue && (
         <p className="flex items-start gap-2 rounded-md border border-stone-200 bg-stone-50 p-3 text-xs leading-relaxed text-stone-600">
           <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-stone-400" />
-          Matches the baseline. Nothing to change.
+          {rec
+            ? "Differs from the baseline, but this is a compound setting (several values at once) — editing those isn't supported yet."
+            : "Compound setting — editing isn't supported yet."}
         </p>
       )}
 

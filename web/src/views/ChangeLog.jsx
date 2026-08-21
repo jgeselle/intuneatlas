@@ -86,7 +86,7 @@ function ChangeLog({ changes, onUpdateField, onRevert, viewer }) {
           <h1 className="text-xl font-semibold">Change log</h1>
           <p className="mt-1 text-sm text-stone-500">
             {list.length === 0
-              ? "Nothing staged yet. Apply a recommendation and it lands here for review."
+              ? "Nothing staged yet. Change a setting's value and it lands here for review."
               : ready + " of " + list.length + " ready. Reason and a reviewer are required before deploying."}
           </p>
         </div>
@@ -105,7 +105,7 @@ function ChangeLog({ changes, onUpdateField, onRevert, viewer }) {
           <Clock className="mx-auto h-6 w-6 text-stone-400" />
           <p className="mt-3 text-sm font-medium">Nothing staged</p>
           <p className="mx-auto mt-1 max-w-sm text-xs text-stone-500">
-            Open a recommendation and click "Stage this change" — it'll show up here for review.
+            Open a setting and click "Stage this change" — it'll show up here for review.
           </p>
         </div>
       ) : (

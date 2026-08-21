@@ -60,7 +60,17 @@ export interface StageChangeInput {
   to: string;
 }
 
-/** Only ever originates from an existing baseline recommendation — no freeform change creation. Replaces any existing staged change for the same key; restaging transfers ownership to whoever just restaged it, same as reason/reviewedBy resetting. `stagedBy` must be a stable id (Entra object ID), not a display name — see ViewerIdentity.id; `stagedByName` is display-only. */
+/**
+ * `to` can be any value the caller sends, not just an existing baseline
+ * recommendation's — this layer never enforced that restriction (it only
+ * ever lived in the web UI, which used to show "Stage this change" only
+ * next to a real recommendation). `ruleId` is `"manual"` for a freeform
+ * edit with no baseline rule behind it. Replaces any existing staged
+ * change for the same key; restaging transfers ownership to whoever just
+ * restaged it, same as reason/reviewedBy resetting. `stagedBy` must be a
+ * stable id (Entra object ID), not a display name — see ViewerIdentity.id;
+ * `stagedByName` is display-only.
+ */
 export function stageChange(input: StageChangeInput, stagedBy: string, stagedByName: string): StagedChange {
   const db = getDb();
   const now = new Date().toISOString();
