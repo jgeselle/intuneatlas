@@ -310,7 +310,7 @@ export default function App({ initialReport, session }) {
             // for ~800+ rows), which pushed the footer (sync control,
             // account menu) far down the page. Pin it to the viewport
             // instead, independent of main's height.
-            : "lg:sticky lg:top-0 lg:h-screen lg:self-start lg:overflow-y-auto")
+            : "lg:w-60 lg:sticky lg:top-0 lg:h-screen lg:self-start lg:overflow-y-auto")
         }
       >
         <div className="flex items-center gap-2.5 pl-[20px] pr-4 py-4">
