@@ -246,7 +246,7 @@ function HistorySection({ notes = [], onAdd, onDelete, readOnly = false, viewer,
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             rows={2}
-            placeholder={entries.length ? "Add to the history" : "Why is it set this way? Write it down for whoever looks next."}
+            placeholder="Add a note"
             className="w-full resize-none rounded-md border border-stone-300 bg-white p-2.5 text-xs placeholder-stone-400 focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600"
           />
           <button

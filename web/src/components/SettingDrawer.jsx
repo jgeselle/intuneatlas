@@ -90,7 +90,7 @@ function EditValueSection({ current, recs, onStage }) {
           value={reason}
           onChange={(e) => setReason(e.target.value)}
           rows={2}
-          placeholder="Why is this change needed?"
+          placeholder="Why?"
           className="mt-1 w-full resize-none rounded-md border border-stone-300 bg-white p-2 text-xs placeholder-stone-400 focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600"
         />
       </label>
@@ -102,9 +102,6 @@ function EditValueSection({ current, recs, onStage }) {
       >
         Stage this change
       </button>
-      <p className="mt-2 text-xs text-stone-400">
-        Staging doesn't touch the tenant — it just queues this for review. Deploying needs write-back, which isn't built yet.
-      </p>
     </section>
   );
 }
