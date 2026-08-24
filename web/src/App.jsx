@@ -272,7 +272,15 @@ export default function App({ initialReport, session }) {
     { id: "configuration", label: "Settings", icon: Sliders, count: settingIndex.length },
     { id: "compliance", label: "Compliance", icon: ShieldCheck, count: compliancePolicies.length },
     { id: "enrollment", label: "Enrollment", icon: DeviceMobile, count: enrollmentConfigurations.length },
-    { id: "recommendations", label: "Recommendations", icon: Lightbulb, count: settingIndex.filter((e) => e.rec).length },
+    {
+      id: "recommendations",
+      label: "Recommendations",
+      icon: Lightbulb,
+      // Matches Recommendations.jsx's own count exactly — one per
+      // (setting, recommendation) pair, not one per setting, since a
+      // setting can have several from different sources.
+      count: settingIndex.reduce((n, e) => n + e.recs.length, 0),
+    },
     { id: "changes", label: "Change log", icon: ListChecks, count: Object.keys(changes).length },
   ];
 
@@ -319,7 +327,7 @@ export default function App({ initialReport, session }) {
             onClick={toggleRailCollapsed}
             title={railCollapsed ? "Expand sidebar" : "Collapse sidebar"}
             aria-label={railCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-            className={"ml-auto hidden shrink-0 rounded-md p-1.5 text-teal-300 transition-opacity duration-150 hover:bg-teal-800 hover:text-teal-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300 lg:block " + railDim()}
+            className={"ml-auto hidden shrink-0 rounded-md p-1.5 text-teal-300 transition-opacity duration-150 hover:bg-teal-800 hover:text-teal-100 focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-300 lg:block " + railDim()}
           >
             <CaretDoubleLeft
               weight="bold"
@@ -337,7 +345,7 @@ export default function App({ initialReport, session }) {
                 key={n.id}
                 onClick={() => setView(n.id)}
                 className={
-                  "flex shrink-0 items-center gap-2 rounded-md py-2 pl-3 pr-3 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300 lg:w-full " +
+                  "flex shrink-0 items-center gap-2 rounded-md py-2 pl-3 pr-3 text-sm focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-300 lg:w-full " +
                   (active ? "bg-teal-800 font-medium text-white" : "text-teal-100 hover:bg-teal-800")
                 }
               >

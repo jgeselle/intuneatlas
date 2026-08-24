@@ -81,6 +81,7 @@ export function buildSettingIndex(policies: RawPolicy[]): SettingIndexEntry[] {
         sources: bucket.sources,
         conflict,
         state,
+        recs: [],
       };
     })
     .sort(

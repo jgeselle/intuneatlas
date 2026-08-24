@@ -5,47 +5,67 @@ import { Chip, Diff, RefPath, NoteThread, ValueDisplay, SourceRow } from "./bits
 import { STATE_STYLE, SEVERITY_STYLE } from "../lib/styles.js";
 import { platformLabel, refLabel } from "../lib/format.js";
 
+/** One baseline's opinion on this setting — several of these can coexist, possibly disagreeing. */
+function RecommendationCard({ rec, isSelected, onUse }) {
+  return (
+    <div className={"rounded-md border p-2.5 " + (isSelected ? "border-teal-300 bg-teal-50" : "border-stone-200")}>
+      <div className="flex items-center gap-2">
+        <WarningCircle className="h-4 w-4 shrink-0 text-amber-500" />
+        <span className="text-xs font-medium text-stone-500">{rec.source}</span>
+        <Chip className={"ml-auto " + SEVERITY_STYLE[rec.severity].chip}>{SEVERITY_STYLE[rec.severity].label}</Chip>
+      </div>
+      <p className="mt-1.5 text-xs leading-relaxed text-stone-600">{rec.why}</p>
+      <button
+        type="button"
+        onClick={onUse}
+        disabled={isSelected}
+        className="mt-1.5 text-xs font-medium text-teal-700 hover:underline focus:outline-none disabled:cursor-default disabled:text-teal-800 disabled:no-underline"
+      >
+        {isSelected ? `Using this value (${rec.recommended})` : `Use this value (${rec.recommended})`}
+      </button>
+    </div>
+  );
+}
+
 /**
  * Stage any new value, not just a baseline's recommended one — the
  * server never required a real rule id behind a staged change (only
  * that one be present at all), so this was always a frontend-only
- * restriction. Pre-fills from the baseline recommendation when there is
- * one, but it's editable either way; "Use recommended value" just
- * resets the field if you've typed over it.
+ * restriction. A setting can have zero, one, or several recommendations
+ * — different baselines (Microsoft's, a CIS benchmark, a house rules
+ * pack, ...) can each have their own opinion, and even disagree with
+ * each other — so this shows all of them and lets you pick, or type
+ * something else entirely. Which rule (if any) the staged change
+ * traces back to is derived from whether the current field value
+ * matches one of them, not tracked separately — free-typing over a
+ * picked recommendation correctly falls back to "manual".
  */
-function EditValueSection({ current, rec, onStage }) {
-  const [value, setValue] = useState(rec?.recommended ?? current);
+function EditValueSection({ current, recs, onStage }) {
+  const [value, setValue] = useState(recs[0]?.recommended ?? current);
   // A single-line input works fine for "Enabled"/"Not allowed." but not
   // for a long single string value (confirmed live: a 2,300-character
   // base64 blob) — genuinely simple (one value, not a group/collection),
   // just too long for one line.
   const isLong = current.length > 100 || value.length > 100;
+  const matchedRuleId = recs.find((r) => r.recommended === value)?.ruleId ?? "manual";
 
   return (
     <section className="rounded-md border border-stone-200 p-3">
-      {rec && (
-        <>
-          <div className="flex items-center gap-2">
-            <WarningCircle className="h-4 w-4 shrink-0 text-amber-500" />
-            <h3 className="text-sm font-semibold">Recommended change</h3>
-            <Chip className={"ml-auto " + SEVERITY_STYLE[rec.severity].chip}>{SEVERITY_STYLE[rec.severity].label}</Chip>
-          </div>
-          <p className="mt-2 text-xs leading-relaxed text-stone-600">{rec.why}</p>
-          <p className="mt-1 text-xs text-stone-400">Source: {rec.source}</p>
-          {value !== rec.recommended && (
-            <button
-              type="button"
-              onClick={() => setValue(rec.recommended)}
-              className="mt-2 text-xs font-medium text-teal-700 hover:underline focus:outline-none"
-            >
-              Use recommended value ({rec.recommended})
-            </button>
-          )}
-        </>
+      {recs.length > 0 && (
+        <div className="space-y-2">
+          {recs.map((rec) => (
+            <RecommendationCard
+              key={rec.ruleId}
+              rec={rec}
+              isSelected={value === rec.recommended}
+              onUse={() => setValue(rec.recommended)}
+            />
+          ))}
+        </div>
       )}
 
       <label className="mt-3 block">
-        <span className="text-xs font-medium text-stone-500">{rec ? "Value to stage" : "New value"}</span>
+        <span className="text-xs font-medium text-stone-500">{recs.length > 0 ? "Value to stage" : "New value"}</span>
         {isLong ? (
           <textarea
             value={value}
@@ -64,9 +84,9 @@ function EditValueSection({ current, rec, onStage }) {
       </label>
 
       <button
-        onClick={() => onStage(value, rec?.ruleId ?? "manual", current)}
+        onClick={() => onStage(value, matchedRuleId, current)}
         disabled={!value.trim() || value === current}
-        className="mt-3 rounded-md bg-teal-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-teal-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-400"
+        className="mt-3 rounded-md bg-teal-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-teal-700 focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500 disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-400"
       >
         Stage this change
       </button>
@@ -78,7 +98,7 @@ function EditValueSection({ current, rec, onStage }) {
 }
 
 function SettingDrawer({ entry, notes, onAddNote, onClose, change, onStage, onRevert, viewer }) {
-  const rec = entry.rec;
+  const recs = entry.recs;
   const canNote = viewer?.role === "contributor" || viewer?.role === "admin";
   const canStage = viewer?.role === "contributor" || viewer?.role === "admin";
   const canRevertThis = viewer?.role === "admin" || (viewer?.role === "contributor" && change?.stagedBy === viewer?.id);
@@ -159,7 +179,7 @@ function SettingDrawer({ entry, notes, onAddNote, onClose, change, onStage, onRe
           {canRevertThis && (
             <button
               onClick={() => onRevert(change.id)}
-              className="mt-3 inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-stone-600 ring-1 ring-inset ring-stone-300 hover:bg-white focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+              className="mt-3 inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-stone-600 ring-1 ring-inset ring-stone-300 hover:bg-white focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500"
             >
               <ArrowCounterClockwise className="h-3.5 w-3.5" />
               Revert
@@ -168,19 +188,19 @@ function SettingDrawer({ entry, notes, onAddNote, onClose, change, onStage, onRe
         </section>
       )}
 
-      {!change && isSimpleValue && canStage && <EditValueSection current={current} rec={rec} onStage={onStage} />}
+      {!change && isSimpleValue && canStage && <EditValueSection current={current} recs={recs} onStage={onStage} />}
 
       {!change && isSimpleValue && !canStage && (
         <p className="flex items-start gap-2 rounded-md border border-stone-200 bg-stone-50 p-3 text-xs leading-relaxed text-stone-600">
           <PencilSimple className="mt-0.5 h-4 w-4 shrink-0 text-stone-400" />
-          {rec ? "Differs from the baseline. Ask a Contributor or Admin to change it." : "Ask a Contributor or Admin to change this."}
+          {recs.length > 0 ? "Differs from the baseline. Ask a Contributor or Admin to change it." : "Ask a Contributor or Admin to change this."}
         </p>
       )}
 
       {!change && !isSimpleValue && (
         <p className="flex items-start gap-2 rounded-md border border-stone-200 bg-stone-50 p-3 text-xs leading-relaxed text-stone-600">
           <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-stone-400" />
-          {rec
+          {recs.length > 0
             ? "Differs from the baseline, but this is a compound setting (several values at once) — editing those isn't supported yet."
             : "Compound setting — editing isn't supported yet."}
         </p>

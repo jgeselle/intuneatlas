@@ -32,7 +32,7 @@ for (const file of readdirSync(FIXTURES_DIR).filter((f) => f.endsWith(".json")).
   });
 }
 
-test("applyBaselines: first matching rule wins when multiple rules target the same path+platform", () => {
+test("applyBaselines: every matching rule attaches its own recommendation — a setting can have several, from different sources", () => {
   const entries: SettingIndexEntry[] = [
     {
       key: "Require BitLocker::windows10",
@@ -44,6 +44,7 @@ test("applyBaselines: first matching rule wins when multiple rules target the sa
       sources: [],
       conflict: false,
       state: "Baseline",
+      recs: [],
     },
   ];
   const rules: BaselineRule[] = [
@@ -52,7 +53,33 @@ test("applyBaselines: first matching rule wins when multiple rules target the sa
   ];
 
   const [result] = applyBaselines(entries, rules);
-  assert.equal(result.rec?.ruleId, "first-rule");
+  assert.equal(result.recs.length, 2);
+  assert.deepEqual(result.recs.map((r) => r.ruleId), ["first-rule", "second-rule"]);
+  assert.deepEqual(result.recs.map((r) => r.source), ["A", "B"]);
+});
+
+test("applyBaselines: a rule that's already satisfied doesn't produce a recommendation, even alongside one that isn't", () => {
+  const entries: SettingIndexEntry[] = [
+    {
+      key: "Require BitLocker::windows10",
+      name: "Require BitLocker",
+      cspPath: "./x",
+      category: "Encryption",
+      platform: "windows10",
+      values: ["1"],
+      sources: [],
+      conflict: false,
+      state: "Baseline",
+      recs: [],
+    },
+  ];
+  const rules: BaselineRule[] = [
+    { id: "already-satisfied", name: "Satisfied", platform: "windows", path: "./x", expect: "1", severity: "critical", rationale: "ok", source: "A" },
+    { id: "still-failing", name: "Failing", platform: "windows", path: "./x", expect: "0", severity: "low", rationale: "conflicting rule", source: "B" },
+  ];
+
+  const [result] = applyBaselines(entries, rules);
+  assert.deepEqual(result.recs.map((r) => r.ruleId), ["still-failing"]);
 });
 
 test("applyBaselines: no rule at all for the path — entry passes through unchanged", () => {
@@ -67,6 +94,7 @@ test("applyBaselines: no rule at all for the path — entry passes through uncha
       sources: [],
       conflict: false,
       state: "Baseline",
+      recs: [],
     },
   ];
   const result = applyBaselines(entries, []);

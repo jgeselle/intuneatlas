@@ -29,14 +29,16 @@
     {
       "key": "Screen Lock Timeout::windows10",
       "state": "Below baseline",
-      "rec": {
-        "ruleId": "cis-lock-timeout",
-        "current": "1200",
-        "recommended": "900 or less",
-        "severity": "medium",
-        "why": "Idle unattended sessions should lock within 15 minutes.",
-        "source": "CIS Windows 10 Benchmark"
-      }
+      "recs": [
+        {
+          "ruleId": "cis-lock-timeout",
+          "current": "1200",
+          "recommended": "900 or less",
+          "severity": "medium",
+          "why": "Idle unattended sessions should lock within 15 minutes.",
+          "source": "CIS Windows 10 Benchmark"
+        }
+      ]
     }
   ]
 }

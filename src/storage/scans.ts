@@ -22,7 +22,7 @@ interface SettingsSnapshotRow {
   conflict: number;
   values_json: string;
   sources_json: string;
-  rec_json: string | null;
+  recs_json: string | null;
 }
 
 interface PolicySnapshotRow {
@@ -48,7 +48,7 @@ export function recordScan(report: ScanReport): void {
     const scanId = scanResult.lastInsertRowid;
 
     const insertSetting = db.prepare(`
-      INSERT INTO settings_snapshot (scan_id, key, name, csp_path, category, platform, state, conflict, values_json, sources_json, rec_json)
+      INSERT INTO settings_snapshot (scan_id, key, name, csp_path, category, platform, state, conflict, values_json, sources_json, recs_json)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     for (const e of report.settings) {
@@ -63,7 +63,7 @@ export function recordScan(report: ScanReport): void {
         e.conflict ? 1 : 0,
         JSON.stringify(e.values),
         JSON.stringify(e.sources),
-        e.rec ? JSON.stringify(e.rec) : null,
+        e.recs.length > 0 ? JSON.stringify(e.recs) : null,
       );
     }
 
@@ -96,7 +96,7 @@ export function getLatestScan(tenant?: string): ScanReport | undefined {
   if (!scan) return undefined;
 
   const settingRows = db
-    .prepare(`SELECT key, name, csp_path, category, platform, state, conflict, values_json, sources_json, rec_json FROM settings_snapshot WHERE scan_id = ?`)
+    .prepare(`SELECT key, name, csp_path, category, platform, state, conflict, values_json, sources_json, recs_json FROM settings_snapshot WHERE scan_id = ?`)
     .all(scan.id) as unknown as SettingsSnapshotRow[];
 
   const settings = settingRows.map((r) => ({
@@ -109,7 +109,7 @@ export function getLatestScan(tenant?: string): ScanReport | undefined {
     conflict: Boolean(r.conflict),
     values: JSON.parse(r.values_json),
     sources: JSON.parse(r.sources_json),
-    ...(r.rec_json ? { rec: JSON.parse(r.rec_json) } : {}),
+    recs: r.recs_json ? JSON.parse(r.recs_json) : [],
   }));
 
   const policyRows = db

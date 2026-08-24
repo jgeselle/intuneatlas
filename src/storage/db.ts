@@ -44,7 +44,7 @@ export function getDb(): DatabaseSync {
       conflict INTEGER NOT NULL,
       values_json TEXT NOT NULL,
       sources_json TEXT NOT NULL,
-      rec_json TEXT
+      recs_json TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_settings_snapshot_scan ON settings_snapshot(scan_id);
 
@@ -108,6 +108,15 @@ function migrate(db: DatabaseSync): void {
   const settingsColumns = db.prepare(`PRAGMA table_info(settings_snapshot)`).all() as Array<{ name: string }>;
   if (!settingsColumns.some((c) => c.name === "rec_json")) {
     db.exec(`ALTER TABLE settings_snapshot ADD COLUMN rec_json TEXT`);
+  }
+
+  // recs_json (plural) replaces rec_json: a setting can now carry several
+  // baseline recommendations (different sources), not just one. rec_json
+  // itself is left in place rather than dropped — SQLite column drops are
+  // more invasive than this project's "no migration framework" approach
+  // wants to take on for a column that just goes unused going forward.
+  if (!settingsColumns.some((c) => c.name === "recs_json")) {
+    db.exec(`ALTER TABLE settings_snapshot ADD COLUMN recs_json TEXT`);
   }
 
   const scanColumns = db.prepare(`PRAGMA table_info(scans)`).all() as Array<{ name: string }>;

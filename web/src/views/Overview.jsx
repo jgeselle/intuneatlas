@@ -6,8 +6,11 @@ import { platformLabel } from "../lib/format.js";
 function Overview({ settingIndex, compliancePolicies, enrollmentConfigurations, changes, onGo, onOpen }) {
   const conflicts = settingIndex.filter((e) => e.conflict).length;
   const undeployed = settingIndex.filter((e) => e.state === "Not deployed").length;
+  // One row per (setting, recommendation) — a setting can have several,
+  // from different sources, so this can list the same setting more than
+  // once if more than one baseline flags it.
   const recs = settingIndex
-    .filter((e) => e.rec)
+    .flatMap((e) => e.recs.map((rec) => ({ entry: e, rec })))
     .sort((a, b) => SEVERITY_STYLE[a.rec.severity].rank - SEVERITY_STYLE[b.rec.severity].rank);
   const complianceDeployed = compliancePolicies.filter((p) => p.deployed).length;
   const enrollmentDeployed = enrollmentConfigurations.filter((p) => p.deployed).length;
@@ -44,7 +47,7 @@ function Overview({ settingIndex, compliancePolicies, enrollmentConfigurations, 
             <h2 className="text-sm font-semibold">Fix these first</h2>
             <button
               onClick={() => onGo("recommendations")}
-              className="rounded text-xs font-medium text-teal-600 hover:text-teal-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+              className="rounded text-xs font-medium text-teal-600 hover:text-teal-700 focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500"
             >
               {recs.length > 0 ? "See all " + recs.length : "Recommendations"}
             </button>
@@ -57,8 +60,8 @@ function Overview({ settingIndex, compliancePolicies, enrollmentConfigurations, 
             </div>
           ) : (
             <ul className="divide-y divide-stone-100">
-              {recs.slice(0, 5).map((e) => (
-                <li key={e.key}>
+              {recs.slice(0, 5).map(({ entry: e, rec }) => (
+                <li key={e.key + "::" + rec.ruleId}>
                   <button
                     onClick={() => onOpen(e.key)}
                     className="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-stone-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-teal-500"
@@ -66,10 +69,10 @@ function Overview({ settingIndex, compliancePolicies, enrollmentConfigurations, 
                     <span className="min-w-0 flex-1">
                       <span className="block text-sm font-medium">{e.name}</span>
                       <span className="mt-0.5 block truncate text-xs text-stone-500">
-                        {platformLabel(e.platform)} · {e.category}
+                        {platformLabel(e.platform)} · {e.category} · {rec.source}
                       </span>
                     </span>
-                    <Chip className={SEVERITY_STYLE[e.rec.severity].chip}>{SEVERITY_STYLE[e.rec.severity].label}</Chip>
+                    <Chip className={SEVERITY_STYLE[rec.severity].chip}>{SEVERITY_STYLE[rec.severity].label}</Chip>
                   </button>
                 </li>
               ))}

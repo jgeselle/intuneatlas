@@ -64,5 +64,12 @@ export interface SettingIndexEntry {
   sources: SettingIndexSource[];
   conflict: boolean;
   state: SettingIndexState;
-  rec?: SettingRecommendation;
+  /**
+   * Zero, one, or many — a setting can have no baseline opinion, one, or
+   * several from different sources (Microsoft's security baseline, a CIS
+   * benchmark, a house rules pack, ...) that may even disagree with each
+   * other. Always a real array, never omitted — buildSettingIndex sets it
+   * to [] up front, applyBaselines only ever pushes into it.
+   */
+  recs: SettingRecommendation[];
 }
