@@ -234,17 +234,17 @@ export default function App({ initialReport, session }) {
   // Not just for applying a baseline recommendation — ruleId is "manual"
   // for a freeform edit with no baseline rule behind it. The server never
   // required a real rule id; this was always a frontend-only constraint.
-  async function stageChange(entry, { ruleId, from, to }) {
+  async function stageChange(entry, { ruleId, from, to, reason }) {
     try {
       const res = await fetch("/api/changes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ targetKey: entry.key, targetName: entry.name, ruleId, from, to }),
+        body: JSON.stringify({ targetKey: entry.key, targetName: entry.name, ruleId, from, to, reason }),
       });
       const change = await res.json();
       if (!res.ok) throw new Error(change.error || "Couldn't stage the change");
       setChanges((c) => ({ ...c, [entry.key]: change }));
-      flash("Change staged. Add a reason and reviewer before it's ready.");
+      flash(reason?.trim() ? "Change staged. Add a reviewer before it's ready." : "Change staged. Add a reason and reviewer before it's ready.");
     } catch (err) {
       flash(err.message);
     }
@@ -478,7 +478,7 @@ export default function App({ initialReport, session }) {
           onAddNote={(text) => addNote(openSetting.key, text)}
           onClose={() => setOpen(null)}
           change={changes[openSetting.key]}
-          onStage={(to, ruleId, from) => stageChange(openSetting, { ruleId, from, to })}
+          onStage={(to, ruleId, from, reason) => stageChange(openSetting, { ruleId, from, to, reason })}
           onRevert={(id) => revertEntryChange(id, openSetting.key)}
           viewer={session}
         />

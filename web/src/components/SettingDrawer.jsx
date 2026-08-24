@@ -42,6 +42,7 @@ function RecommendationCard({ rec, isSelected, onUse }) {
  */
 function EditValueSection({ current, recs, onStage }) {
   const [value, setValue] = useState(recs[0]?.recommended ?? current);
+  const [reason, setReason] = useState("");
   // A single-line input works fine for "Enabled"/"Not allowed." but not
   // for a long single string value (confirmed live: a 2,300-character
   // base64 blob) — genuinely simple (one value, not a group/collection),
@@ -83,8 +84,19 @@ function EditValueSection({ current, recs, onStage }) {
         )}
       </label>
 
+      <label className="mt-3 block">
+        <span className="text-xs font-medium text-stone-500">Reason (optional)</span>
+        <textarea
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          rows={2}
+          placeholder="Why is this change needed?"
+          className="mt-1 w-full resize-none rounded-md border border-stone-300 bg-white p-2 text-xs placeholder-stone-400 focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600"
+        />
+      </label>
+
       <button
-        onClick={() => onStage(value, matchedRuleId, current)}
+        onClick={() => onStage(value, matchedRuleId, current, reason)}
         disabled={!value.trim() || value === current}
         className="mt-3 rounded-md bg-teal-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-teal-700 focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500 disabled:bg-stone-200 disabled:text-stone-400"
       >

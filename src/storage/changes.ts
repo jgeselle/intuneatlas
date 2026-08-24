@@ -58,6 +58,8 @@ export interface StageChangeInput {
   ruleId: string;
   from: string;
   to: string;
+  /** Optional — can be set right away instead of only via the later reason/reviewer edit. */
+  reason?: string;
 }
 
 /**
@@ -67,30 +69,32 @@ export interface StageChangeInput {
  * next to a real recommendation). `ruleId` is `"manual"` for a freeform
  * edit with no baseline rule behind it. Replaces any existing staged
  * change for the same key; restaging transfers ownership to whoever just
- * restaged it, same as reason/reviewedBy resetting. `stagedBy` must be a
- * stable id (Entra object ID), not a display name — see ViewerIdentity.id;
- * `stagedByName` is display-only.
+ * restaged it. `reason` resets to whatever (if anything) was passed this
+ * time — `reviewedBy` always resets, since a fresh restage needs fresh
+ * review regardless. `stagedBy` must be a stable id (Entra object ID), not
+ * a display name — see ViewerIdentity.id; `stagedByName` is display-only.
  */
 export function stageChange(input: StageChangeInput, stagedBy: string, stagedByName: string): StagedChange {
   const db = getDb();
   const now = new Date().toISOString();
+  const reason = input.reason ?? "";
 
   db.prepare(
     `
-    INSERT INTO staged_changes (target_key, target_name, rule_id, from_value, to_value, staged_by, staged_by_name, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO staged_changes (target_key, target_name, rule_id, from_value, to_value, reason, staged_by, staged_by_name, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(target_key) DO UPDATE SET
       target_name = excluded.target_name,
       rule_id = excluded.rule_id,
       from_value = excluded.from_value,
       to_value = excluded.to_value,
-      reason = '',
+      reason = excluded.reason,
       reviewed_by = '',
       staged_by = excluded.staged_by,
       staged_by_name = excluded.staged_by_name,
       updated_at = excluded.updated_at
   `,
-  ).run(input.targetKey, input.targetName, input.ruleId, input.from, input.to, stagedBy, stagedByName, now, now);
+  ).run(input.targetKey, input.targetName, input.ruleId, input.from, input.to, reason, stagedBy, stagedByName, now, now);
 
   const row = db.prepare(`SELECT * FROM staged_changes WHERE target_key = ?`).get(input.targetKey) as unknown as ChangeRow;
   return toStagedChange(row);

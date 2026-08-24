@@ -36,6 +36,7 @@ export interface StageChangeRequestBody {
   ruleId: string;
   from: string;
   to: string;
+  reason?: string;
 }
 
 export interface UpdateChangeRequestBody {
