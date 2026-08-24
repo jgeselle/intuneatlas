@@ -90,6 +90,17 @@ export function getDb(): DatabaseSync {
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
     );
+
+    -- Which baseline packs (source/name+version folders under baselines/)
+    -- are active, per signed-in viewer — not tenant data, a personal
+    -- preference. Row absence means "never customized" (defaults to every
+    -- pack active, today's behavior); an explicit empty array means
+    -- "deliberately chose none".
+    CREATE TABLE IF NOT EXISTS baseline_selections (
+      viewer_id TEXT PRIMARY KEY,
+      selected_json TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
   `);
 
   migrate(db);

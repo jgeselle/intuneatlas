@@ -1,5 +1,5 @@
 import { readdir, readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join, relative, sep } from "node:path";
 import { load } from "js-yaml";
 import { resolveAppPath } from "../packagedPaths.js";
 import type { BaselineRule } from "./types.js";
@@ -20,7 +20,7 @@ const REQUIRED_FIELDS: Array<keyof BaselineRule> = [
 ];
 const SEVERITIES = new Set(["critical", "high", "medium", "low"]);
 
-/** Recursively reads every *.yml/*.yaml file under `dir` and collects their rules. */
+/** Recursively reads every *.yml/*.yaml file under `dir` and collects their rules, tagging each with which pack it came from. */
 export async function loadBaselines(dir: string): Promise<BaselineRule[]> {
   const files = await findYamlFiles(dir);
   const rules: BaselineRule[] = [];
@@ -31,10 +31,27 @@ export async function loadBaselines(dir: string): Promise<BaselineRule[]> {
     if (!Array.isArray(parsed)) {
       throw new Error(`${file}: expected a YAML list of rules at the top level.`);
     }
-    parsed.forEach((rule, i) => rules.push(validateRule(rule, `${file} (rule #${i + 1})`)));
+    const pack = packForFile(dir, file);
+    parsed.forEach((rule, i) => rules.push({ ...validateRule(rule, `${file} (rule #${i + 1})`), pack }));
   }
 
   return rules;
+}
+
+/**
+ * A rule's pack is its file's first two path segments under `dir` — e.g.
+ * baselines/cis/windows-11-benchmark-l1/windows/quality-update.yml ->
+ * "cis/windows-11-benchmark-l1". Always forward-slash-joined regardless
+ * of platform, so it's a stable identifier to persist and compare
+ * against (see src/storage/baselineSelections.ts), not a real filesystem
+ * path. A file sitting directly under `dir` with no subfolder at all
+ * gets "" — a catch-all pack for anything that doesn't follow the
+ * source/name-version convention.
+ */
+function packForFile(dir: string, file: string): string {
+  const rel = relative(dir, dirname(file));
+  const segments = rel.split(sep).filter(Boolean);
+  return segments.slice(0, 2).join("/");
 }
 
 async function findYamlFiles(dir: string): Promise<string[]> {
@@ -53,7 +70,7 @@ async function findYamlFiles(dir: string): Promise<string[]> {
   return files;
 }
 
-function validateRule(rule: unknown, context: string): BaselineRule {
+function validateRule(rule: unknown, context: string): Omit<BaselineRule, "pack"> {
   if (typeof rule !== "object" || rule === null) {
     throw new Error(`${context}: rule must be an object.`);
   }
@@ -75,5 +92,5 @@ function validateRule(rule: unknown, context: string): BaselineRule {
     throw new Error(`${context}: expect must be a string, or an object with min/max.`);
   }
 
-  return r as unknown as BaselineRule;
+  return r as unknown as Omit<BaselineRule, "pack">;
 }

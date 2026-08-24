@@ -168,9 +168,52 @@ test("loadBaselines: the real starter pack shipped in the repo actually loads", 
   for (const rule of rules) {
     assert.ok(rule.id, "every shipped rule needs a non-empty id");
     assert.ok(rule.path.startsWith("./"), `rule "${rule.id}"'s path should be a CSP path starting with "./"`);
+    assert.ok(rule.pack, `rule "${rule.id}" should have a non-empty pack — every shipped rule follows the source/name-version convention`);
   }
   // ids are looked up by baseline recommendation, tenant-wide — a
   // duplicate would silently shadow one of the two rules.
   const ids = rules.map((r) => r.id);
   assert.deepEqual(ids, [...new Set(ids)], "shipped rule ids must be unique");
+});
+
+test("loadBaselines: pack is the file's first two path segments, forward-slash-joined regardless of platform", async () => {
+  await withTempDir(
+    {
+      "cis/windows-11-benchmark-l1/windows/rule.yml": `
+- id: r1
+  name: R1
+  platform: windows
+  path: ./x
+  expect: "1"
+  severity: high
+  rationale: why
+  source: CIS
+`,
+    },
+    async (dir) => {
+      const [rule] = await loadBaselines(dir);
+      assert.equal(rule.pack, "cis/windows-11-benchmark-l1");
+    },
+  );
+});
+
+test("loadBaselines: a file sitting directly under the baselines root gets an empty pack, not an error", async () => {
+  await withTempDir(
+    {
+      "house-rule.yml": `
+- id: r1
+  name: R1
+  platform: windows
+  path: ./x
+  expect: "1"
+  severity: low
+  rationale: why
+  source: Internal
+`,
+    },
+    async (dir) => {
+      const [rule] = await loadBaselines(dir);
+      assert.equal(rule.pack, "");
+    },
+  );
 });

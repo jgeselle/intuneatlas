@@ -48,8 +48,8 @@ test("applyBaselines: every matching rule attaches its own recommendation — a 
     },
   ];
   const rules: BaselineRule[] = [
-    { id: "first-rule", name: "First", platform: "windows", path: "./x", expect: "1", severity: "critical", rationale: "first", source: "A" },
-    { id: "second-rule", name: "Second", platform: "windows", path: "./x", expect: "1", severity: "low", rationale: "second", source: "B" },
+    { id: "first-rule", name: "First", platform: "windows", path: "./x", expect: "1", severity: "critical", rationale: "first", source: "A", pack: "test" },
+    { id: "second-rule", name: "Second", platform: "windows", path: "./x", expect: "1", severity: "low", rationale: "second", source: "B", pack: "test" },
   ];
 
   const [result] = applyBaselines(entries, rules);
@@ -74,8 +74,8 @@ test("applyBaselines: a rule that's already satisfied doesn't produce a recommen
     },
   ];
   const rules: BaselineRule[] = [
-    { id: "already-satisfied", name: "Satisfied", platform: "windows", path: "./x", expect: "1", severity: "critical", rationale: "ok", source: "A" },
-    { id: "still-failing", name: "Failing", platform: "windows", path: "./x", expect: "0", severity: "low", rationale: "conflicting rule", source: "B" },
+    { id: "already-satisfied", name: "Satisfied", platform: "windows", path: "./x", expect: "1", severity: "critical", rationale: "ok", source: "A", pack: "test" },
+    { id: "still-failing", name: "Failing", platform: "windows", path: "./x", expect: "0", severity: "low", rationale: "conflicting rule", source: "B", pack: "test" },
   ];
 
   const [result] = applyBaselines(entries, rules);
@@ -103,7 +103,7 @@ test("applyBaselines: no rule at all for the path — entry passes through uncha
 
 test("findUncoveredEntries: a rule whose path matches nothing in the tenant produces one synthetic entry", () => {
   const rules: BaselineRule[] = [
-    { id: "gap-rule", name: "BitLocker recovery key backup", platform: "windows", path: "./nowhere", expect: "1", severity: "high", rationale: "why", source: "CIS" },
+    { id: "gap-rule", name: "BitLocker recovery key backup", platform: "windows", path: "./nowhere", expect: "1", severity: "high", rationale: "why", source: "CIS", pack: "test" },
   ];
 
   const [result] = findUncoveredEntries([], rules);
@@ -132,7 +132,7 @@ test("findUncoveredEntries: a real entry at that path — in ANY state — count
     recs: [],
   });
   const rules: BaselineRule[] = [
-    { id: "r", name: "R", platform: "windows", path: "./x", expect: "1", severity: "low", rationale: "why", source: "A" },
+    { id: "r", name: "R", platform: "windows", path: "./x", expect: "1", severity: "low", rationale: "why", source: "A", pack: "test" },
   ];
 
   for (const state of ["Conflict", "Not deployed", "Below baseline", "Baseline"] as const) {
@@ -142,8 +142,8 @@ test("findUncoveredEntries: a real entry at that path — in ANY state — count
 
 test("findUncoveredEntries: several uncovered rules sharing the same path+platform merge into one entry", () => {
   const rules: BaselineRule[] = [
-    { id: "r1", name: "First", platform: "windows", path: "./x", expect: "1", severity: "high", rationale: "a", source: "CIS" },
-    { id: "r2", name: "Second", platform: "windows", path: "./x", expect: "1", severity: "low", rationale: "b", source: "Microsoft" },
+    { id: "r1", name: "First", platform: "windows", path: "./x", expect: "1", severity: "high", rationale: "a", source: "CIS", pack: "test" },
+    { id: "r2", name: "Second", platform: "windows", path: "./x", expect: "1", severity: "low", rationale: "b", source: "Microsoft", pack: "test" },
   ];
 
   const result = findUncoveredEntries([], rules);
@@ -168,7 +168,7 @@ test("findUncoveredEntries: an entry on a different platform doesn't cover a rul
     },
   ];
   const rules: BaselineRule[] = [
-    { id: "r", name: "R", platform: "windows", path: "./x", expect: "1", severity: "low", rationale: "why", source: "A" },
+    { id: "r", name: "R", platform: "windows", path: "./x", expect: "1", severity: "low", rationale: "why", source: "A", pack: "test" },
   ];
 
   const result = findUncoveredEntries(entries, rules);

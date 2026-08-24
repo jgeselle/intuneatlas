@@ -86,16 +86,23 @@ export async function buildReport(token: string, flow: string, tenant: string): 
  * against an empty string and misclassify it as "Below baseline" instead
  * of leaving coverage gaps for findUncoveredEntries below to recompute
  * fresh.
+ *
+ * `activePacks` narrows which loaded rules actually get evaluated, by
+ * BaselineRule.pack — undefined means every loaded rule is active
+ * (nothing customized yet); an explicit array (even empty) is filtered to
+ * exactly those packs. Lets a per-viewer baseline selection change what
+ * gets judged without touching which rules were loaded at all.
  */
-export function applyBaselinesToReport(report: ScanReport, baselineRules: BaselineRule[]): ScanReport {
+export function applyBaselinesToReport(report: ScanReport, baselineRules: BaselineRule[], activePacks?: string[]): ScanReport {
+  const activeRules = activePacks ? baselineRules.filter((r) => activePacks.includes(r.pack)) : baselineRules;
   const rawSettings = report.settings.filter((e) => e.state !== "Not covered");
-  const evaluated = applyBaselines(rawSettings, baselineRules);
+  const evaluated = applyBaselines(rawSettings, activeRules);
   // Synthetic "Not covered" entries for baseline rules with no matching
   // setting anywhere in the tenant — appended for display only, after
   // belowBaselineCount is computed from the real scanned entries, so that
   // count stays truthful to what was actually found in the tenant rather
   // than what the baseline merely wishes existed.
-  const settingsWithGaps = [...evaluated, ...findUncoveredEntries(evaluated, baselineRules)];
+  const settingsWithGaps = [...evaluated, ...findUncoveredEntries(evaluated, activeRules)];
 
   return {
     ...report,

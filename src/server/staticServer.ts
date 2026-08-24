@@ -78,6 +78,17 @@ export interface StartServerOptions {
   onRevertChange?: (id: number) => string | undefined;
   /** Looks up who staged a change, for the editChange/revertChange ownership check — undefined if the id doesn't exist. */
   getChangeById?: (id: number) => { stagedBy: string } | undefined;
+  /**
+   * `report` (and whatever onScanRequest returns) is raw — no baseline
+   * judgment applied yet. This judges it for one specific viewer, using
+   * their own active-baseline selection, every time a report is actually
+   * served (initial page load, after a scan, after the selection itself
+   * changes) — never stored back, so the same held report can be judged
+   * differently per viewer without ever needing a rescan.
+   */
+  onEvaluateForViewer?: (report: unknown, viewer: ViewerIdentity) => Promise<unknown>;
+  /** Persists which baseline packs are active for this viewer — null means "every pack", the default before anyone customizes it. */
+  onSetBaselineSelection?: (viewerId: string, packs: string[] | null) => void;
 }
 
 export async function startServer(options: StartServerOptions): Promise<{ url: string; server: Server }> {
@@ -161,9 +172,29 @@ export async function startServer(options: StartServerOptions): Promise<{ url: s
       }
 
       if (req.method === "POST" && req.url === "/api/scan") {
-        await handleScanRequest(req, res, options.onScanRequest, session, viewer, (report) => {
-          currentReport = report;
-        });
+        await handleScanRequest(
+          req,
+          res,
+          options.onScanRequest,
+          options.onEvaluateForViewer,
+          session,
+          viewer,
+          (report) => {
+            currentReport = report;
+          },
+        );
+        return;
+      }
+
+      if (req.method === "PUT" && req.url === "/api/baseline-selection") {
+        await handleSetBaselineSelection(
+          req,
+          res,
+          options.onSetBaselineSelection,
+          options.onEvaluateForViewer,
+          viewer,
+          () => currentReport,
+        );
         return;
       }
 
@@ -201,7 +232,7 @@ export async function startServer(options: StartServerOptions): Promise<{ url: s
         return;
       }
 
-      await serveStatic(req, res, () => currentReport, viewer);
+      await serveStatic(req, res, () => currentReport, viewer, options.onEvaluateForViewer);
     } catch (err) {
       // serveStatic's readFile throwing ENOENT for a genuinely missing
       // static asset is the routine, expected case this 404 exists for —
@@ -302,6 +333,7 @@ async function serveStatic(
   res: ServerResponse,
   getReport: () => unknown,
   viewer: ViewerIdentity,
+  onEvaluateForViewer: StartServerOptions["onEvaluateForViewer"],
 ): Promise<void> {
   const dist = webDist();
   const requestPath = (req.url ?? "/").split("?")[0];
@@ -314,7 +346,8 @@ async function serveStatic(
     // A signed-in-but-unassigned viewer (no Entra App Role) still gets the
     // SPA shell — it needs to load to render the "no role assigned"
     // screen — but never the actual report contents.
-    const report = can(viewer.role, "view") ? getReport() : null;
+    const raw = can(viewer.role, "view") ? getReport() : null;
+    const report = raw && onEvaluateForViewer ? await onEvaluateForViewer(raw, viewer) : raw;
     const injectedScript =
       `<script>window.__INTUNEATLAS_REPORT__ = ${jsonForScriptTag(report)};` +
       `window.__INTUNEATLAS_SESSION__ = ${jsonForScriptTag(viewer)};</script>`;
@@ -329,6 +362,7 @@ async function handleScanRequest(
   req: IncomingMessage,
   res: ServerResponse,
   onScanRequest: StartServerOptions["onScanRequest"],
+  onEvaluateForViewer: StartServerOptions["onEvaluateForViewer"],
   session: WebSessionManager,
   viewer: ViewerIdentity,
   setReport: (report: unknown) => void,
@@ -352,8 +386,45 @@ async function handleScanRequest(
       return;
     }
 
-    const report = await onScanRequest(graphToken);
-    setReport(report);
+    // What's stored (and what every OTHER viewer's own next request judges
+    // for themselves) is the raw report — only the response to whoever
+    // triggered this scan gets judged right away, against their own active
+    // baseline selection.
+    const rawReport = await onScanRequest(graphToken);
+    setReport(rawReport);
+    const report = onEvaluateForViewer ? await onEvaluateForViewer(rawReport, viewer) : rawReport;
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify(report));
+  } catch (err) {
+    sendApiError(res, err);
+  }
+}
+
+async function handleSetBaselineSelection(
+  req: IncomingMessage,
+  res: ServerResponse,
+  onSetBaselineSelection: StartServerOptions["onSetBaselineSelection"],
+  onEvaluateForViewer: StartServerOptions["onEvaluateForViewer"],
+  viewer: ViewerIdentity,
+  getReport: () => unknown,
+): Promise<void> {
+  if (!onSetBaselineSelection || !onEvaluateForViewer) {
+    res.writeHead(501, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Baseline selection isn't available from this session." }));
+    return;
+  }
+
+  try {
+    const body = JSON.parse(await readRequestBody(req)) as { packs: string[] | null };
+    if (body.packs !== null && !Array.isArray(body.packs)) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "packs must be an array of pack paths, or null for every pack" }));
+      return;
+    }
+
+    onSetBaselineSelection(viewer.id, body.packs);
+    const raw = getReport();
+    const report = raw ? await onEvaluateForViewer(raw, viewer) : null;
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify(report));
   } catch (err) {

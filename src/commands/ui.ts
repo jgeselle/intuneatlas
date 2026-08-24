@@ -3,10 +3,18 @@ import open from "open";
 import { resolveClientId } from "../auth/index.js";
 import { createWebSessionManager } from "../auth/webSession.js";
 import { defaultBaselinesDir, loadBaselines } from "../baselines/loader.js";
+import { listBaselinePacks, type BaselinePack } from "../baselines/packs.js";
 import { applyBaselinesToReport, buildReport, type ScanReport } from "../scan/report.js";
-import { LOOPBACK_HOSTS, startServer, type StageChangeRequestBody, type UpdateChangeRequestBody } from "../server/staticServer.js";
+import {
+  LOOPBACK_HOSTS,
+  startServer,
+  type StageChangeRequestBody,
+  type UpdateChangeRequestBody,
+} from "../server/staticServer.js";
+import type { ViewerIdentity } from "../auth/webSession.js";
 import { addNote, deleteNote, getAllNotes, getNoteById, type Note } from "../storage/notes.js";
 import { getLatestScan, recordScan } from "../storage/scans.js";
+import { clearSelectedPacks, getSelectedPacks, setSelectedPacks } from "../storage/baselineSelections.js";
 import {
   getAllChanges,
   getChangeById,
@@ -26,7 +34,10 @@ export interface UiOptions {
   host?: string;
 }
 
-type EnrichedReport = ScanReport & { notes: Record<string, Note[]>; changes: Record<string, StagedChange> };
+/** Raw — settings carry no baseline judgment yet, notes/changes are tenant-wide and shared. */
+type RawEnrichedReport = ScanReport & { notes: Record<string, Note[]>; changes: Record<string, StagedChange> };
+/** What actually gets served — judged for one specific viewer's own active-baseline selection. */
+type ViewerReport = RawEnrichedReport & { baselinePacks: BaselinePack[]; activeBaselinePacks: string[] | null };
 
 export async function runUi(options: UiOptions): Promise<void> {
   const host = options.host ?? "127.0.0.1";
@@ -48,10 +59,18 @@ export async function runUi(options: UiOptions): Promise<void> {
   const baselinePath = options.baseline;
 
   const { url } = await startServer({
-    report: staticReport ? enrichReport(await evaluateAgainstActiveBaselines(staticReport, baselinePath)) : null,
+    // Raw — never pre-evaluated. Judging it for the specific viewer loading
+    // the page happens in onEvaluateForViewer below, every time, so it's
+    // never stale relative to whatever that viewer's own selection is.
+    report: staticReport ? enrichReport(staticReport) : null,
     host,
     session,
-    onScanRequest: async (graphToken) => enrichReport(await runViewerTriggeredScan(tenantId, baselinePath, graphToken)),
+    onScanRequest: async (graphToken) => enrichReport(await runViewerTriggeredScan(tenantId, graphToken)),
+    onEvaluateForViewer: (report, viewer) => evaluateForViewer(report as RawEnrichedReport, viewer, baselinePath),
+    onSetBaselineSelection: (viewerId, packs) => {
+      if (packs === null) clearSelectedPacks(viewerId);
+      else setSelectedPacks(viewerId, packs);
+    },
     onNoteRequest: (body, viewer) => addNote(body.targetKey, viewer.id, viewer.name, body.text),
     onDeleteNote: (id: number) => deleteNote(id),
     getNoteById: (id: number) => getNoteById(id),
@@ -85,7 +104,7 @@ export async function runUi(options: UiOptions): Promise<void> {
   }
 }
 
-function enrichReport(report: ScanReport): EnrichedReport {
+function enrichReport(report: ScanReport): RawEnrichedReport {
   return { ...report, notes: getAllNotes(), changes: getAllChanges() };
 }
 
@@ -98,16 +117,36 @@ async function resolveStaticReport(options: UiOptions): Promise<ScanReport | und
   return getLatestScan(options.tenant);
 }
 
-async function runViewerTriggeredScan(tenantId: string, baselinePath: string | undefined, graphToken: string): Promise<ScanReport> {
+async function runViewerTriggeredScan(tenantId: string, graphToken: string): Promise<ScanReport> {
   // recordScan persists only the raw report — evaluating against a
   // different baseline selection later never needs another scan.
   const rawReport = await buildReport(graphToken, "interactive-browser", tenantId);
   recordScan(rawReport);
-  return evaluateAgainstActiveBaselines(rawReport, baselinePath);
+  return rawReport;
 }
 
-/** Reloaded fresh each call — baselines are just YAML files, so an edit to one takes effect on the very next scan or page load, no restart needed. */
-async function evaluateAgainstActiveBaselines(report: ScanReport, baselinePath: string | undefined): Promise<ScanReport> {
+/**
+ * Judges a raw (but notes/changes-enriched) report for one specific
+ * viewer: loads whatever baseline rules currently exist on disk (fresh —
+ * baselines are just YAML files, an edit takes effect on the very next
+ * request, no restart needed), looks up that viewer's own active-pack
+ * selection (undefined = never customized = every pack active), and
+ * attaches the full discovered pack list too so the picker always has
+ * something to show regardless of what's currently selected.
+ */
+async function evaluateForViewer(
+  report: RawEnrichedReport,
+  viewer: ViewerIdentity,
+  baselinePath: string | undefined,
+): Promise<ViewerReport> {
   const baselineRules = await loadBaselines(baselinePath ?? defaultBaselinesDir());
-  return applyBaselinesToReport(report, baselineRules);
+  const activePacks = getSelectedPacks(viewer.id);
+  const evaluated = applyBaselinesToReport(report, baselineRules, activePacks);
+  return {
+    ...evaluated,
+    notes: report.notes,
+    changes: report.changes,
+    baselinePacks: listBaselinePacks(baselineRules),
+    activeBaselinePacks: activePacks ?? null,
+  };
 }

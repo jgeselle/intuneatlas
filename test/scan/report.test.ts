@@ -42,6 +42,7 @@ const tamperRule: BaselineRule = {
   severity: "critical",
   rationale: "why",
   source: "Microsoft",
+  pack: "microsoft/defender-hardening-guidance",
 };
 
 const bitlockerRule: BaselineRule = {
@@ -53,6 +54,7 @@ const bitlockerRule: BaselineRule = {
   severity: "high",
   rationale: "why",
   source: "CIS",
+  pack: "cis/windows-11-benchmark-l1",
 };
 
 test("applyBaselinesToReport: judges a raw report, leaving raw tenant facts untouched", () => {
@@ -105,4 +107,25 @@ test("applyBaselinesToReport: re-running on an already-evaluated report doesn't 
   assert.equal(uncovered!.state, "Not covered");
   assert.equal(twiceEvaluated.settings.filter((e) => e.state === "Below baseline").length, 1);
   assert.equal(twiceEvaluated.settings.length, 2);
+});
+
+test("applyBaselinesToReport: activePacks narrows which loaded rules actually get evaluated", () => {
+  const raw = makeRawReport([tamperEntry]);
+
+  // Both packs active (or undefined -- everything active): tamper fails, bitlocker is a gap.
+  const both = applyBaselinesToReport(raw, [tamperRule, bitlockerRule], ["microsoft/defender-hardening-guidance", "cis/windows-11-benchmark-l1"]);
+  assert.equal(both.settings.length, 2);
+  assert.equal(both.belowBaselineCount, 1);
+
+  // Only the CIS pack active: tamper's own (Microsoft) rule no longer applies at all,
+  // so it passes straight through as "Baseline" -- only the BitLocker gap shows.
+  const cisOnly = applyBaselinesToReport(raw, [tamperRule, bitlockerRule], ["cis/windows-11-benchmark-l1"]);
+  assert.equal(cisOnly.belowBaselineCount, 0);
+  assert.equal(cisOnly.settings.find((e) => e.key === "tamper::windows10")!.state, "Baseline");
+  assert.equal(cisOnly.settings.filter((e) => e.state === "Not covered").length, 1);
+
+  // Neither pack active: no judgment at all, no gaps.
+  const none = applyBaselinesToReport(raw, [tamperRule, bitlockerRule], []);
+  assert.equal(none.settings.length, 1);
+  assert.equal(none.settings[0].state, "Baseline");
 });
