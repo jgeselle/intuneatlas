@@ -10,3 +10,7 @@ NEXT_STEPS.txt
 
 # Real policy exports from a real tenant, for local reference only — never commit.
 donottrack/
+
+# Local working notes for how to build/test/commit/release in this repo —
+# personal reference, not project documentation for other contributors.
+CLAUDE.md
