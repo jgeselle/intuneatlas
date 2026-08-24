@@ -1,5 +1,24 @@
 import { useState } from "react";
-import { SlidersHorizontal } from "@phosphor-icons/react";
+import { SlidersHorizontal, Folder, CaretLeft, CaretRight, Check } from "@phosphor-icons/react";
+
+/** A fully custom checkbox — no native `<input type="checkbox">` — matching the app's own button/chip visual language instead of the browser's default styling. */
+function CheckToggle({ checked, onClick, label }) {
+  return (
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={checked}
+      onClick={onClick}
+      className={
+        "flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500 " +
+        (checked ? "border-teal-700 bg-teal-700" : "border-stone-300 bg-white hover:border-stone-400")
+      }
+      aria-label={label}
+    >
+      {checked && <Check weight="bold" className="h-3 w-3 text-white" />}
+    </button>
+  );
+}
 
 /**
  * Which baseline packs judge the settings list — a personal preference,
@@ -9,9 +28,14 @@ import { SlidersHorizontal } from "@phosphor-icons/react";
  * pack paths. Every toggle here re-evaluates immediately — no separate
  * "Apply" step — since evaluation is now a purely local, pure function
  * over an already-scanned report (see applyBaselinesToReport).
+ *
+ * Browsed like a directory tree, matching how baselines/ is actually
+ * laid out on disk: the root shows only source folders (CIS, Microsoft,
+ * ...); picking one navigates into it to toggle the packs inside.
  */
 function BaselinePicker({ packs, activePacks, onChange }) {
   const [open, setOpen] = useState(false);
+  const [folder, setFolder] = useState(null);
   const allActive = activePacks === null;
   const isActive = (pack) => allActive || activePacks.includes(pack.path);
   const activeCount = packs.filter(isActive).length;
@@ -21,17 +45,25 @@ function BaselinePicker({ packs, activePacks, onChange }) {
     onChange(next);
   }
 
-  const groups = [];
-  for (const pack of packs) {
-    const group = groups.find((g) => g.sourceLabel === pack.sourceLabel);
-    if (group) group.packs.push(pack);
-    else groups.push({ sourceLabel: pack.sourceLabel, packs: [pack] });
+  function close() {
+    setOpen(false);
+    setFolder(null);
   }
+
+  const folders = [];
+  for (const pack of packs) {
+    const group = folders.find((g) => g.sourceLabel === pack.sourceLabel);
+    if (group) group.packs.push(pack);
+    else folders.push({ sourceLabel: pack.sourceLabel, packs: [pack] });
+  }
+  const currentFolder = folders.find((g) => g.sourceLabel === folder);
 
   return (
     <div className="relative shrink-0">
       <button
         onClick={() => setOpen((o) => !o)}
+        aria-haspopup="true"
+        aria-expanded={open}
         className={
           "flex h-full items-center gap-1.5 rounded-md border px-3 py-2 text-sm font-medium focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500 " +
           (open ? "border-teal-500 bg-teal-50 text-teal-700" : "border-stone-300 bg-white text-stone-600 hover:bg-stone-50")
@@ -46,10 +78,37 @@ function BaselinePicker({ packs, activePacks, onChange }) {
         )}
       </button>
 
-      {open && (
-        <>
-          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 z-40 mt-2 w-96 rounded-lg border border-stone-200 bg-white p-3 shadow-xl">
+      {open && <div className="fixed inset-0 z-30" onClick={close} />}
+      {/* Always mounted (not `{open && ...}`) so the close transition below
+          can actually play instead of the panel just vanishing — same
+          pattern as the account menu (components/AccountMenu.jsx). */}
+      <div
+        className={
+          "absolute right-0 z-40 mt-2 w-96 origin-top-right rounded-lg border border-stone-200 bg-white p-3 shadow-xl transition duration-150 ease-out " +
+          (open ? "translate-y-0 scale-100 opacity-100" : "pointer-events-none -translate-y-1.5 scale-95 opacity-0")
+        }
+      >
+        {currentFolder ? (
+          <>
+            <button
+              onClick={() => setFolder(null)}
+              className="flex items-center gap-1 rounded text-xs font-semibold uppercase tracking-wide text-stone-500 hover:text-stone-700 focus:outline-none"
+            >
+              <CaretLeft weight="bold" className="h-3 w-3" />
+              {currentFolder.sourceLabel}
+            </button>
+            <div className="mt-2 max-h-80 space-y-0.5 overflow-y-auto">
+              {currentFolder.packs.map((p) => (
+                <div key={p.path} className="flex items-center gap-2 rounded px-1.5 py-1.5 text-sm hover:bg-stone-50">
+                  <CheckToggle checked={isActive(p)} onClick={() => toggle(p)} label={p.name} />
+                  <span className="min-w-0 flex-1 truncate">{p.name}</span>
+                  <span className="shrink-0 text-xs text-stone-400">{p.platforms.join(", ")}</span>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : (
+          <>
             <div className="flex items-center justify-between gap-2">
               <span className="text-xs font-semibold uppercase tracking-wide text-stone-500">Active baselines</span>
               <div className="flex gap-3">
@@ -70,37 +129,32 @@ function BaselinePicker({ packs, activePacks, onChange }) {
               </div>
             </div>
 
-            {packs.length === 0 ? (
+            {folders.length === 0 ? (
               <p className="mt-2 text-xs text-stone-500">No baseline rules found.</p>
             ) : (
-              <div className="mt-2 max-h-80 space-y-3 overflow-y-auto">
-                {groups.map((g) => (
-                  <div key={g.sourceLabel}>
-                    <div className="text-xs font-medium text-stone-500">{g.sourceLabel}</div>
-                    <div className="mt-1 space-y-0.5">
-                      {g.packs.map((p) => (
-                        <label
-                          key={p.path}
-                          className="flex cursor-pointer items-center gap-2 rounded px-1.5 py-1.5 text-sm hover:bg-stone-50"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={isActive(p)}
-                            onChange={() => toggle(p)}
-                            className="h-3.5 w-3.5 shrink-0 rounded border-stone-300 text-teal-700 focus:ring-1 focus:ring-teal-500"
-                          />
-                          <span className="min-w-0 flex-1 truncate">{p.name}</span>
-                          <span className="shrink-0 text-xs text-stone-400">{p.platforms.join(", ")}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-                ))}
+              <div className="mt-2 space-y-0.5">
+                {folders.map((f) => {
+                  const folderActiveCount = f.packs.filter(isActive).length;
+                  return (
+                    <button
+                      key={f.sourceLabel}
+                      onClick={() => setFolder(f.sourceLabel)}
+                      className="flex w-full items-center gap-2 rounded px-1.5 py-2 text-left text-sm hover:bg-stone-50 focus:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-teal-500"
+                    >
+                      <Folder weight="fill" className="h-4 w-4 shrink-0 text-stone-400" />
+                      <span className="min-w-0 flex-1 truncate">{f.sourceLabel}</span>
+                      <span className="shrink-0 text-xs tabular-nums text-stone-400">
+                        {folderActiveCount}/{f.packs.length}
+                      </span>
+                      <CaretRight className="h-3.5 w-3.5 shrink-0 text-stone-300" />
+                    </button>
+                  );
+                })}
               </div>
             )}
-          </div>
-        </>
-      )}
+          </>
+        )}
+      </div>
     </div>
   );
 }
