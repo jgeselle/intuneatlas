@@ -1,22 +1,22 @@
 import { useState } from "react";
-import { SlidersHorizontal, Folder, CaretLeft, CaretRight, Check } from "@phosphor-icons/react";
+import { SlidersHorizontal, CaretLeft, CaretRight, Check } from "@phosphor-icons/react";
 
-/** A fully custom checkbox — no native `<input type="checkbox">` — matching the app's own button/chip visual language instead of the browser's default styling. */
-function CheckToggle({ checked, onClick, label }) {
+/**
+ * A fully custom checkbox — no native `<input type="checkbox">` — matching
+ * the app's own button/chip visual language. Purely visual: the whole row
+ * it sits in is the actual clickable/accessible control (see the pack row
+ * button below), so this never carries its own click handler or ARIA role.
+ */
+function CheckIndicator({ checked }) {
   return (
-    <button
-      type="button"
-      role="checkbox"
-      aria-checked={checked}
-      onClick={onClick}
+    <span
       className={
-        "flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500 " +
-        (checked ? "border-teal-700 bg-teal-700" : "border-stone-300 bg-white hover:border-stone-400")
+        "flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors " +
+        (checked ? "border-teal-700 bg-teal-700" : "border-stone-300 bg-white")
       }
-      aria-label={label}
     >
       {checked && <Check weight="bold" className="h-3 w-3 text-white" />}
-    </button>
+    </span>
   );
 }
 
@@ -99,11 +99,18 @@ function BaselinePicker({ packs, activePacks, onChange }) {
             </button>
             <div className="mt-2 max-h-80 space-y-0.5 overflow-y-auto">
               {currentFolder.packs.map((p) => (
-                <div key={p.path} className="flex items-center gap-2 rounded px-1.5 py-1.5 text-sm hover:bg-stone-50">
-                  <CheckToggle checked={isActive(p)} onClick={() => toggle(p)} label={p.name} />
+                <button
+                  key={p.path}
+                  type="button"
+                  role="checkbox"
+                  aria-checked={isActive(p)}
+                  onClick={() => toggle(p)}
+                  className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-stone-50 focus:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-teal-500"
+                >
+                  <CheckIndicator checked={isActive(p)} />
                   <span className="min-w-0 flex-1 truncate">{p.name}</span>
                   <span className="shrink-0 text-xs text-stone-400">{p.platforms.join(", ")}</span>
-                </div>
+                </button>
               ))}
             </div>
           </>
@@ -139,9 +146,8 @@ function BaselinePicker({ packs, activePacks, onChange }) {
                     <button
                       key={f.sourceLabel}
                       onClick={() => setFolder(f.sourceLabel)}
-                      className="flex w-full items-center gap-2 rounded px-1.5 py-2 text-left text-sm hover:bg-stone-50 focus:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-teal-500"
+                      className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-stone-50 focus:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-teal-500"
                     >
-                      <Folder weight="fill" className="h-4 w-4 shrink-0 text-stone-400" />
                       <span className="min-w-0 flex-1 truncate">{f.sourceLabel}</span>
                       <span className="shrink-0 text-xs tabular-nums text-stone-400">
                         {folderActiveCount}/{f.packs.length}
