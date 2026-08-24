@@ -23,7 +23,7 @@ function DrawerShell({ eyebrow, title, chips, onClose, children }) {
             <button
               onClick={onClose}
               aria-label="Close"
-              className="rounded p-1 text-stone-400 hover:bg-stone-100 hover:text-stone-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+              className="rounded p-1 text-stone-400 hover:bg-stone-100 hover:text-stone-700 focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500"
             >
               <X className="h-5 w-5" />
             </button>

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { CaretDown, SignOut } from "@phosphor-icons/react";
 import { initialsOf } from "../lib/format.js";
+import { Chip } from "./bits.jsx";
 
 function AccountMenu({ session, tenant, up = false, full = false, textClassName = "", onOpenChange }) {
   const [open, setOpen] = useState(false);
@@ -30,7 +31,7 @@ function AccountMenu({ session, tenant, up = false, full = false, textClassName 
         aria-haspopup="true"
         aria-expanded={open}
         title={textClassName ? session.name : undefined}
-        className={"flex items-center gap-2 rounded-md py-1 pl-[5px] pr-1.5 hover:bg-teal-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-300 " + (full ? "w-full" : "")}
+        className={"flex items-center gap-2 rounded-md py-1 pl-[5px] pr-1.5 hover:bg-teal-800 focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-300 " + (full ? "w-full" : "")}
       >
         {/* The avatar is the "icon" here — like a nav icon it stays fully
             visible in the collapsed rail; only the surrounding text fades. */}
@@ -86,6 +87,12 @@ function AccountMenu({ session, tenant, up = false, full = false, textClassName 
           </div>
         </div>
 
+        {session.role && (
+          <Chip className="mt-2.5 bg-teal-50 text-teal-700 ring-teal-200">
+            {session.role.charAt(0).toUpperCase() + session.role.slice(1)}
+          </Chip>
+        )}
+
         {tenant && (
           <dl className="mt-3 space-y-1.5 border-t border-stone-100 pt-3 text-xs">
             <div className="flex items-baseline justify-between gap-3">
@@ -97,7 +104,7 @@ function AccountMenu({ session, tenant, up = false, full = false, textClassName 
 
         <a
           href="/auth/logout"
-          className="mt-3 flex w-full items-center gap-2 rounded-md border-t border-stone-200 px-2 pt-3 pb-1.5 text-xs font-medium text-stone-600 hover:bg-stone-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+          className="mt-3 flex w-full items-center gap-2 rounded-md border-t border-stone-200 px-2 pt-3 pb-1.5 text-xs font-medium text-stone-600 hover:bg-stone-50 focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500"
         >
           <SignOut className="h-3.5 w-3.5" />
           Sign out
