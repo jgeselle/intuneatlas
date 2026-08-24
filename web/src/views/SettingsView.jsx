@@ -57,7 +57,12 @@ function SettingsView({ entries, notes = {}, query, setQuery, platform, setPlatf
 
   return (
     <div className="space-y-5">
-      <div className="sticky top-0 z-10 space-y-5 bg-stone-50 pb-4 pt-1">
+      {/* Cancels out the page wrapper's own top padding (App.jsx's `py-6
+          lg:py-8`) with a matching negative margin, then restores the same
+          visual gap as internal padding. Otherwise this element's box starts
+          24-32px below the true document top, so `sticky top-0` only takes
+          effect after scrolling past that gap instead of immediately. */}
+      <div className="sticky top-0 z-10 -mt-6 space-y-5 bg-stone-50 pb-4 pt-6 lg:-mt-8 lg:pt-8">
         <header>
           <h1 className="text-xl font-semibold">Settings</h1>
           <p className="mt-1 text-sm text-stone-500">
@@ -168,7 +173,7 @@ function SettingsView({ entries, notes = {}, query, setQuery, platform, setPlatf
                   <div className="pb-2">
                     <button
                       onClick={() => onOpen(item.entry.key)}
-                      className="flex w-full items-center gap-3 rounded-lg border border-stone-200 bg-white px-4 py-3 text-left hover:bg-stone-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-teal-500"
+                      className="flex w-full items-center gap-3 rounded-lg border border-stone-200 bg-white px-4 py-3 text-left hover:bg-stone-50 focus:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-teal-500"
                     >
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5">

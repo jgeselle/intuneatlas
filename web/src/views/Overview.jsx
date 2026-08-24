@@ -64,7 +64,7 @@ function Overview({ settingIndex, compliancePolicies, enrollmentConfigurations, 
                 <li key={e.key + "::" + rec.ruleId}>
                   <button
                     onClick={() => onOpen(e.key)}
-                    className="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-stone-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-teal-500"
+                    className="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-stone-50 focus:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-teal-500"
                   >
                     <span className="min-w-0 flex-1">
                       <span className="block text-sm font-medium">{e.name}</span>

@@ -303,7 +303,14 @@ export default function App({ initialReport, session }) {
           (railCollapsed
             ? "overflow-hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-40 " +
               (railWide ? "lg:w-60 lg:shadow-2xl" : "lg:w-16")
-            : "lg:w-60")
+            // Not collapsed: still a plain flex sibling of `main`, which
+            // stretches it to match main's full height by default — fine
+            // normally, but main can now be much taller than the viewport
+            // (the virtualized settings list reserves real scroll height
+            // for ~800+ rows), which pushed the footer (sync control,
+            // account menu) far down the page. Pin it to the viewport
+            // instead, independent of main's height.
+            : "lg:sticky lg:top-0 lg:h-screen lg:self-start lg:overflow-y-auto")
         }
       >
         <div className="flex items-center gap-2.5 pl-[20px] pr-4 py-4">
