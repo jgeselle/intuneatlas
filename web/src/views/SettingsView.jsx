@@ -22,20 +22,13 @@ function SettingsView({
   onUpdateBaselineSelection,
 }) {
   const [state, setState] = useState("All");
-  // A setting's recommendation source(s) — a baseline pack (CIS, Microsoft's
-  // own, a house rules file, ...). Focusing on one lets you review a single
-  // baseline's coverage across the tenant on its own, without the others'
-  // recommendations mixed in.
-  const [source, setSource] = useState("All");
   const platforms = ["All", ...Array.from(new Set(entries.map((e) => e.platform)))];
-  const states = ["All", "Below baseline", "Conflict", "Not deployed", "Not covered", "Baseline"];
-  const sources = Array.from(new Set(entries.flatMap((e) => e.recs.map((r) => r.source))));
+  const states = ["All", "Below baseline", "Conflict", "Not deployed", "Not covered"];
 
   const shown = entries.filter(
     (e) =>
       (platform === "All" || e.platform === platform) &&
       (state === "All" || e.state === state) &&
-      (source === "All" || e.recs.some((r) => r.source === source)) &&
       (e.name.toLowerCase().includes(query.toLowerCase()) ||
         e.category.toLowerCase().includes(query.toLowerCase()) ||
         (e.cspPath || "").toLowerCase().includes(query.toLowerCase())),
@@ -138,32 +131,6 @@ function SettingsView({
             </button>
           ))}
         </div>
-        {sources.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span className="text-xs font-medium text-stone-500">Source</span>
-            <button
-              onClick={() => setSource("All")}
-              className={
-                "shrink-0 rounded-md px-2.5 py-1 text-xs font-medium focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500 " +
-                (source === "All" ? "bg-stone-900 text-white" : "bg-white text-stone-600 ring-1 ring-inset ring-stone-300 hover:bg-stone-50")
-              }
-            >
-              All
-            </button>
-            {sources.map((s) => (
-              <button
-                key={s}
-                onClick={() => setSource(s)}
-                className={
-                  "shrink-0 rounded-md px-2.5 py-1 text-xs font-medium focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500 " +
-                  (source === s ? "bg-stone-900 text-white" : "bg-white text-stone-600 ring-1 ring-inset ring-stone-300 hover:bg-stone-50")
-                }
-              >
-                {s}
-              </button>
-            ))}
-          </div>
-        )}
         </div>
       </div>
 
