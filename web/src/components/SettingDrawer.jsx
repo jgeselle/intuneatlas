@@ -64,7 +64,7 @@ function EditValueSection({ current, recs, onStage }) {
         </div>
       )}
 
-      <label className="mt-3 block">
+      <label className={"block " + (recs.length > 0 ? "mt-3" : "")}>
         <span className="text-xs font-medium text-stone-500">{recs.length > 0 ? "Value to stage" : "New value"}</span>
         {isLong ? (
           <textarea
