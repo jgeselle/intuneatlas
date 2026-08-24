@@ -167,20 +167,6 @@ export default function App({ initialReport, session }) {
     return () => window.clearInterval(t);
   }, []);
 
-  // A drawer sits over the page as a fixed overlay with its own scroll
-  // area — without this, the page underneath (window-scrolled, including
-  // the virtualized settings list) can still scroll too, which reads as
-  // broken: content shifts behind the drawer, or the wrong thing scrolls
-  // depending on where the pointer happens to be.
-  useEffect(() => {
-    if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, [open]);
-
   if (session && !session.role) {
     return <NoRoleScreen session={session} />;
   }

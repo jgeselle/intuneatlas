@@ -13,7 +13,7 @@ function DrawerShell({ eyebrow, title, chips, onClose, children }) {
   return (
     <div className="fixed inset-0 z-40 flex justify-end" role="dialog" aria-modal="true" aria-label={title}>
       <div className="absolute inset-0 transition-opacity" style={{ backgroundColor: "rgba(28, 25, 23, 0.32)" }} onClick={onClose} />
-      <div className="relative flex h-full w-full max-w-md flex-col overflow-y-auto border-l border-stone-200 bg-white shadow-2xl">
+      <div className="relative flex h-full w-full max-w-md flex-col overflow-y-auto overscroll-contain border-l border-stone-200 bg-white shadow-2xl">
         <div className="sticky top-0 z-10 border-b border-stone-200 bg-white px-5 py-4">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
