@@ -3,6 +3,7 @@ const STATE_STYLE = {
   "Below baseline": "bg-amber-50 text-amber-800 ring-amber-200",
   "Not deployed": "bg-stone-100 text-stone-500 ring-stone-200",
   Baseline: "bg-white text-stone-500 ring-stone-200",
+  "Not covered": "bg-purple-50 text-purple-700 ring-purple-200",
 };
 
 const SEVERITY_STYLE = {

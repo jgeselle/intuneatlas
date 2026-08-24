@@ -116,7 +116,11 @@ function SettingDrawer({ entry, notes, onAddNote, onDeleteNote, onClose, change,
   // replacing several discrete things at once, which needs its own UI
   // this doesn't have yet. Simple/choice settings only, for now.
   const isSimpleValue = !entry.values.some((v) => v.includes("\n"));
-  const current = entry.values[0] ?? "";
+  // Only synthetic "Not covered" entries ever have no values at all — a
+  // real scanned setting always has at least one. "Not configured" reads
+  // sensibly wherever this ends up displayed (e.g. a staged change's
+  // Diff), instead of an empty string.
+  const current = entry.values[0] ?? "Not configured";
 
   return (
     <DrawerShell
@@ -132,7 +136,11 @@ function SettingDrawer({ entry, notes, onAddNote, onDeleteNote, onClose, change,
     >
       <section>
         <h3 className="text-xs font-semibold uppercase tracking-wide text-stone-500">Effective value</h3>
-        {entry.conflict ? (
+        {entry.state === "Not covered" ? (
+          <p className="mt-2 rounded-md border border-dashed border-stone-300 bg-stone-50 p-3 text-xs leading-relaxed text-stone-500">
+            No policy in this tenant configures this setting.
+          </p>
+        ) : entry.conflict ? (
           <div className="mt-2 rounded-md border border-red-200 bg-red-50 p-3">
             <div className="flex gap-2">
               <Warning className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
@@ -193,24 +201,26 @@ function SettingDrawer({ entry, notes, onAddNote, onDeleteNote, onClose, change,
         </p>
       )}
 
-      <section>
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-stone-500">Set by</h3>
-        <ul className="mt-2 space-y-2">
-          {entry.sources.map((s, n) => (
-            <li key={n} className="rounded-md border border-stone-200 p-3">
-              <SourceRow policyName={s.policyName} value={s.value} />
-              <div className="mt-2 text-xs text-stone-500">
-                {s.deployed ? "Deployed" : <span className="text-stone-400">Not deployed to any group</span>}
-              </div>
-            </li>
-          ))}
-        </ul>
-        {entry.sources.length > 1 && !entry.conflict && (
-          <p className="mt-2 text-xs text-stone-500">
-            Defined in {entry.sources.length} policies with the same value. Harmless, but worth consolidating.
-          </p>
-        )}
-      </section>
+      {entry.sources.length > 0 && (
+        <section>
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-stone-500">Set by</h3>
+          <ul className="mt-2 space-y-2">
+            {entry.sources.map((s, n) => (
+              <li key={n} className="rounded-md border border-stone-200 p-3">
+                <SourceRow policyName={s.policyName} value={s.value} />
+                <div className="mt-2 text-xs text-stone-500">
+                  {s.deployed ? "Deployed" : <span className="text-stone-400">Not deployed to any group</span>}
+                </div>
+              </li>
+            ))}
+          </ul>
+          {entry.sources.length > 1 && !entry.conflict && (
+            <p className="mt-2 text-xs text-stone-500">
+              Defined in {entry.sources.length} policies with the same value. Harmless, but worth consolidating.
+            </p>
+          )}
+        </section>
+      )}
 
       <HistorySection
         notes={notes}

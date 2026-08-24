@@ -43,3 +43,47 @@ export function applyBaselines(entries: SettingIndexEntry[], rules: BaselineRule
 function platformMatches(rulePlatform: string, entryPlatform: string): boolean {
   return entryPlatform.toLowerCase().startsWith(rulePlatform.toLowerCase());
 }
+
+/**
+ * A baseline rule whose path never appears as any entry's cspPath isn't
+ * evaluated by applyBaselines at all — it just silently never matches
+ * anything, and there's no signal that the tenant doesn't configure this
+ * setting *anywhere*, not even badly. That's a stronger gap than "Not
+ * deployed" (which still has a real policy, just not assigned to a
+ * group) — nothing in the tenant even attempts this setting. Synthesizes
+ * one placeholder entry per uncovered (path, platform) — real settings-
+ * index entries in every other state still count as "covered" (Conflict,
+ * Not deployed, Below baseline, Baseline all mean some policy sets it);
+ * only a path with zero matching entries in any state is a true gap.
+ */
+export function findUncoveredEntries(entries: SettingIndexEntry[], rules: BaselineRule[]): SettingIndexEntry[] {
+  const groups = new Map<string, BaselineRule[]>();
+  for (const rule of rules) {
+    const covered = entries.some((e) => e.cspPath === rule.path && platformMatches(rule.platform, e.platform));
+    if (covered) continue;
+    const groupKey = `${rule.path}::${rule.platform}`;
+    const group = groups.get(groupKey);
+    if (group) group.push(rule);
+    else groups.set(groupKey, [rule]);
+  }
+
+  return Array.from(groups.entries()).map(([groupKey, groupRules]) => ({
+    key: `uncovered::${groupKey}`,
+    name: groupRules[0].name,
+    cspPath: groupRules[0].path,
+    category: "Not covered by any policy",
+    platform: groupRules[0].platform,
+    values: [],
+    sources: [],
+    conflict: false,
+    state: "Not covered" as const,
+    recs: groupRules.map((rule) => ({
+      ruleId: rule.id,
+      current: "Not configured",
+      recommended: describeExpectation(rule.expect),
+      severity: rule.severity,
+      why: rule.rationale,
+      source: rule.source,
+    })),
+  }));
+}

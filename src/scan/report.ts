@@ -1,4 +1,4 @@
-import { applyBaselines } from "../baselines/evaluate.js";
+import { applyBaselines, findUncoveredEntries } from "../baselines/evaluate.js";
 import type { BaselineRule } from "../baselines/types.js";
 import { fetchCompliancePolicies } from "./compliancePolicies.js";
 import { fetchConfigurationPolicies } from "./configurationPolicies.js";
@@ -41,6 +41,13 @@ export async function buildReport(
   // a legacy Device Restrictions profile writing the same real setting need
   // to land in the same bucket to be conflict-checked against each other.
   const settingIndex = applyBaselines(buildSettingIndex([...policies, ...legacyPolicies]), baselineRules);
+  // Synthetic "Not covered" entries for baseline rules with no matching
+  // setting anywhere in the tenant — appended for display only, after
+  // settingCount/conflictCount/belowBaselineCount are computed from the
+  // real scanned entries, so those counts stay truthful to what was
+  // actually found in the tenant rather than what the baseline merely
+  // wishes existed.
+  const settingsWithGaps = [...settingIndex, ...findUncoveredEntries(settingIndex, baselineRules)];
 
   return {
     scannedAt: new Date().toISOString(),
@@ -52,7 +59,7 @@ export async function buildReport(
     settingCount: settingIndex.length,
     conflictCount: settingIndex.filter((e) => e.conflict).length,
     belowBaselineCount: settingIndex.filter((e) => e.state === "Below baseline").length,
-    settings: settingIndex,
+    settings: settingsWithGaps,
     compliancePolicies,
     enrollmentConfigurations,
   };

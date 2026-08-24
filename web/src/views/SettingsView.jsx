@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
-import { Sliders, WarningCircle, Warning, Prohibit, MagnifyingGlass, ChatCircle } from "@phosphor-icons/react";
+import { Sliders, WarningCircle, Warning, Prohibit, Question, MagnifyingGlass, ChatCircle } from "@phosphor-icons/react";
 import { Chip, Stat } from "../components/bits.jsx";
 import { STATE_STYLE } from "../lib/styles.js";
 import { platformLabel } from "../lib/format.js";
@@ -16,7 +16,7 @@ function SettingsView({ entries, notes = {}, query, setQuery, platform, setPlatf
   // recommendations mixed in.
   const [source, setSource] = useState("All");
   const platforms = ["All", ...Array.from(new Set(entries.map((e) => e.platform)))];
-  const states = ["All", "Below baseline", "Conflict", "Not deployed", "Baseline"];
+  const states = ["All", "Below baseline", "Conflict", "Not deployed", "Not covered", "Baseline"];
   const sources = Array.from(new Set(entries.flatMap((e) => e.recs.map((r) => r.source))));
 
   const shown = entries.filter(
@@ -31,6 +31,10 @@ function SettingsView({ entries, notes = {}, query, setQuery, platform, setPlatf
 
   const categories = Array.from(new Set(shown.map((e) => e.category)));
   const count = (s) => entries.filter((e) => e.state === s).length;
+  // "Not covered" entries are synthetic — a baseline rule with no matching
+  // setting anywhere in the tenant, not something actually configured —
+  // so they're excluded from what "Managed" claims to count.
+  const managedCount = entries.length - count("Not covered");
 
   // Flattened so category headers and their rows live in one virtualized
   // list — the alternative (virtualizing per-category) can't share a
@@ -71,11 +75,12 @@ function SettingsView({ entries, notes = {}, query, setQuery, platform, setPlatf
           </p>
         </header>
 
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <Stat label="Managed" value={entries.length} icon={Sliders} />
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          <Stat label="Managed" value={managedCount} icon={Sliders} />
           <Stat label="Below baseline" value={count("Below baseline")} tone={count("Below baseline") ? "amber" : "neutral"} icon={WarningCircle} />
           <Stat label="Conflicting" value={count("Conflict")} tone={count("Conflict") ? "alert" : "neutral"} icon={Warning} />
           <Stat label="Not deployed" value={count("Not deployed")} icon={Prohibit} />
+          <Stat label="Not covered" value={count("Not covered")} tone={count("Not covered") ? "amber" : "neutral"} icon={Question} />
         </div>
 
         <div className="flex flex-col gap-3">
@@ -190,12 +195,18 @@ function SettingsView({ entries, notes = {}, query, setQuery, platform, setPlatf
                         </div>
                         <div className="mt-0.5 truncate text-xs text-stone-500">
                           {platformLabel(item.entry.platform)} ·{" "}
-                          {item.entry.sources.length === 1 ? item.entry.sources[0].policyName : item.entry.sources.length + " policies"}
+                          {item.entry.sources.length === 0
+                            ? "No policy"
+                            : item.entry.sources.length === 1
+                              ? item.entry.sources[0].policyName
+                              : item.entry.sources.length + " policies"}
                         </div>
                       </div>
                       <div className="hidden w-56 shrink-0 sm:block">
                         <div className={"truncate text-sm " + (item.entry.conflict ? "text-red-700" : "text-stone-700")}>
-                          {item.entry.values.map((v) => v.replace(/\n/g, ", ")).join(" / ")}
+                          {item.entry.values.length === 0
+                            ? "Not configured"
+                            : item.entry.values.map((v) => v.replace(/\n/g, ", ")).join(" / ")}
                         </div>
                       </div>
                       <Chip className={STATE_STYLE[item.entry.state]}>{item.entry.state}</Chip>

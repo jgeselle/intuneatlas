@@ -35,7 +35,7 @@ export interface RawSimplePolicy {
   priority?: number;
 }
 
-export type SettingIndexState = "Conflict" | "Not deployed" | "Below baseline" | "Baseline";
+export type SettingIndexState = "Conflict" | "Not deployed" | "Below baseline" | "Baseline" | "Not covered";
 
 export interface SettingIndexSource {
   policyId: string;

@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { applyBaselines } from "../../src/baselines/evaluate.js";
+import { applyBaselines, findUncoveredEntries } from "../../src/baselines/evaluate.js";
 import type { BaselineRule } from "../../src/baselines/types.js";
 import type { SettingIndexEntry } from "../../src/scan/types.js";
 
@@ -99,4 +99,83 @@ test("applyBaselines: no rule at all for the path — entry passes through uncha
   ];
   const result = applyBaselines(entries, []);
   assert.deepEqual(result, entries);
+});
+
+test("findUncoveredEntries: a rule whose path matches nothing in the tenant produces one synthetic entry", () => {
+  const rules: BaselineRule[] = [
+    { id: "gap-rule", name: "BitLocker recovery key backup", platform: "windows", path: "./nowhere", expect: "1", severity: "high", rationale: "why", source: "CIS" },
+  ];
+
+  const [result] = findUncoveredEntries([], rules);
+  assert.equal(result.key, "uncovered::./nowhere::windows");
+  assert.equal(result.name, "BitLocker recovery key backup");
+  assert.equal(result.cspPath, "./nowhere");
+  assert.equal(result.platform, "windows");
+  assert.deepEqual(result.values, []);
+  assert.deepEqual(result.sources, []);
+  assert.equal(result.conflict, false);
+  assert.equal(result.state, "Not covered");
+  assert.deepEqual(result.recs.map((r) => r.ruleId), ["gap-rule"]);
+});
+
+test("findUncoveredEntries: a real entry at that path — in ANY state — counts as covered, not just Baseline/Below baseline", () => {
+  const makeEntry = (state: SettingIndexEntry["state"]): SettingIndexEntry => ({
+    key: "k::windows10",
+    name: "Some setting",
+    cspPath: "./x",
+    category: "Cat",
+    platform: "windows10",
+    values: ["1"],
+    sources: [],
+    conflict: state === "Conflict",
+    state,
+    recs: [],
+  });
+  const rules: BaselineRule[] = [
+    { id: "r", name: "R", platform: "windows", path: "./x", expect: "1", severity: "low", rationale: "why", source: "A" },
+  ];
+
+  for (const state of ["Conflict", "Not deployed", "Below baseline", "Baseline"] as const) {
+    assert.deepEqual(findUncoveredEntries([makeEntry(state)], rules), [], `state "${state}" should count as covered`);
+  }
+});
+
+test("findUncoveredEntries: several uncovered rules sharing the same path+platform merge into one entry", () => {
+  const rules: BaselineRule[] = [
+    { id: "r1", name: "First", platform: "windows", path: "./x", expect: "1", severity: "high", rationale: "a", source: "CIS" },
+    { id: "r2", name: "Second", platform: "windows", path: "./x", expect: "1", severity: "low", rationale: "b", source: "Microsoft" },
+  ];
+
+  const result = findUncoveredEntries([], rules);
+  assert.equal(result.length, 1);
+  assert.deepEqual(result[0].recs.map((r) => r.ruleId), ["r1", "r2"]);
+  assert.deepEqual(result[0].recs.map((r) => r.source), ["CIS", "Microsoft"]);
+});
+
+test("findUncoveredEntries: an entry on a different platform doesn't cover a rule for this one", () => {
+  const entries: SettingIndexEntry[] = [
+    {
+      key: "k::iOS",
+      name: "Some setting",
+      cspPath: "./x",
+      category: "Cat",
+      platform: "iOS",
+      values: ["1"],
+      sources: [],
+      conflict: false,
+      state: "Baseline",
+      recs: [],
+    },
+  ];
+  const rules: BaselineRule[] = [
+    { id: "r", name: "R", platform: "windows", path: "./x", expect: "1", severity: "low", rationale: "why", source: "A" },
+  ];
+
+  const result = findUncoveredEntries(entries, rules);
+  assert.equal(result.length, 1);
+  assert.equal(result[0].platform, "windows");
+});
+
+test("findUncoveredEntries: no rules at all — nothing to report", () => {
+  assert.deepEqual(findUncoveredEntries([], []), []);
 });
