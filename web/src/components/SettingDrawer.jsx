@@ -86,7 +86,7 @@ function EditValueSection({ current, recs, onStage }) {
       <button
         onClick={() => onStage(value, matchedRuleId, current)}
         disabled={!value.trim() || value === current}
-        className="mt-3 rounded-md bg-teal-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-teal-700 focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500 disabled:cursor-not-allowed disabled:bg-stone-200 disabled:text-stone-400"
+        className="mt-3 rounded-md bg-teal-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-teal-700 focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500 disabled:bg-stone-200 disabled:text-stone-400"
       >
         Stage this change
       </button>

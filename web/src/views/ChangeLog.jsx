@@ -48,7 +48,7 @@ function ChangeCard({ change, onUpdateField, onRevert, viewer }) {
             rows={2}
             disabled={!canEdit}
             placeholder="Why is this change needed?"
-            className="mt-1 w-full resize-none rounded-md border border-stone-300 bg-white p-2 text-xs placeholder-stone-400 focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600 disabled:cursor-not-allowed disabled:bg-stone-50 disabled:text-stone-400"
+            className="mt-1 w-full resize-none rounded-md border border-stone-300 bg-white p-2 text-xs placeholder-stone-400 focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600 disabled:bg-stone-50 disabled:text-stone-400"
           />
         </label>
         <div>
@@ -58,7 +58,7 @@ function ChangeCard({ change, onUpdateField, onRevert, viewer }) {
             onClick={() => onUpdateField(change.id, "reviewedBy", viewer.name)}
             disabled={reviewedByMe || !canEdit}
             className={
-              "mt-1 flex w-full items-center justify-center gap-1.5 rounded-md p-2 text-xs font-medium focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500 disabled:cursor-not-allowed " +
+              "mt-1 flex w-full items-center justify-center gap-1.5 rounded-md p-2 text-xs font-medium focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500 " +
               (reviewedByMe
                 ? "cursor-default bg-teal-50 text-teal-700 ring-1 ring-inset ring-teal-200"
                 : canEdit
@@ -93,7 +93,7 @@ function ChangeLog({ changes, onUpdateField, onRevert, viewer }) {
         <button
           disabled
           title="Deploying to the tenant needs write-back, which isn't built yet."
-          className="inline-flex cursor-not-allowed items-center gap-2 rounded-md bg-stone-200 px-3.5 py-2 text-sm font-medium text-stone-400"
+          className="inline-flex items-center gap-2 rounded-md bg-stone-200 px-3.5 py-2 text-sm font-medium text-stone-400"
         >
           <PaperPlaneTilt className="h-4 w-4" />
           Deploy

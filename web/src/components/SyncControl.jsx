@@ -31,7 +31,7 @@ function SyncControl({ syncing, syncedAgo, onSync, compact = false, statusVisibl
         onClick={onSync}
         disabled={disabled}
         title={!canSync ? deniedTitle : undefined}
-        className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-teal-50 ring-1 ring-inset ring-teal-700 hover:bg-teal-800 focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-300 disabled:cursor-not-allowed disabled:text-teal-400"
+        className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-teal-50 ring-1 ring-inset ring-teal-700 hover:bg-teal-800 focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-300 disabled:text-teal-400"
       >
         <ArrowsClockwise weight="bold" className={"h-3.5 w-3.5 shrink-0 " + (syncing ? "animate-spin" : "")} />
         {syncing ? "Syncing" : "Sync now"}
