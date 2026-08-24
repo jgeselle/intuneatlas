@@ -2,7 +2,7 @@ import { writeFile } from "node:fs/promises";
 import { resolveAuth, type ResolveAuthOptions } from "../auth/index.js";
 import { can } from "../auth/roles.js";
 import { defaultBaselinesDir, loadBaselines } from "../baselines/loader.js";
-import { buildReport } from "../scan/report.js";
+import { applyBaselinesToReport, buildReport } from "../scan/report.js";
 import { recordScan } from "../storage/scans.js";
 
 export interface ScanOptions extends ResolveAuthOptions {
@@ -19,10 +19,15 @@ export async function runScan(options: ScanOptions): Promise<void> {
     throw new Error("Your role doesn't include scanning the tenant. Ask an Admin to run it, or to assign you the Admin role.");
   }
   const token = await auth.getToken();
-  const baselineRules = await loadBaselines(options.baseline ?? defaultBaselinesDir());
 
-  const report = await buildReport(token, auth.flow, auth.tenantId, baselineRules);
-  recordScan(report);
+  // Scanning and evaluating are deliberately separate: recordScan persists
+  // only the raw report, so evaluating against a different baseline
+  // selection later never needs another scan.
+  const rawReport = await buildReport(token, auth.flow, auth.tenantId);
+  recordScan(rawReport);
+
+  const baselineRules = await loadBaselines(options.baseline ?? defaultBaselinesDir());
+  const report = applyBaselinesToReport(rawReport, baselineRules);
   const json = JSON.stringify(report, null, 2);
 
   if (options.out) {

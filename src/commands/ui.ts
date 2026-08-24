@@ -3,7 +3,7 @@ import open from "open";
 import { resolveClientId } from "../auth/index.js";
 import { createWebSessionManager } from "../auth/webSession.js";
 import { defaultBaselinesDir, loadBaselines } from "../baselines/loader.js";
-import { buildReport, type ScanReport } from "../scan/report.js";
+import { applyBaselinesToReport, buildReport, type ScanReport } from "../scan/report.js";
 import { LOOPBACK_HOSTS, startServer, type StageChangeRequestBody, type UpdateChangeRequestBody } from "../server/staticServer.js";
 import { addNote, deleteNote, getAllNotes, getNoteById, type Note } from "../storage/notes.js";
 import { getLatestScan, recordScan } from "../storage/scans.js";
@@ -48,7 +48,7 @@ export async function runUi(options: UiOptions): Promise<void> {
   const baselinePath = options.baseline;
 
   const { url } = await startServer({
-    report: staticReport ? enrichReport(staticReport) : null,
+    report: staticReport ? enrichReport(await evaluateAgainstActiveBaselines(staticReport, baselinePath)) : null,
     host,
     session,
     onScanRequest: async (graphToken) => enrichReport(await runViewerTriggeredScan(tenantId, baselinePath, graphToken)),
@@ -99,8 +99,15 @@ async function resolveStaticReport(options: UiOptions): Promise<ScanReport | und
 }
 
 async function runViewerTriggeredScan(tenantId: string, baselinePath: string | undefined, graphToken: string): Promise<ScanReport> {
+  // recordScan persists only the raw report — evaluating against a
+  // different baseline selection later never needs another scan.
+  const rawReport = await buildReport(graphToken, "interactive-browser", tenantId);
+  recordScan(rawReport);
+  return evaluateAgainstActiveBaselines(rawReport, baselinePath);
+}
+
+/** Reloaded fresh each call — baselines are just YAML files, so an edit to one takes effect on the very next scan or page load, no restart needed. */
+async function evaluateAgainstActiveBaselines(report: ScanReport, baselinePath: string | undefined): Promise<ScanReport> {
   const baselineRules = await loadBaselines(baselinePath ?? defaultBaselinesDir());
-  const report = await buildReport(graphToken, "interactive-browser", tenantId, baselineRules);
-  recordScan(report);
-  return report;
+  return applyBaselinesToReport(report, baselineRules);
 }
