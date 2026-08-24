@@ -26,7 +26,7 @@ function ChangeCard({ change, onUpdateField, onRevert, viewer }) {
         {canEdit && (
           <button
             onClick={() => onRevert(change.id, change.targetKey)}
-            className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-stone-600 ring-1 ring-inset ring-stone-300 hover:bg-stone-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+            className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-stone-600 ring-1 ring-inset ring-stone-300 hover:bg-stone-50 focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500"
           >
             <ArrowCounterClockwise className="h-3.5 w-3.5" />
             Revert
@@ -58,7 +58,7 @@ function ChangeCard({ change, onUpdateField, onRevert, viewer }) {
             onClick={() => onUpdateField(change.id, "reviewedBy", viewer.name)}
             disabled={reviewedByMe || !canEdit}
             className={
-              "mt-1 flex w-full items-center justify-center gap-1.5 rounded-md p-2 text-xs font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 disabled:cursor-not-allowed " +
+              "mt-1 flex w-full items-center justify-center gap-1.5 rounded-md p-2 text-xs font-medium focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500 disabled:cursor-not-allowed " +
               (reviewedByMe
                 ? "cursor-default bg-teal-50 text-teal-700 ring-1 ring-inset ring-teal-200"
                 : canEdit
