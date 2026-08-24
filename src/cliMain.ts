@@ -12,7 +12,7 @@ program
   .description("Flatten every Intune profile into one settings index, matched by the real setting — not just a shared name.")
   // Keep in sync with package.json's "version" — not read dynamically
   // because the packaged exe doesn't ship package.json alongside it.
-  .version("0.0.27");
+  .version("0.0.28");
 
 function withAuthOptions(command: Command): Command {
   return command
