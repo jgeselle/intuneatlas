@@ -201,6 +201,25 @@ export default function App({ initialReport, session }) {
     }
   }
 
+  // `packs`: an array of pack paths to make active, or null to reset to
+  // "every pack" (the default before this viewer ever customized it).
+  // Personal to the signed-in viewer — doesn't touch the tenant, doesn't
+  // need a rescan, and never affects anyone else's own selection.
+  async function updateBaselineSelection(packs) {
+    try {
+      const res = await fetch("/api/baseline-selection", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ packs }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || "Couldn't update baseline selection");
+      setReport(body);
+    } catch (err) {
+      flash(err.message);
+    }
+  }
+
   async function addNote(key, text) {
     try {
       const res = await fetch("/api/notes", {
@@ -436,6 +455,9 @@ export default function App({ initialReport, session }) {
               platform={platform}
               setPlatform={setPlatform}
               onOpen={(key) => setOpen({ type: "setting", key })}
+              baselinePacks={report.baselinePacks ?? []}
+              activeBaselinePacks={report.activeBaselinePacks ?? null}
+              onUpdateBaselineSelection={updateBaselineSelection}
             />
           )}
 

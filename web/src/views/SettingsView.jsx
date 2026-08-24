@@ -2,13 +2,25 @@ import { useMemo, useRef, useState } from "react";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { Sliders, WarningCircle, Warning, Prohibit, Question, MagnifyingGlass, ChatCircle } from "@phosphor-icons/react";
 import { Chip, Stat } from "../components/bits.jsx";
+import { BaselinePicker } from "../components/BaselinePicker.jsx";
 import { STATE_STYLE } from "../lib/styles.js";
 import { platformLabel } from "../lib/format.js";
 
 const HEADER_ROW_HEIGHT = 33; // category label, ~= mb-2 + line height
 const SETTING_ROW_HEIGHT = 61; // one list row at its common (non-wrapping) height
 
-function SettingsView({ entries, notes = {}, query, setQuery, platform, setPlatform, onOpen }) {
+function SettingsView({
+  entries,
+  notes = {},
+  query,
+  setQuery,
+  platform,
+  setPlatform,
+  onOpen,
+  baselinePacks = [],
+  activeBaselinePacks = null,
+  onUpdateBaselineSelection,
+}) {
   const [state, setState] = useState("All");
   // A setting's recommendation source(s) — a baseline pack (CIS, Microsoft's
   // own, a house rules file, ...). Focusing on one lets you review a single
@@ -84,14 +96,19 @@ function SettingsView({ entries, notes = {}, query, setQuery, platform, setPlatf
         </div>
 
         <div className="flex flex-col gap-3">
-        <div className="relative">
-          <MagnifyingGlass className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-stone-400" />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search by name, category, or CSP path"
-            className="w-full rounded-md border border-stone-300 bg-white py-2 pl-9 pr-3 text-sm placeholder-stone-400 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
-          />
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <MagnifyingGlass className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-stone-400" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search by name, category, or CSP path"
+              className="w-full rounded-md border border-stone-300 bg-white py-2 pl-9 pr-3 text-sm placeholder-stone-400 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+            />
+          </div>
+          {onUpdateBaselineSelection && (
+            <BaselinePicker packs={baselinePacks} activePacks={activeBaselinePacks} onChange={onUpdateBaselineSelection} />
+          )}
         </div>
         <div className="flex flex-wrap gap-1">
           {states.map((s) => (
