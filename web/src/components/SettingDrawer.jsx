@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { Warning, WarningCircle, CheckCircle, ArrowCounterClockwise, PencilSimple } from "@phosphor-icons/react";
+import { Warning, WarningCircle, CheckCircle, PencilSimple } from "@phosphor-icons/react";
 import { DrawerShell } from "./DrawerShell.jsx";
-import { Chip, Diff, RefPath, NoteThread, ValueDisplay, SourceRow } from "./bits.jsx";
+import { Chip, RefPath, HistorySection, ValueDisplay, SourceRow } from "./bits.jsx";
 import { STATE_STYLE, SEVERITY_STYLE } from "../lib/styles.js";
 import { platformLabel, refLabel } from "../lib/format.js";
 
@@ -178,30 +178,6 @@ function SettingDrawer({ entry, notes, onAddNote, onDeleteNote, onClose, change,
 
       {entry.cspPath && <RefPath value={entry.cspPath} label={refLabel(entry.platform)} />}
 
-      {change && (
-        <section className="rounded-md border border-stone-200 p-3">
-          <div className="flex items-center gap-2">
-            <Chip className={change.ready ? "bg-teal-50 text-teal-700 ring-teal-200" : "bg-amber-50 text-amber-800 ring-amber-200"}>
-              {change.ready ? "Ready" : "Needs review"}
-            </Chip>
-            {!change.ready && <span className="text-xs text-stone-500">Needs a reason and reviewer</span>}
-          </div>
-          <div className="mt-3">
-            <Diff from={change.from} to={change.to} />
-          </div>
-          <p className="mt-2 text-xs text-stone-500">Edit the reason and reviewer from the Change log tab.</p>
-          {canRevertThis && (
-            <button
-              onClick={() => onRevert(change.id)}
-              className="mt-3 inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-stone-600 ring-1 ring-inset ring-stone-300 hover:bg-stone-50 focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500"
-            >
-              <ArrowCounterClockwise className="h-3.5 w-3.5" />
-              Revert
-            </button>
-          )}
-        </section>
-      )}
-
       {!change && isSimpleValue && canStage && <EditValueSection current={current} recs={recs} onStage={onStage} />}
 
       {!change && isSimpleValue && !canStage && (
@@ -239,7 +215,16 @@ function SettingDrawer({ entry, notes, onAddNote, onDeleteNote, onClose, change,
         )}
       </section>
 
-      <NoteThread notes={notes} onAdd={onAddNote} onDelete={onDeleteNote} readOnly={!canNote} viewer={viewer} />
+      <HistorySection
+        notes={notes}
+        onAdd={onAddNote}
+        onDelete={onDeleteNote}
+        readOnly={!canNote}
+        viewer={viewer}
+        change={change}
+        onRevertChange={onRevert}
+        canRevertChange={canRevertThis}
+      />
     </DrawerShell>
   );
 }

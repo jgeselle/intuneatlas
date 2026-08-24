@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check, CaretRight, Copy, Trash } from "@phosphor-icons/react";
+import { Check, CaretRight, Copy, Trash, ArrowCounterClockwise } from "@phosphor-icons/react";
 
 function Chip({ className = "", children }) {
   return (
@@ -144,12 +144,88 @@ function SourceRow({ policyName, value, tone = "default" }) {
   );
 }
 
-function NoteThread({ notes = [], onAdd, onDelete, readOnly = false, viewer }) {
+/** A note entry in the history feed. */
+function NoteEntry({ note, onDelete, canDelete }) {
+  return (
+    <li className="rounded-md border border-stone-200 bg-stone-50 p-3">
+      <div className="flex items-baseline justify-between gap-2 text-xs">
+        <span className="font-medium text-stone-700">{note.author}</span>
+        <span className="flex shrink-0 items-center gap-1.5 text-stone-400">
+          {new Date(note.createdAt).toLocaleDateString()}
+          {onDelete && canDelete && (
+            <button
+              onClick={() => onDelete(note.id)}
+              aria-label="Delete note"
+              title="Delete note"
+              className="rounded p-0.5 hover:bg-stone-200 hover:text-stone-700 focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500"
+            >
+              <Trash className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </span>
+      </div>
+      <p className="mt-1.5 text-xs leading-relaxed text-stone-600">{note.text}</p>
+    </li>
+  );
+}
+
+/** The setting's current staged change, shown as one entry in the same feed as notes. */
+function ChangeEntry({ change, onRevert, canRevert }) {
+  return (
+    <li className="rounded-md border border-stone-200 bg-stone-50 p-3">
+      <div className="flex items-baseline justify-between gap-2 text-xs">
+        <div className="flex items-center gap-2">
+          <Chip className={change.ready ? "bg-teal-50 text-teal-700 ring-teal-200" : "bg-amber-50 text-amber-800 ring-amber-200"}>
+            {change.ready ? "Ready" : "Needs review"}
+          </Chip>
+          {change.stagedByName && <span className="font-medium text-stone-700">{change.stagedByName}</span>}
+        </div>
+        <span className="flex shrink-0 items-center gap-1.5 text-stone-400">
+          {new Date(change.updatedAt).toLocaleDateString()}
+          {onRevert && canRevert && (
+            <button
+              onClick={() => onRevert(change.id)}
+              aria-label="Revert change"
+              title="Revert change"
+              className="rounded p-0.5 hover:bg-stone-200 hover:text-stone-700 focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500"
+            >
+              <ArrowCounterClockwise className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </span>
+      </div>
+      <div className="mt-1.5">
+        <Diff from={change.from} to={change.to} />
+      </div>
+      {change.reason ? (
+        <p className="mt-1.5 text-xs leading-relaxed text-stone-600">{change.reason}</p>
+      ) : (
+        <p className="mt-1.5 text-xs text-stone-400">No reason given yet — add one from the Change log tab.</p>
+      )}
+    </li>
+  );
+}
+
+/**
+ * Notes and the setting's staged change, merged into one reverse-
+ * chronological feed — a staged change carries its own reason (which
+ * functions like a note explaining the "why"), so treating it as just
+ * another timeline entry instead of a separate fixed card keeps the
+ * whole history of "what happened and why" in one place, newest first.
+ * `change` is optional — compliance/enrollment items have no staged-
+ * change concept at all, just notes.
+ */
+function HistorySection({ notes = [], onAdd, onDelete, readOnly = false, viewer, change, onRevertChange, canRevertChange }) {
   const [draft, setDraft] = useState("");
   // Whoever wrote a note can delete it themselves; an Admin can delete
   // any — mirrors the same author-or-admin check the server enforces
   // (src/auth/roles.ts's deleteNote capability).
-  const canDelete = (note) => viewer?.role === "admin" || (Boolean(note.authorId) && note.authorId === viewer?.id);
+  const canDeleteNote = (note) => viewer?.role === "admin" || (Boolean(note.authorId) && note.authorId === viewer?.id);
+
+  const entries = [
+    ...notes.map((n) => ({ type: "note", ts: n.createdAt, key: "note:" + n.id, note: n })),
+    ...(change ? [{ type: "change", ts: change.updatedAt, key: "change:" + change.id, change }] : []),
+  ].sort((a, b) => new Date(b.ts) - new Date(a.ts));
 
   function submit() {
     const text = draft.trim();
@@ -161,34 +237,8 @@ function NoteThread({ notes = [], onAdd, onDelete, readOnly = false, viewer }) {
   return (
     <section>
       <h3 className="text-xs font-semibold uppercase tracking-wide text-stone-500">
-        Notes {notes.length ? <span className="tabular-nums text-stone-400">· {notes.length}</span> : null}
+        History {entries.length ? <span className="tabular-nums text-stone-400">· {entries.length}</span> : null}
       </h3>
-
-      {notes.length > 0 && (
-        <ul className="mt-2 space-y-2">
-          {notes.map((n) => (
-            <li key={n.id} className="rounded-md border border-stone-200 bg-stone-50 p-3">
-              <div className="flex items-baseline justify-between gap-2 text-xs">
-                <span className="font-medium text-stone-700">{n.author}</span>
-                <span className="flex shrink-0 items-center gap-1.5 text-stone-400">
-                  {new Date(n.createdAt).toLocaleDateString()}
-                  {onDelete && canDelete(n) && (
-                    <button
-                      onClick={() => onDelete(n.id)}
-                      aria-label="Delete note"
-                      title="Delete note"
-                      className="rounded p-0.5 hover:bg-stone-200 hover:text-stone-700 focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500"
-                    >
-                      <Trash className="h-3.5 w-3.5" />
-                    </button>
-                  )}
-                </span>
-              </div>
-              <p className="mt-1.5 text-xs leading-relaxed text-stone-600">{n.text}</p>
-            </li>
-          ))}
-        </ul>
-      )}
 
       {!readOnly && (
         <div className="mt-2">
@@ -196,7 +246,7 @@ function NoteThread({ notes = [], onAdd, onDelete, readOnly = false, viewer }) {
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             rows={2}
-            placeholder={notes.length ? "Add to the thread" : "Why is it set this way? Write it down for whoever looks next."}
+            placeholder={entries.length ? "Add to the history" : "Why is it set this way? Write it down for whoever looks next."}
             className="w-full resize-none rounded-md border border-stone-300 bg-white p-2.5 text-xs placeholder-stone-400 focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600"
           />
           <button
@@ -207,6 +257,18 @@ function NoteThread({ notes = [], onAdd, onDelete, readOnly = false, viewer }) {
             Add note
           </button>
         </div>
+      )}
+
+      {entries.length > 0 && (
+        <ul className="mt-3 space-y-2">
+          {entries.map((e) =>
+            e.type === "note" ? (
+              <NoteEntry key={e.key} note={e.note} onDelete={onDelete} canDelete={canDeleteNote(e.note)} />
+            ) : (
+              <ChangeEntry key={e.key} change={e.change} onRevert={onRevertChange} canRevert={canRevertChange} />
+            ),
+          )}
+        </ul>
       )}
     </section>
   );
@@ -236,4 +298,4 @@ function NotAvailableYet({ title, children }) {
   );
 }
 
-export { Chip, Diff, RefPath, NoteThread, Stat, NotAvailableYet, ValueDisplay, SourceRow };
+export { Chip, Diff, RefPath, HistorySection, Stat, NotAvailableYet, ValueDisplay, SourceRow };
