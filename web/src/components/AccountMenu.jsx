@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { CaretDown, SignOut } from "@phosphor-icons/react";
 import { initialsOf } from "../lib/format.js";
-import { Chip } from "./bits.jsx";
 
 function AccountMenu({ session, tenant, up = false, full = false, textClassName = "", onOpenChange }) {
   const [open, setOpen] = useState(false);
@@ -87,18 +86,20 @@ function AccountMenu({ session, tenant, up = false, full = false, textClassName 
           </div>
         </div>
 
-        {session.role && (
-          <Chip className="mt-2.5 bg-teal-50 text-teal-700 ring-teal-200">
-            {session.role.charAt(0).toUpperCase() + session.role.slice(1)}
-          </Chip>
-        )}
-
-        {tenant && (
+        {(session.role || tenant) && (
           <dl className="mt-3 space-y-1.5 border-t border-stone-100 pt-3 text-xs">
-            <div className="flex items-baseline justify-between gap-3">
-              <dt className="text-stone-500">Tenant</dt>
-              <dd className="truncate text-right text-stone-700">{tenant}</dd>
-            </div>
+            {session.role && (
+              <div className="flex items-baseline justify-between gap-3">
+                <dt className="text-stone-500">Role</dt>
+                <dd className="truncate text-right text-stone-700">{session.role.charAt(0).toUpperCase() + session.role.slice(1)}</dd>
+              </div>
+            )}
+            {tenant && (
+              <div className="flex items-baseline justify-between gap-3">
+                <dt className="text-stone-500">Tenant</dt>
+                <dd className="truncate text-right text-stone-700">{tenant}</dd>
+              </div>
+            )}
           </dl>
         )}
 
