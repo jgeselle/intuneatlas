@@ -48,7 +48,7 @@ exact variables and setup.
   legacy `deviceConfigurations` profile writing the same real setting —
   see below).
 - **Baseline drift** — values that should trip the bundled baseline
-  rules (`baselines/windows/*.yml`).
+  rules (`baselines/<source>/<baseline-name>/<os>/*.yml`).
 - **Settings Catalog coverage** — real Settings Catalog responses
   contain shapes hand-written fixtures never do. Confirmed and fixed so
   far, in order found — each one only surfaced once real data actually

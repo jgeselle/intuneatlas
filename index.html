@@ -476,9 +476,13 @@
         </p>
       </div>
 
+      <p class="muted" style="margin:0 0 1rem;font-size:.875rem">
+        Organized by source, then baseline name and version, then OS — <code>baselines/&lt;source&gt;/&lt;baseline-name-and-version&gt;/&lt;os&gt;/*.yml</code>.
+      </p>
+
       <div class="code">
         <header>
-          <code>baselines/windows/defender.yml</code>
+          <code>baselines/microsoft/defender-hardening-guidance/windows/tamper-protection.yml</code>
           <code class="muted">yaml</code>
         </header>
 <pre><span class="c">- </span><span class="k">id</span>: defender.tamper-protection
@@ -491,8 +495,15 @@
     Any process running as SYSTEM can silently disable real-time
     scanning while tamper protection is off.
   <span class="k">source</span>: <span class="s">Microsoft Defender for Endpoint hardening guidance</span>
+</pre>
+      </div>
 
-<span class="c">- </span><span class="k">id</span>: update.quality-deferral
+      <div class="code">
+        <header>
+          <code>baselines/cis/windows-11-benchmark-l1/windows/quality-update-deferral.yml</code>
+          <code class="muted">yaml</code>
+        </header>
+<pre><span class="c">- </span><span class="k">id</span>: update.quality-deferral
   <span class="k">name</span>: Quality update deferral
   <span class="k">platform</span>: windows
   <span class="k">path</span>: <span class="s">./Device/Vendor/MSFT/Policy/Config/Update/DeferQualityUpdatesPeriodInDays</span>
@@ -500,6 +511,10 @@
     <span class="k">max</span>: 7
   <span class="k">severity</span>: high
   <span class="k">source</span>: <span class="s">CIS Microsoft Windows 11 Benchmark, L1</span>
+  <span class="k">rationale</span>: &gt;
+    Deferring quality updates (which include security patches) much
+    beyond a week leaves known, actively-patched vulnerabilities
+    unaddressed for longer than necessary.
 </pre>
       </div>
 

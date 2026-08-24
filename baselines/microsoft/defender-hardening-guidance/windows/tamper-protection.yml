@@ -1,0 +1,10 @@
+- id: defender.tamper-protection
+  name: Tamper protection
+  platform: windows
+  path: ./Device/Vendor/MSFT/Defender/Configuration/TamperProtection
+  expect: enabled
+  severity: critical
+  rationale: >
+    Any process running as SYSTEM can silently disable real-time
+    scanning while tamper protection is off.
+  source: Microsoft Defender for Endpoint hardening guidance
