@@ -5,7 +5,7 @@ import { createWebSessionManager } from "../auth/webSession.js";
 import { defaultBaselinesDir, loadBaselines } from "../baselines/loader.js";
 import { buildReport, type ScanReport } from "../scan/report.js";
 import { LOOPBACK_HOSTS, startServer, type StageChangeRequestBody, type UpdateChangeRequestBody } from "../server/staticServer.js";
-import { addNote, getAllNotes, type Note } from "../storage/notes.js";
+import { addNote, deleteNote, getAllNotes, getNoteById, type Note } from "../storage/notes.js";
 import { getLatestScan, recordScan } from "../storage/scans.js";
 import {
   getAllChanges,
@@ -52,7 +52,9 @@ export async function runUi(options: UiOptions): Promise<void> {
     host,
     session,
     onScanRequest: async (graphToken) => enrichReport(await runViewerTriggeredScan(tenantId, baselinePath, graphToken)),
-    onNoteRequest: (body, viewer) => addNote(body.targetKey, viewer.name, body.text),
+    onNoteRequest: (body, viewer) => addNote(body.targetKey, viewer.id, viewer.name, body.text),
+    onDeleteNote: (id: number) => deleteNote(id),
+    getNoteById: (id: number) => getNoteById(id),
     onStageChange: (body: StageChangeRequestBody, viewer) => stageChange(body, viewer.id, viewer.name),
     onUpdateChange: (id: number, body: UpdateChangeRequestBody, viewer) => {
       // "Reviewed by" always names the real signed-in viewer, never

@@ -66,6 +66,10 @@ export interface StartServerOptions {
   onScanRequest?: (graphToken: string) => Promise<unknown>;
   /** Backs the note-adding UI; returns the updated note list for that key. */
   onNoteRequest?: (body: NoteRequestBody, viewer: ViewerIdentity) => unknown[];
+  /** Deletes a note; returns its targetKey and the remaining notes for that key, or undefined if it didn't exist. */
+  onDeleteNote?: (id: number) => { targetKey: string; notes: unknown[] } | undefined;
+  /** Looks up who wrote a note, for the deleteNote ownership check — undefined if the id doesn't exist. */
+  getNoteById?: (id: number) => { authorId: string } | undefined;
   /** Stages a change; must return the created record including its targetKey. */
   onStageChange?: (body: StageChangeRequestBody, viewer: ViewerIdentity) => WithTargetKey;
   /** Updates reason/reviewer on a staged change; must return the updated record including its targetKey. */
@@ -84,6 +88,13 @@ export async function startServer(options: StartServerOptions): Promise<{ url: s
   function requestOrigin(req: IncomingMessage): string {
     const proto = (req.headers["x-forwarded-proto"] as string | undefined) ?? "http";
     return `${proto}://${req.headers.host}`;
+  }
+
+  function setNotes(targetKey: string, notes: unknown[]): void {
+    if (!currentReport || typeof currentReport !== "object") return;
+    const existing = currentReport as Record<string, unknown>;
+    const existingNotes = (existing.notes as Record<string, unknown[]> | undefined) ?? {};
+    currentReport = { ...existing, notes: { ...existingNotes, [targetKey]: notes } };
   }
 
   function setChange(targetKey: string, change: unknown): void {
@@ -157,13 +168,13 @@ export async function startServer(options: StartServerOptions): Promise<{ url: s
       }
 
       if (req.method === "POST" && req.url === "/api/notes") {
-        await handleNoteRequest(req, res, options.onNoteRequest, viewer, (targetKey, notes) => {
-          if (currentReport && typeof currentReport === "object") {
-            const existing = currentReport as Record<string, unknown>;
-            const existingNotes = (existing.notes as Record<string, unknown[]> | undefined) ?? {};
-            currentReport = { ...existing, notes: { ...existingNotes, [targetKey]: notes } };
-          }
-        });
+        await handleNoteRequest(req, res, options.onNoteRequest, viewer, setNotes);
+        return;
+      }
+
+      const noteIdMatch = req.url?.match(/^\/api\/notes\/(\d+)$/);
+      if (noteIdMatch && req.method === "DELETE") {
+        await handleDeleteNote(res, Number(noteIdMatch[1]), options.onDeleteNote, options.getNoteById, viewer, setNotes);
         return;
       }
 
@@ -405,6 +416,42 @@ async function handleNoteRequest(
   }
 }
 
+async function handleDeleteNote(
+  res: ServerResponse,
+  id: number,
+  onDeleteNote: StartServerOptions["onDeleteNote"],
+  getNoteById: StartServerOptions["getNoteById"],
+  viewer: ViewerIdentity,
+  onDeleted: (targetKey: string, notes: unknown[]) => void,
+): Promise<void> {
+  if (!onDeleteNote) {
+    res.writeHead(501, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Deleting notes isn't available from this session." }));
+    return;
+  }
+
+  const existing = getNoteById?.(id);
+  if (!existing) {
+    res.writeHead(404, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: `No note with id ${id}.` }));
+    return;
+  }
+  if (!can(viewer.role, "deleteNote", { ownerId: existing.authorId, viewerId: viewer.id })) {
+    res.writeHead(403, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "You can only delete notes you wrote yourself, unless you're an Admin." }));
+    return;
+  }
+
+  try {
+    const result = onDeleteNote(id);
+    if (result) onDeleted(result.targetKey, result.notes);
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify(result?.notes ?? []));
+  } catch (err) {
+    sendApiError(res, err);
+  }
+}
+
 async function handleStageChange(
   req: IncomingMessage,
   res: ServerResponse,
@@ -461,7 +508,7 @@ async function handleUpdateChange(
     res.end(JSON.stringify({ error: `No staged change with id ${id}.` }));
     return;
   }
-  if (!can(viewer.role, "editChange", { stagedBy: existing.stagedBy, viewerId: viewer.id })) {
+  if (!can(viewer.role, "editChange", { ownerId: existing.stagedBy, viewerId: viewer.id })) {
     res.writeHead(403, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "You can only edit changes you staged yourself, unless you're an Admin." }));
     return;
@@ -504,7 +551,7 @@ async function handleRevertChange(
     res.end(JSON.stringify({ error: `No staged change with id ${id}.` }));
     return;
   }
-  if (!can(viewer.role, "revertChange", { stagedBy: existing.stagedBy, viewerId: viewer.id })) {
+  if (!can(viewer.role, "revertChange", { ownerId: existing.stagedBy, viewerId: viewer.id })) {
     res.writeHead(403, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "You can only revert changes you staged yourself, unless you're an Admin." }));
     return;

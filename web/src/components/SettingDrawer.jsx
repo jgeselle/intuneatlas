@@ -109,7 +109,7 @@ function EditValueSection({ current, recs, onStage }) {
   );
 }
 
-function SettingDrawer({ entry, notes, onAddNote, onClose, change, onStage, onRevert, viewer }) {
+function SettingDrawer({ entry, notes, onAddNote, onDeleteNote, onClose, change, onStage, onRevert, viewer }) {
   const recs = entry.recs;
   const canNote = viewer?.role === "contributor" || viewer?.role === "admin";
   const canStage = viewer?.role === "contributor" || viewer?.role === "admin";
@@ -239,7 +239,7 @@ function SettingDrawer({ entry, notes, onAddNote, onClose, change, onStage, onRe
         )}
       </section>
 
-      <NoteThread notes={notes} onAdd={onAddNote} readOnly={!canNote} />
+      <NoteThread notes={notes} onAdd={onAddNote} onDelete={onDeleteNote} readOnly={!canNote} viewer={viewer} />
     </DrawerShell>
   );
 }

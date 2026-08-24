@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check, CaretRight, Copy } from "@phosphor-icons/react";
+import { Check, CaretRight, Copy, Trash } from "@phosphor-icons/react";
 
 function Chip({ className = "", children }) {
   return (
@@ -144,8 +144,12 @@ function SourceRow({ policyName, value, tone = "default" }) {
   );
 }
 
-function NoteThread({ notes = [], onAdd, readOnly = false }) {
+function NoteThread({ notes = [], onAdd, onDelete, readOnly = false, viewer }) {
   const [draft, setDraft] = useState("");
+  // Whoever wrote a note can delete it themselves; an Admin can delete
+  // any — mirrors the same author-or-admin check the server enforces
+  // (src/auth/roles.ts's deleteNote capability).
+  const canDelete = (note) => viewer?.role === "admin" || (Boolean(note.authorId) && note.authorId === viewer?.id);
 
   function submit() {
     const text = draft.trim();
@@ -166,7 +170,19 @@ function NoteThread({ notes = [], onAdd, readOnly = false }) {
             <li key={n.id} className="rounded-md border border-stone-200 bg-stone-50 p-3">
               <div className="flex items-baseline justify-between gap-2 text-xs">
                 <span className="font-medium text-stone-700">{n.author}</span>
-                <span className="shrink-0 text-stone-400">{new Date(n.createdAt).toLocaleDateString()}</span>
+                <span className="flex shrink-0 items-center gap-1.5 text-stone-400">
+                  {new Date(n.createdAt).toLocaleDateString()}
+                  {onDelete && canDelete(n) && (
+                    <button
+                      onClick={() => onDelete(n.id)}
+                      aria-label="Delete note"
+                      title="Delete note"
+                      className="rounded p-0.5 hover:bg-stone-200 hover:text-stone-700 focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500"
+                    >
+                      <Trash className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </span>
               </div>
               <p className="mt-1.5 text-xs leading-relaxed text-stone-600">{n.text}</p>
             </li>

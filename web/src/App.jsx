@@ -231,6 +231,18 @@ export default function App({ initialReport, session }) {
     }
   }
 
+  async function deleteNote(key, id) {
+    try {
+      const res = await fetch("/api/notes/" + id, { method: "DELETE" });
+      const updated = await res.json();
+      if (!res.ok) throw new Error(updated.error || "Couldn't delete the note");
+      setNotes((n) => ({ ...n, [key]: updated }));
+      flash("Note deleted");
+    } catch (err) {
+      flash(err.message);
+    }
+  }
+
   // Not just for applying a baseline recommendation — ruleId is "manual"
   // for a freeform edit with no baseline rule behind it. The server never
   // required a real rule id; this was always a frontend-only constraint.
@@ -476,6 +488,7 @@ export default function App({ initialReport, session }) {
           entry={openSetting}
           notes={notes[openSetting.key] || []}
           onAddNote={(text) => addNote(openSetting.key, text)}
+          onDeleteNote={(id) => deleteNote(openSetting.key, id)}
           onClose={() => setOpen(null)}
           change={changes[openSetting.key]}
           onStage={(to, ruleId, from, reason) => stageChange(openSetting, { ruleId, from, to, reason })}
@@ -489,6 +502,7 @@ export default function App({ initialReport, session }) {
           kindLabel="Compliance"
           notes={notes[openCompliance.id] || []}
           onAddNote={(text) => addNote(openCompliance.id, text)}
+          onDeleteNote={(id) => deleteNote(openCompliance.id, id)}
           onClose={() => setOpen(null)}
           viewer={session}
         />
@@ -499,6 +513,7 @@ export default function App({ initialReport, session }) {
           kindLabel="Enrollment"
           notes={notes[openEnrollment.id] || []}
           onAddNote={(text) => addNote(openEnrollment.id, text)}
+          onDeleteNote={(id) => deleteNote(openEnrollment.id, id)}
           onClose={() => setOpen(null)}
           viewer={session}
         />

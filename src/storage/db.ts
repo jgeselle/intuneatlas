@@ -64,6 +64,7 @@ export function getDb(): DatabaseSync {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       target_key TEXT NOT NULL,
       author TEXT NOT NULL,
+      author_id TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL,
       text TEXT NOT NULL
     );
@@ -152,5 +153,14 @@ function migrate(db: DatabaseSync): void {
   // scan any), not a placeholder.
   if (!scanColumns.some((c) => c.name === "legacy_policy_count")) {
     db.exec(`ALTER TABLE scans ADD COLUMN legacy_policy_count INTEGER NOT NULL DEFAULT 0`);
+  }
+
+  // author_id — same fail-closed reasoning as staged_by above: existing
+  // notes predate per-author deletion and get '', which never matches a
+  // real signed-in id, so they become admin-only to delete rather than
+  // owned by no one in particular.
+  const notesColumns = db.prepare(`PRAGMA table_info(notes)`).all() as Array<{ name: string }>;
+  if (!notesColumns.some((c) => c.name === "author_id")) {
+    db.exec(`ALTER TABLE notes ADD COLUMN author_id TEXT NOT NULL DEFAULT ''`);
   }
 }
