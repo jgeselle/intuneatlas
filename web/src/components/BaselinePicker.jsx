@@ -84,7 +84,7 @@ function BaselinePicker({ packs, activePacks, onChange }) {
           pattern as the account menu (components/AccountMenu.jsx). */}
       <div
         className={
-          "absolute right-0 z-40 mt-2 w-96 origin-top-right rounded-lg border border-stone-200 bg-white p-3 shadow-xl transition duration-150 ease-out " +
+          "absolute right-0 z-40 mt-2 w-96 origin-top-right overflow-hidden rounded-lg border border-stone-200 bg-white py-2 shadow-xl transition duration-150 ease-out " +
           (open ? "translate-y-0 scale-100 opacity-100" : "pointer-events-none -translate-y-1.5 scale-95 opacity-0")
         }
       >
@@ -92,12 +92,12 @@ function BaselinePicker({ packs, activePacks, onChange }) {
           <>
             <button
               onClick={() => setFolder(null)}
-              className="flex items-center gap-1 rounded text-xs font-semibold uppercase tracking-wide text-stone-500 hover:text-stone-700 focus:outline-none"
+              className="flex items-center gap-1 rounded px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-stone-500 hover:text-stone-700 focus:outline-none"
             >
               <CaretLeft weight="bold" className="h-3 w-3" />
               {currentFolder.sourceLabel}
             </button>
-            <div className="mt-2 max-h-80 space-y-0.5 overflow-y-auto">
+            <div className="mt-2 max-h-80 overflow-y-auto">
               {currentFolder.packs.map((p) => (
                 <button
                   key={p.path}
@@ -105,7 +105,7 @@ function BaselinePicker({ packs, activePacks, onChange }) {
                   role="checkbox"
                   aria-checked={isActive(p)}
                   onClick={() => toggle(p)}
-                  className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-stone-50 focus:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-teal-500"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-stone-100 focus:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-teal-500"
                 >
                   <CheckIndicator checked={isActive(p)} />
                   <span className="min-w-0 flex-1 truncate">{p.name}</span>
@@ -116,7 +116,7 @@ function BaselinePicker({ packs, activePacks, onChange }) {
           </>
         ) : (
           <>
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center justify-between gap-2 px-3 py-1.5">
               <span className="text-xs font-semibold uppercase tracking-wide text-stone-500">Active baselines</span>
               <div className="flex gap-3">
                 <button
@@ -137,16 +137,16 @@ function BaselinePicker({ packs, activePacks, onChange }) {
             </div>
 
             {folders.length === 0 ? (
-              <p className="mt-2 text-xs text-stone-500">No baseline rules found.</p>
+              <p className="mt-2 px-3 text-xs text-stone-500">No baseline rules found.</p>
             ) : (
-              <div className="mt-2 space-y-0.5">
+              <div className="mt-2">
                 {folders.map((f) => {
                   const folderActiveCount = f.packs.filter(isActive).length;
                   return (
                     <button
                       key={f.sourceLabel}
                       onClick={() => setFolder(f.sourceLabel)}
-                      className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-stone-50 focus:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-teal-500"
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-stone-100 focus:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-teal-500"
                     >
                       <span className="min-w-0 flex-1 truncate">{f.sourceLabel}</span>
                       <span className="shrink-0 text-xs tabular-nums text-stone-400">
