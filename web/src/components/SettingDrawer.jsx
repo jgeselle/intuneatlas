@@ -1,18 +1,29 @@
 import { useState } from "react";
 import { Warning, WarningCircle, CheckCircle, PencilSimple } from "@phosphor-icons/react";
 import { DrawerShell } from "./DrawerShell.jsx";
-import { Chip, RefPath, HistorySection, ValueDisplay, SourceRow } from "./bits.jsx";
+import { Chip, Diff, RefPath, HistorySection, ValueDisplay, SourceRow } from "./bits.jsx";
 import { STATE_STYLE, SEVERITY_STYLE } from "../lib/styles.js";
 import { platformLabel, refLabel } from "../lib/format.js";
 
-/** One baseline's opinion on this setting — several of these can coexist, possibly disagreeing. */
-function RecommendationCard({ rec, isSelected, onUse }) {
+/**
+ * One baseline's opinion on this setting — several of these can coexist,
+ * possibly disagreeing (a different source recommending a different
+ * value shows up as its own card, right below this one). The recommended
+ * value gets the same Diff treatment as a staged change elsewhere in the
+ * app (current struck through -> recommended in teal), instead of being
+ * buried in the action button's own text, so what's actually being
+ * recommended reads clearly at a glance.
+ */
+function RecommendationCard({ rec, current, isSelected, onUse }) {
   return (
-    <div className={"rounded-md border p-2.5 " + (isSelected ? "border-teal-300 bg-teal-50" : "border-stone-200")}>
+    <div className={"rounded-md border border-stone-200 p-2.5 " + (isSelected ? "bg-teal-50" : "")}>
       <div className="flex items-center gap-2">
         <WarningCircle className="h-4 w-4 shrink-0 text-amber-500" />
         <span className="text-xs font-medium text-stone-500">{rec.source}</span>
         <Chip className={"ml-auto " + SEVERITY_STYLE[rec.severity].chip}>{SEVERITY_STYLE[rec.severity].label}</Chip>
+      </div>
+      <div className="mt-2">
+        <Diff from={current} to={rec.recommended} />
       </div>
       <p className="mt-1.5 text-xs leading-relaxed text-stone-600">{rec.why}</p>
       <button
@@ -21,7 +32,7 @@ function RecommendationCard({ rec, isSelected, onUse }) {
         disabled={isSelected}
         className="mt-1.5 text-xs font-medium text-teal-700 hover:underline focus:outline-none disabled:cursor-default disabled:text-teal-800 disabled:no-underline"
       >
-        {isSelected ? `Using this value (${rec.recommended})` : `Use this value (${rec.recommended})`}
+        {isSelected ? "Using this value" : "Use this value"}
       </button>
     </div>
   );
@@ -58,6 +69,7 @@ function EditValueSection({ current, recs, onStage }) {
             <RecommendationCard
               key={rec.ruleId}
               rec={rec}
+              current={current}
               isSelected={value === rec.recommended}
               onUse={() => setValue(rec.recommended)}
             />
