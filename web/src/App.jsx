@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   SquaresFour,
   Sliders,
@@ -30,6 +30,27 @@ const RAIL_COLLAPSE_KEY = "intuneatlas.rail-collapsed";
  * keeps its facts and takes its new state, recommendations and checks;
  * the synthetic "Missing" entries are replaced wholesale.
  */
+/**
+ * The groups the Settings page can be narrowed to: every group a policy is
+ * assigned to, plus the groups nested inside those. Labelled by name when
+ * the scan could read names (it needs Group.Read.All for that), by id
+ * otherwise.
+ */
+function groupChoices(settings, groups) {
+  const ids = new Set();
+  for (const entry of settings) {
+    for (const source of entry.sources ?? []) {
+      for (const target of source.targets ?? []) {
+        if (target.kind === "group" && target.groupId) ids.add(target.groupId);
+      }
+    }
+  }
+  for (const id of [...ids]) for (const child of groups?.contains?.[id] ?? []) ids.add(child);
+  return [...ids]
+    .map((id) => ({ value: id, label: groups?.names?.[id] ?? id }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+}
+
 function withBaselineVerdicts(report, patch) {
   if (!patch) return report;
   const settings = report.settings
@@ -52,6 +73,12 @@ export default function App({ initialReport, session }) {
   const [platform, setPlatform] = useState("All");
   // Which two baselines the Settings page is comparing, if any — kept here so it survives switching pages.
   const [compareSelection, setCompareSelection] = useState({ from: null, to: null });
+  // The Settings page can be narrowed to what one group gets: `scopeGroup`
+  // is the chosen group's id, `scoped` the settings as that group gets
+  // them (worked out by the server — conflicts and baseline verdicts are
+  // different per group, not just a filter over the tenant-wide list).
+  const [scopeGroup, setScopeGroup] = useState(null);
+  const [scoped, setScoped] = useState(null);
   const [notes, setNotes] = useState(initialReport?.notes ?? {});
   const [changes, setChanges] = useState(initialReport?.changes ?? {});
   const [open, setOpen] = useState(null);
@@ -200,6 +227,35 @@ export default function App({ initialReport, session }) {
   }
 
   const settingIndex = report.settings ?? [];
+  // Fetched again whenever anything it depends on changes: the group, a new scan, or which baselines are judged against.
+  const scopeStamp = [scopeGroup, report.scannedAt, JSON.stringify(report.activeBaselinePacks ?? null), (report.baselinePacks ?? []).map((p) => p.path + ":" + p.ruleCount).join("|")].join("#");
+  useEffect(() => {
+    if (!scopeGroup) {
+      setScoped(null);
+      return;
+    }
+    let stale = false;
+    fetch("/api/scope?group=" + encodeURIComponent(scopeGroup))
+      .then(async (res) => {
+        const body = await res.json();
+        if (stale) return;
+        if (!res.ok) throw new Error(body.error || "Couldn't load that group's settings");
+        setScoped({ group: scopeGroup, settings: body.settings });
+      })
+      .catch((err) => {
+        if (stale) return;
+        flash(err.message);
+        setScopeGroup(null);
+      });
+    return () => {
+      stale = true;
+    };
+  }, [scopeStamp]);
+  // What the Settings page lists, and what a setting opened from it shows: the group's view while one is chosen and loaded.
+  const scopedHere = view === "configuration" && scopeGroup && scoped?.group === scopeGroup;
+  const listedSettings = scopedHere ? scoped.settings : settingIndex;
+  // Every group a policy names (or that sits inside one that is named), by name where the scan could read names.
+  const groupOptions = useMemo(() => groupChoices(settingIndex, report.groups), [settingIndex, report.groups]);
   const compliancePolicies = report.compliancePolicies ?? [];
   const enrollmentConfigurations = report.enrollmentConfigurations ?? [];
   const syncedAgo = report.scannedAt ? Math.max(0, Math.round((Date.now() - new Date(report.scannedAt).getTime()) / 60000)) : 0;
@@ -387,7 +443,7 @@ export default function App({ initialReport, session }) {
     { id: "baselines", label: "Baselines", icon: Stack, count: (report.baselinePacks ?? []).length },
   ];
 
-  const openSetting = open?.type === "setting" ? settingIndex.find((e) => e.key === open.key) : null;
+  const openSetting = open?.type === "setting" ? listedSettings.find((e) => e.key === open.key) : null;
   const openCompliance = open?.type === "compliance" ? compliancePolicies.find((p) => p.id === open.id) : null;
   const openEnrollment = open?.type === "enrollment" ? enrollmentConfigurations.find((p) => p.id === open.id) : null;
 
@@ -545,7 +601,10 @@ export default function App({ initialReport, session }) {
 
           {view === "configuration" && (
             <SettingsView
-              entries={settingIndex}
+              entries={listedSettings}
+              groupOptions={groupOptions}
+              scopeGroup={scopeGroup}
+              setScopeGroup={setScopeGroup}
               notes={notes}
               query={query}
               setQuery={setQuery}
@@ -612,6 +671,7 @@ export default function App({ initialReport, session }) {
           onDeleteNote={(id) => deleteNote(openSetting.key, id)}
           onClose={() => setOpen(null)}
           changes={Object.values(changes).filter((c) => c.settingKey === openSetting.key || c.targetKey === openSetting.key)}
+          groups={report.groups}
           onStage={(source, change) => stageChange(openSetting, source, change)}
           onStageNew={(change) => stageChange(openSetting, null, change)}
           onRevert={(change) => revertEntryChange(change.id, change.targetKey)}

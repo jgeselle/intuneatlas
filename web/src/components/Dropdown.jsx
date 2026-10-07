@@ -17,7 +17,7 @@ import { CaretDown, Check } from "@phosphor-icons/react";
  * letter jumps to the next option starting with it; Enter or Space picks;
  * Escape or Tab closes.
  */
-function Dropdown({ value, options, onChange, placeholder = "Select…", ariaLabel, muted = false }) {
+function Dropdown({ value, options, onChange, placeholder = "Select…", ariaLabel, muted = false, size = "md" }) {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
   const [above, setAbove] = useState(false);
@@ -110,7 +110,9 @@ function Dropdown({ value, options, onChange, placeholder = "Select…", ariaLab
         onClick={() => (open ? setOpen(false) : openList())}
         onKeyDown={onKeyDown}
         className={
-          "flex w-full items-center gap-2 rounded-md border bg-white py-1.5 pl-2.5 pr-2 text-left text-sm focus:outline-none focus:ring-1 focus:ring-teal-600 " +
+          "flex w-full items-center gap-2 rounded-md border bg-white pl-2.5 pr-2 text-left text-sm focus:outline-none focus:ring-1 focus:ring-teal-600 " +
+          // "lg" matches the height of the page-level search box it sits next to.
+          (size === "lg" ? "py-2 pl-3 " : "py-1.5 ") +
           (open ? "border-teal-600 ring-1 ring-teal-600" : "border-stone-300 focus:border-teal-600")
         }
       >

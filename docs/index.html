@@ -203,6 +203,10 @@
             <code>DeviceManagementServiceConfig.Read.All</code>. If you're a Global or Intune
             admin, click <b>Grant admin consent</b> now — otherwise the first sign-in will
             prompt for it instead.
+            <br>Optionally also add <code>Group.Read.All</code>. IntuneAtlas uses it only to read the names of
+            the groups your policies are assigned to and which groups contain other groups, so it can show
+            settings per group by name. Everything works without it: groups are then shown by their ID, and a
+            policy assigned to a parent group isn't counted for the groups inside it.
           </li>
           <li>
             <b>App roles</b> → <b>Create app role</b>, three times, one for each of:

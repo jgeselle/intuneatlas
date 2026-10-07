@@ -153,7 +153,22 @@ function BaselineCheckCard({ check, canUse, isSelected, onUse, onStageNew }) {
  * can't be edited at all (several lines of text with no structure behind
  * them — a legacy profile, or a scan stored before structure was kept).
  */
-function PolicyValueCard({ source, schemas, inConflict, canStage, change, canRevert, draft, setDraft, onReset, onStage, onRevert }) {
+/**
+ * Who a policy is assigned to, in words: "All devices", group names, and
+ * what it excludes. Group names come from the scan when it could read
+ * them; otherwise the group's id stands in. A scan stored before targets
+ * were kept only knows assigned-or-not.
+ */
+function targetsLabel(source, groups) {
+  if (!source.targets) return source.deployed ? "Assigned" : "Not assigned";
+  const name = (t) => (t.kind === "allDevices" ? "All devices" : t.kind === "allLicensedUsers" ? "All users" : (groups?.names?.[t.groupId] ?? t.groupId)) + (t.filtered ? " (filtered)" : "");
+  const included = source.targets.filter((t) => t.kind !== "group" || !t.excluded).map(name);
+  const excluded = source.targets.filter((t) => t.kind === "group" && t.excluded).map(name);
+  if (included.length === 0) return "Not assigned";
+  return included.join(", ") + (excluded.length ? " · except " + excluded.join(", ") : "");
+}
+
+function PolicyValueCard({ source, schemas, groups, inConflict, canStage, change, canRevert, draft, setDraft, onReset, onStage, onRevert }) {
   const [reason, setReason] = useState("");
   const editable = canStage && !change && draft !== null;
   const dirty = editable && renderNode(draft) !== source.value;
@@ -164,14 +179,10 @@ function PolicyValueCard({ source, schemas, inConflict, canStage, change, canRev
 
   return (
     <li className={"rounded-md border p-3 " + (alert ? "border-red-200 bg-red-50" : "border-stone-200")}>
-      <div className="flex items-baseline justify-between gap-3">
-        <span className={"min-w-0 truncate text-xs font-medium " + (alert ? "text-red-900" : "text-stone-700")} title={source.policyName}>
-          {source.policyName}
-        </span>
-        <span className={"shrink-0 text-xs " + (source.deployed ? "text-stone-500" : "text-stone-400")}>
-          {source.deployed ? "Assigned" : "Not assigned"}
-        </span>
+      <div className={"truncate text-xs font-medium " + (alert ? "text-red-900" : "text-stone-700")} title={source.policyName}>
+        {source.policyName}
       </div>
+      <div className={"mt-0.5 break-words text-xs " + (source.deployed ? "text-stone-500" : "text-stone-400")}>{targetsLabel(source, groups)}</div>
 
       <div className="mt-2">
         {change ? (
@@ -289,7 +300,7 @@ function initialDraft(source) {
  * them differs. The state itself is the chip in the header — nothing
  * here restates it in a sentence.
  */
-function SettingDrawer({ entry, notes, onAddNote, onDeleteNote, onClose, changes, onStage, onStageNew, onRevert, viewer }) {
+function SettingDrawer({ entry, notes, onAddNote, onDeleteNote, onClose, changes, groups, onStage, onStageNew, onRevert, viewer }) {
   const recs = entry.recs;
   const checks = entry.checks ?? [];
   const schemas = entry.schemas;
@@ -345,6 +356,7 @@ function SettingDrawer({ entry, notes, onAddNote, onDeleteNote, onClose, changes
                   key={n}
                   source={source}
                   schemas={schemas}
+                  groups={groups}
                   inConflict={entry.conflict}
                   canStage={canStage}
                   change={change}
