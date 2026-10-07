@@ -41,6 +41,7 @@ export interface StageChangeRequestBody {
   ruleId: string;
   from: string;
   to: string;
+  toStructured?: unknown;
   reason?: string;
 }
 

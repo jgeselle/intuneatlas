@@ -16,6 +16,12 @@ export interface StagedChange {
   ruleId: string;
   from: string;
   to: string;
+  /**
+   * The new value with its structure (a SettingValueNode) — `to` is this
+   * rendered as text. Present for Settings Catalog settings; what a write
+   * back to the tenant would send.
+   */
+  toStructured?: unknown;
   reason: string;
   reviewedBy: string;
   /** Entra object ID of whoever staged this — the ownership key; never display this. */
@@ -38,6 +44,7 @@ interface ChangeRow {
   rule_id: string;
   from_value: string;
   to_value: string;
+  to_structured_json: string | null;
   reason: string;
   reviewed_by: string;
   staged_by: string;
@@ -57,6 +64,7 @@ function toStagedChange(r: ChangeRow): StagedChange {
     ruleId: r.rule_id,
     from: r.from_value,
     to: r.to_value,
+    ...(r.to_structured_json ? { toStructured: JSON.parse(r.to_structured_json) as unknown } : {}),
     reason: r.reason,
     reviewedBy: r.reviewed_by,
     stagedBy: r.staged_by,
@@ -78,6 +86,7 @@ export interface StageChangeInput {
   ruleId: string;
   from: string;
   to: string;
+  toStructured?: unknown;
   /** Optional — can be set right away instead of only via the later reason/reviewer edit. */
   reason?: string;
 }
@@ -101,8 +110,8 @@ export function stageChange(input: StageChangeInput, stagedBy: string, stagedByN
 
   db.prepare(
     `
-    INSERT INTO staged_changes (target_key, target_name, setting_key, policy_id, policy_name, rule_id, from_value, to_value, reason, staged_by, staged_by_name, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO staged_changes (target_key, target_name, setting_key, policy_id, policy_name, rule_id, from_value, to_value, to_structured_json, reason, staged_by, staged_by_name, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(target_key) DO UPDATE SET
       target_name = excluded.target_name,
       setting_key = excluded.setting_key,
@@ -111,6 +120,7 @@ export function stageChange(input: StageChangeInput, stagedBy: string, stagedByN
       rule_id = excluded.rule_id,
       from_value = excluded.from_value,
       to_value = excluded.to_value,
+      to_structured_json = excluded.to_structured_json,
       reason = excluded.reason,
       reviewed_by = '',
       staged_by = excluded.staged_by,
@@ -126,6 +136,7 @@ export function stageChange(input: StageChangeInput, stagedBy: string, stagedByN
     input.ruleId,
     input.from,
     input.to,
+    input.toStructured === undefined ? null : JSON.stringify(input.toStructured),
     reason,
     stagedBy,
     stagedByName,

@@ -31,6 +31,7 @@ interface SettingDefinitionResponse {
   options?: SettingDefinitionOption[];
   defaultOptionId?: string | null;
   valueDefinition?: SettingValueDefinition | null;
+  defaultValue?: { value?: unknown } | null;
   childIds?: string[] | null;
   minimumCount?: number | null;
   maximumCount?: number | null;
@@ -188,10 +189,55 @@ function toSchema(definition: SettingDefinitionResponse): SettingSchema {
     if (value?.format) schema.format = value.format;
     if (value?.isSecret) schema.isSecret = true;
   }
+  const defaultValue = definition.defaultValue?.value;
+  if (typeof defaultValue === "number" || (typeof defaultValue === "string" && defaultValue !== "")) schema.defaultValue = defaultValue;
   if (definition.childIds?.length) schema.childIds = definition.childIds;
   const minCount = num(definition.minimumCount);
   const maxCount = num(definition.maximumCount);
   if (minCount !== undefined) schema.minCount = minCount;
   if (maxCount !== undefined) schema.maxCount = maxCount;
   return schema;
+}
+
+/**
+ * Fills `schemas` out to every sub-setting its definitions declare — a
+ * choice option's dependents, a group's children — recursively, whether
+ * or not any policy's value configures them. Without this an editor could
+ * show what is set but never offer what could be added.
+ *
+ * A declared id Graph has no definition for is skipped: confirmed live
+ * that definitions do name children that 404 (66 of 701 declared ids in
+ * one tenant, e.g. most of DMClient's "Provider ID" group). The setting
+ * just can't offer that one sub-setting. Any other failure still fails
+ * the scan — silently dropping definitions over a throttling or auth
+ * error would look exactly the same and be wrong.
+ */
+export async function resolveDeclaredSchemas(token: string, schemas: Record<string, SettingSchema>): Promise<void> {
+  let pending = declaredIds(Object.values(schemas)).filter((id) => !(id in schemas));
+  while (pending.length > 0) {
+    const resolved = await Promise.all(
+      pending.map(async (id) => {
+        try {
+          return (await resolveSettingDefinition(token, id)).schema;
+        } catch (err) {
+          if (err instanceof Error && /failed: 404\b/.test(err.message)) return undefined;
+          throw err;
+        }
+      }),
+    );
+    const added = resolved.filter((schema): schema is SettingSchema => schema !== undefined);
+    for (const schema of added) schemas[schema.definitionId] = schema;
+    // Ids that failed stay out of `schemas`; only what was just added can declare anything new.
+    const failed = new Set(pending.filter((_, i) => resolved[i] === undefined));
+    pending = declaredIds(added).filter((id) => !(id in schemas) && !failed.has(id));
+  }
+}
+
+function declaredIds(list: SettingSchema[]): string[] {
+  const ids = new Set<string>();
+  for (const schema of list) {
+    for (const id of schema.childIds ?? []) ids.add(id);
+    for (const option of schema.options ?? []) for (const id of option.childIds ?? []) ids.add(id);
+  }
+  return [...ids];
 }

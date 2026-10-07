@@ -267,6 +267,7 @@ test("fetchConfigurationPolicies — structured values and definition schemas", 
 
   const CHOICE_ID = "schema_test_startup_auth";
   const CHILD_ID = `${CHOICE_ID}_min_pin_length`;
+  const UNSET_ID = `${CHOICE_ID}_recovery_message`;
   const LIST_ID = "schema_test_excluded_paths";
   const CATEGORY_ID = "cat-schema";
   const definitions: Record<string, unknown> = {
@@ -280,7 +281,8 @@ test("fetchConfigurationPolicies — structured values and definition schemas", 
       categoryId: CATEGORY_ID,
       defaultOptionId: `${CHOICE_ID}_0`,
       options: [
-        { itemId: `${CHOICE_ID}_0`, displayName: "Disabled", description: null, dependedOnBy: [] },
+        // Declares a sub-setting no policy in this fixture configures — its schema must still be resolved.
+        { itemId: `${CHOICE_ID}_0`, displayName: "Disabled", description: null, dependedOnBy: [{ dependedOnBy: UNSET_ID }, { dependedOnBy: "schema_test_gone" }] },
         { itemId: `${CHOICE_ID}_1`, displayName: "Enabled", description: "Turns it on", dependedOnBy: [{ dependedOnBy: CHILD_ID, required: true }] },
       ],
     },
@@ -296,6 +298,16 @@ test("fetchConfigurationPolicies — structured values and definition schemas", 
         minimumValue: 4,
         maximumValue: 20,
       },
+    },
+    [UNSET_ID]: {
+      "@odata.type": "#microsoft.graph.deviceManagementConfigurationSimpleSettingDefinition",
+      id: UNSET_ID,
+      displayName: "Recovery message",
+      baseUri: "./Device/Vendor/MSFT/BitLocker/",
+      offsetUri: "RecoveryMessage",
+      categoryId: CATEGORY_ID,
+      defaultValue: { "@odata.type": "#microsoft.graph.deviceManagementConfigurationStringSettingValue", value: "Contact IT" },
+      valueDefinition: { "@odata.type": "#microsoft.graph.deviceManagementConfigurationStringSettingValueDefinition", format: "none", maximumLength: 900 },
     },
     [LIST_ID]: {
       "@odata.type": "#microsoft.graph.deviceManagementConfigurationSimpleSettingCollectionDefinition",
@@ -352,6 +364,8 @@ test("fetchConfigurationPolicies — structured values and definition schemas", 
     }
     const definitionId = Object.keys(definitions).find((id) => u.endsWith(`/deviceManagement/configurationSettings/${id}`));
     if (definitionId) return jsonResponse(definitions[definitionId]);
+    // A declared sub-setting Graph can't return must not fail the scan.
+    if (u.endsWith("/deviceManagement/configurationSettings/schema_test_gone")) return new Response("{}", { status: 404 });
     if (u.endsWith(`/deviceManagement/configurationCategories/${CATEGORY_ID}`)) {
       return jsonResponse({ id: CATEGORY_ID, displayName: "Schema tests" });
     }
@@ -377,12 +391,13 @@ test("fetchConfigurationPolicies — structured values and definition schemas", 
       kind: "choice",
       description: "Controls whether a PIN is needed.",
       options: [
-        { id: `${CHOICE_ID}_0`, label: "Disabled" },
+        { id: `${CHOICE_ID}_0`, label: "Disabled", childIds: [UNSET_ID, "schema_test_gone"] },
         { id: `${CHOICE_ID}_1`, label: "Enabled", description: "Turns it on", childIds: [CHILD_ID] },
       ],
       defaultOptionId: `${CHOICE_ID}_0`,
     },
     [CHILD_ID]: { definitionId: CHILD_ID, name: "Minimum PIN length", kind: "simple", valueType: "integer", min: 4, max: 20 },
+    [UNSET_ID]: { definitionId: UNSET_ID, name: "Recovery message", kind: "simple", valueType: "string", maxLength: 900, format: "none", defaultValue: "Contact IT" },
   });
 
   assert.equal(list.value, "C:\\Temp\nD:\\Build");

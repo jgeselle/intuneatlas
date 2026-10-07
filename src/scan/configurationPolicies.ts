@@ -1,7 +1,7 @@
 import { GRAPH_BETA_BASE } from "../config.js";
 import { graphGetAll } from "../graph.js";
 import { mapAssignmentTargets } from "./assignments.js";
-import { resolveSettingDefinition, type ResolvedDefinition } from "./settingDefinitions.js";
+import { resolveDeclaredSchemas, resolveSettingDefinition, type ResolvedDefinition } from "./settingDefinitions.js";
 import type { RawPolicy, RawSetting, SettingSchema, SettingValueNode } from "./types.js";
 
 interface GraphPolicy {
@@ -70,6 +70,7 @@ async function fetchPolicySettings(token: string, policyId: string): Promise<Raw
       const definition = await resolveSettingDefinition(token, settingInstance.settingDefinitionId);
       const schemas: Record<string, SettingSchema> = {};
       const structured = await buildNode(token, settingInstance, definition, schemas);
+      await resolveDeclaredSchemas(token, schemas);
       return {
         settingDefinitionId: settingInstance.settingDefinitionId,
         name: definition.name,

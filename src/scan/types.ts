@@ -5,7 +5,9 @@
  * each have their own.
  *
  * - choice / choiceCollection: `options` (and, per option, which other
- *   definitions it reveals — a "dependent" sub-setting)
+ *   definitions it reveals — "dependent" sub-settings, each of them
+ *   optional: confirmed live that a policy can select the option and
+ *   configure all, some or none of them)
  * - simple / simpleCollection: `valueType` plus its range or length limits
  * - group / groupCollection: `childIds`, the sub-settings it bundles
  * - unknown: the definition didn't say (or a legacy profile with no
@@ -34,6 +36,8 @@ export interface SettingSchema {
   max?: number;
   minLength?: number;
   maxLength?: number;
+  /** What Intune pre-fills for a simple setting, when its definition names one. */
+  defaultValue?: string | number;
   /** Graph's string format hint, e.g. "none", "email", "json", "xml". */
   format?: string;
   isSecret?: boolean;
@@ -68,7 +72,11 @@ export interface RawSetting {
   value: string;
   /** Settings Catalog only — legacy device configuration profiles have no definition to build this from. */
   structured?: SettingValueNode;
-  /** The schema of this setting and of every sub-setting its value touches, keyed by definition id. */
+  /**
+   * The schema of this setting and of every sub-setting it could have —
+   * not only the ones this policy's value happens to configure — keyed by
+   * definition id. An editor needs the ones that aren't set yet too.
+   */
   schemas?: Record<string, SettingSchema>;
 }
 

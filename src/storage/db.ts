@@ -81,6 +81,7 @@ export function getDb(): DatabaseSync {
       rule_id TEXT NOT NULL,
       from_value TEXT NOT NULL,
       to_value TEXT NOT NULL,
+      to_structured_json TEXT,
       reason TEXT NOT NULL DEFAULT '',
       reviewed_by TEXT NOT NULL DEFAULT '',
       staged_by TEXT NOT NULL DEFAULT '',
@@ -156,6 +157,12 @@ function migrate(db: DatabaseSync): void {
   // policy's value of a setting. Rows from before get '', which the UI
   // reads as "a change to the setting as a whole" (target_key is then the
   // setting's own key).
+  // to_structured_json — the staged value with its structure; null on
+  // older rows and on changes to settings that have none (legacy profiles).
+  if (!stagedChangesColumns.some((c) => c.name === "to_structured_json")) {
+    db.exec(`ALTER TABLE staged_changes ADD COLUMN to_structured_json TEXT`);
+  }
+
   for (const column of ["setting_key", "policy_id", "policy_name"]) {
     if (!stagedChangesColumns.some((c) => c.name === column)) {
       db.exec(`ALTER TABLE staged_changes ADD COLUMN ${column} TEXT NOT NULL DEFAULT ''`);
