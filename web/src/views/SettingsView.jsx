@@ -193,7 +193,10 @@ function SettingsView({
                             : item.entry.values.map((v) => v.replace(/\n/g, ", ")).join(" / ")}
                         </div>
                       </div>
-                      <Chip className={STATE_STYLE[item.entry.state]}>{item.entry.state}</Chip>
+                      {/* Fixed width: the chip's own width varies with its label, which would otherwise shift the value column row by row. */}
+                      <div className="flex w-28 shrink-0 justify-end">
+                        <Chip className={STATE_STYLE[item.entry.state]}>{item.entry.state}</Chip>
+                      </div>
                     </button>
                   </div>
                 )}
