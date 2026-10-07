@@ -22,6 +22,26 @@ import { ChangeLog } from "./views/ChangeLog.jsx";
 
 const RAIL_COLLAPSE_KEY = "intuneatlas.rail-collapsed";
 
+/**
+ * The report with a fresh set of baseline verdicts folded in (see
+ * baselineVerdicts in src/server/staticServer.ts): every real setting
+ * keeps its facts and takes its new state, recommendations and checks;
+ * the synthetic "Missing" entries are replaced wholesale.
+ */
+function withBaselineVerdicts(report, patch) {
+  if (!patch) return report;
+  const settings = report.settings
+    .filter((e) => e.state !== "Missing")
+    .map((e) => (patch.verdicts[e.key] ? { ...e, ...patch.verdicts[e.key] } : e));
+  return {
+    ...report,
+    settings: [...settings, ...patch.missing],
+    belowBaselineCount: patch.belowBaselineCount,
+    baselinePacks: patch.baselinePacks,
+    activeBaselinePacks: patch.activeBaselinePacks,
+  };
+}
+
 export default function App({ initialReport, session }) {
   const [report, setReport] = useState(initialReport);
   const [view, setView] = useState("overview");
@@ -213,7 +233,7 @@ export default function App({ initialReport, session }) {
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error || "Couldn't update baseline selection");
-      setReport(body);
+      setReport((current) => withBaselineVerdicts(current, body));
     } catch (err) {
       flash(err.message);
     }

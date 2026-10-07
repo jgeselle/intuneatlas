@@ -432,10 +432,40 @@ async function handleSetBaselineSelection(
     const raw = getReport();
     const report = raw ? await onEvaluateForViewer(raw, viewer) : null;
     res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify(report));
+    res.end(JSON.stringify(report ? baselineVerdicts(report) : null));
   } catch (err) {
     sendApiError(res, err);
   }
+}
+
+/**
+ * What changes about a report when only the baselines do — the browser
+ * already holds everything else. Per real setting just its verdict
+ * (state, recommendations, checks); the synthetic "Missing" entries in
+ * full, since they exist only because of the baselines; and the pack
+ * list and selection. Sending this instead of the whole report again
+ * keeps a baseline toggle to a fraction of the size.
+ */
+export function baselineVerdicts(report: unknown): unknown {
+  const r = report as {
+    settings: Array<{ key: string; state: string; recs: unknown; checks?: unknown }>;
+    belowBaselineCount: number;
+    baselinePacks?: unknown;
+    activeBaselinePacks?: unknown;
+  };
+  const verdicts: Record<string, { state: string; recs: unknown; checks: unknown }> = {};
+  const missing: unknown[] = [];
+  for (const entry of r.settings) {
+    if (entry.state === "Missing") missing.push(entry);
+    else verdicts[entry.key] = { state: entry.state, recs: entry.recs, checks: entry.checks ?? [] };
+  }
+  return {
+    verdicts,
+    missing,
+    belowBaselineCount: r.belowBaselineCount,
+    baselinePacks: r.baselinePacks ?? [],
+    activeBaselinePacks: r.activeBaselinePacks ?? null,
+  };
 }
 
 // Same INTUNEATLAS_DEBUG convention cli.ts's own error handling uses.

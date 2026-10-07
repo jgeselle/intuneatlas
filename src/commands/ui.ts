@@ -143,7 +143,8 @@ async function evaluateForViewer(
 ): Promise<ViewerReport> {
   const baselineRules = await loadBaselines(baselineDirs(baselinePath));
   const activePacks = getSelectedPacks(viewer.id);
-  const evaluated = applyBaselinesToReport(report, baselineRules, activePacks);
+  // The lookup table has done its job once the report is judged; the browser never reads it.
+  const { baselineDefinitions: _lookups, ...evaluated } = applyBaselinesToReport(report, baselineRules, activePacks);
   return {
     ...evaluated,
     notes: report.notes,

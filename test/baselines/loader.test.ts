@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import assert from "node:assert/strict";
@@ -182,5 +182,26 @@ test("loadBaselines: several directories are read together; a missing one is not
 test("loadBaselines: an empty directory produces an empty rule set, not an error", async () => {
   await withTempDir({}, async (dir) => {
     assert.deepEqual(await loadBaselines(dir), []);
+  });
+});
+
+test("loadBaselines: a directory is parsed once and reused until one of its files changes", async () => {
+  await withTempDir({ "p/v1/x.json": exportedPolicy("X", [choiceInstance("s1", "1")]) }, async (dir) => {
+    const first = await loadBaselines(dir);
+    assert.equal(await loadBaselines(dir).then((r) => r[0]), first[0], "unchanged files give back the very same parsed rules");
+
+    // A changed value (same length, so only the modified time gives it away), a new file, a new annotation.
+    await writeFile(join(dir, "p/v1/x.json"), exportedPolicy("X", [choiceInstance("s1", "0")]));
+    await utimes(join(dir, "p/v1/x.json"), new Date(), new Date(Date.now() + 5000));
+    assert.equal(((await loadBaselines(dir))[0].expected as { optionId: string }).optionId, "s1_0");
+
+    await writeFile(join(dir, "p/v1/y.json"), exportedPolicy("Y", [choiceInstance("s2", "1")]));
+    assert.equal((await loadBaselines(dir)).length, 2);
+
+    await writeFile(join(dir, "p/v1/baseline.yml"), "name: Renamed\n");
+    assert.equal((await loadBaselines(dir))[0].source, "Renamed");
+
+    await rm(join(dir, "p/v1/y.json"));
+    assert.equal((await loadBaselines(dir)).length, 1);
   });
 });

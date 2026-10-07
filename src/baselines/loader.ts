@@ -1,4 +1,4 @@
-import { readdir, readFile } from "node:fs/promises";
+import { readdir, readFile, stat } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { basename, dirname, join, relative, sep } from "node:path";
@@ -73,41 +73,68 @@ export async function loadBaselines(dirs: string | string[]): Promise<BaselineRu
   const rules: BaselineRule[] = [];
   for (const dir of Array.isArray(dirs) ? dirs : [dirs]) {
     if (!existsSync(dir)) continue;
-    const files = await findFiles(dir);
-    const annotations = new Map<string, PackAnnotations>();
+    rules.push(...(await loadDirectory(dir)));
+  }
+  return rules;
+}
 
-    for (const file of files.filter((f) => basename(f) === ANNOTATIONS_FILE)) {
-      // Only at a pack's own root — a stray baseline.yml deeper in a download isn't ours.
-      if (relative(dir, dirname(file)).split(sep).filter(Boolean).length === 2) {
-        annotations.set(packForFile(dir, file), await readAnnotations(file));
-      }
+/**
+ * Parsed rules per directory, kept until something in it changes.
+ * Baselines are re-read on every evaluation on purpose — an edit to a
+ * file takes effect on the next request, no restart — but parsing a few
+ * hundred exported policies each time a checkbox is ticked is waste.
+ * Listing the files and their sizes/modified times is cheap, and is all
+ * it takes to know whether the last parse still stands.
+ */
+const cache = new Map<string, { signature: string; rules: BaselineRule[] }>();
+
+async function loadDirectory(dir: string): Promise<BaselineRule[]> {
+  const files = (await findFiles(dir)).filter((f) => /\.json$/i.test(f) || basename(f) === ANNOTATIONS_FILE);
+  const stats = await Promise.all(files.map((file) => stat(file)));
+  const signature = files.map((file, i) => `${file}:${stats[i].size}:${stats[i].mtimeMs}`).join("|");
+  const cached = cache.get(dir);
+  if (cached?.signature === signature) return cached.rules;
+
+  const rules = await parseDirectory(dir, files);
+  cache.set(dir, { signature, rules });
+  return rules;
+}
+
+async function parseDirectory(dir: string, files: string[]): Promise<BaselineRule[]> {
+  const rules: BaselineRule[] = [];
+  const annotations = new Map<string, PackAnnotations>();
+
+  for (const file of files.filter((f) => basename(f) === ANNOTATIONS_FILE)) {
+    // Only at a pack's own root — a stray baseline.yml deeper in a download isn't ours.
+    if (relative(dir, dirname(file)).split(sep).filter(Boolean).length === 2) {
+      annotations.set(packForFile(dir, file), await readAnnotations(file));
     }
+  }
 
-    for (const file of files.filter((f) => /\.json$/i.test(f))) {
-      const policy = await readExportedPolicy(file);
-      if (!policy) continue;
-      const pack = packForFile(dir, file);
-      const packAnnotations = annotations.get(pack);
-      const policyName = policy.name ?? policy.displayName ?? basename(file).replace(/\.json$/i, "");
+  for (const file of files.filter((f) => /\.json$/i.test(f))) {
+    const policy = await readExportedPolicy(file);
+    if (!policy) continue;
+    const pack = packForFile(dir, file);
+    const packAnnotations = annotations.get(pack);
+    const policyName = policy.name ?? policy.displayName ?? basename(file).replace(/\.json$/i, "");
 
-      for (const { settingInstance } of policy.settings ?? []) {
-        if (!settingInstance?.settingDefinitionId) continue;
-        const annotation = packAnnotations?.settings[settingInstance.settingDefinitionId] ?? {};
-        if (annotation.ignore) continue;
-        rules.push({
-          id: `${pack}::${policyName}::${settingInstance.settingDefinitionId}`,
-          pack,
-          source: packAnnotations?.name ?? prettifyPack(pack),
-          policyName,
-          definitionId: settingInstance.settingDefinitionId,
-          platform: policy.platforms ?? "",
-          expected: rawNode(settingInstance),
-          compare: annotation.compare ?? "exact",
-          ...(annotation.severity ? { severity: annotation.severity } : {}),
-          ...(annotation.rationale ? { rationale: annotation.rationale } : {}),
-          ...(annotation.reference ? { reference: annotation.reference } : {}),
-        });
-      }
+    for (const { settingInstance } of policy.settings ?? []) {
+      if (!settingInstance?.settingDefinitionId) continue;
+      const annotation = packAnnotations?.settings[settingInstance.settingDefinitionId] ?? {};
+      if (annotation.ignore) continue;
+      rules.push({
+        id: `${pack}::${policyName}::${settingInstance.settingDefinitionId}`,
+        pack,
+        source: packAnnotations?.name ?? prettifyPack(pack),
+        policyName,
+        definitionId: settingInstance.settingDefinitionId,
+        platform: policy.platforms ?? "",
+        expected: rawNode(settingInstance),
+        compare: annotation.compare ?? "exact",
+        ...(annotation.severity ? { severity: annotation.severity } : {}),
+        ...(annotation.rationale ? { rationale: annotation.rationale } : {}),
+        ...(annotation.reference ? { reference: annotation.reference } : {}),
+      });
     }
   }
   return rules;

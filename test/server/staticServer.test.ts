@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { resolveStaticPath, startServer, type StartServerOptions } from "../../src/server/staticServer.js";
+import { baselineVerdicts, resolveStaticPath, startServer, type StartServerOptions } from "../../src/server/staticServer.js";
 import type { ViewerIdentity, WebSessionManager } from "../../src/auth/webSession.js";
 
 // ------------------------------------------------------------------------
@@ -104,4 +104,33 @@ test("silent login DOES fire on a loopback host — an unauthenticated GET is si
   } finally {
     server.close();
   }
+});
+
+// ------------------------------------------------------------------------
+// baselineVerdicts — what a baseline toggle sends back instead of the
+// whole report.
+// ------------------------------------------------------------------------
+
+test("baselineVerdicts: real settings are reduced to their verdict, Missing entries are sent whole", () => {
+  const report = {
+    tenant: "contoso",
+    belowBaselineCount: 1,
+    baselinePacks: [{ path: "oib/v4" }],
+    activeBaselinePacks: ["oib/v4"],
+    settings: [
+      { key: "a::w", name: "A", sources: [{ big: "payload" }], schemas: { a: {} }, state: "Below baseline", recs: [{ ruleId: "r" }], checks: [{ ruleId: "r" }] },
+      { key: "b::w", name: "B", sources: [], state: "Not checked", recs: [] },
+      { key: "uncovered::c", name: "C", state: "Missing", recs: [{ ruleId: "m" }], checks: [] },
+    ],
+  };
+  assert.deepEqual(baselineVerdicts(report), {
+    verdicts: {
+      "a::w": { state: "Below baseline", recs: [{ ruleId: "r" }], checks: [{ ruleId: "r" }] },
+      "b::w": { state: "Not checked", recs: [], checks: [] },
+    },
+    missing: [report.settings[2]],
+    belowBaselineCount: 1,
+    baselinePacks: [{ path: "oib/v4" }],
+    activeBaselinePacks: ["oib/v4"],
+  });
 });
