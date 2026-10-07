@@ -1,6 +1,6 @@
 export type Role = "viewer" | "contributor" | "admin";
 
-export type Capability = "view" | "note" | "stage" | "editChange" | "revertChange" | "deleteNote" | "scan";
+export type Capability = "view" | "note" | "stage" | "editChange" | "revertChange" | "deleteNote" | "scan" | "manageBaselines";
 
 const RANK: Record<Role, number> = { viewer: 0, contributor: 1, admin: 2 };
 const KNOWN_ROLES: Role[] = ["viewer", "contributor", "admin"];
@@ -8,7 +8,8 @@ const KNOWN_ROLES: Role[] = ["viewer", "contributor", "admin"];
 const CAPABILITIES: Record<Role, ReadonlySet<Capability>> = {
   viewer: new Set(["view"]),
   contributor: new Set(["view", "note", "stage", "editChange", "revertChange", "deleteNote"]),
-  admin: new Set(["view", "note", "stage", "editChange", "revertChange", "deleteNote", "scan"]),
+  // manageBaselines writes and deletes files on the machine running the server — Admin only.
+  admin: new Set(["view", "note", "stage", "editChange", "revertChange", "deleteNote", "scan", "manageBaselines"]),
 };
 
 const OWNER_GATED: ReadonlySet<Capability> = new Set(["editChange", "revertChange", "deleteNote"]);

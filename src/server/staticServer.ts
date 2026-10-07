@@ -4,6 +4,7 @@ import { extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { resolveAppPath } from "../packagedPaths.js";
 import type { ViewerIdentity, WebSessionManager } from "../auth/webSession.js";
 import { can } from "../auth/roles.js";
+import { BaselineInputError, type AddPackInput } from "../baselines/manage.js";
 
 export const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "::1"]);
 
@@ -95,6 +96,17 @@ export interface StartServerOptions {
   onEvaluateForViewer?: (report: unknown, viewer: ViewerIdentity) => Promise<unknown>;
   /** Persists which baseline packs are active for this viewer — null means "every pack", the default before anyone customizes it. */
   onSetBaselineSelection?: (viewerId: string, packs: string[] | null) => void;
+  /**
+   * Adding, renaming and removing baselines in the user's baselines
+   * folder — absent when the server reads baselines from an explicit
+   * `--baseline` directory instead, which is then not the app's to manage.
+   * Each throws BaselineInputError for anything wrong with the request.
+   */
+  baselines?: {
+    add: (input: AddPackInput) => Promise<string>;
+    rename: (pack: string, name: string) => Promise<void>;
+    remove: (pack: string) => Promise<void>;
+  };
 }
 
 export async function startServer(options: StartServerOptions): Promise<{ url: string; server: Server }> {
@@ -201,6 +213,11 @@ export async function startServer(options: StartServerOptions): Promise<{ url: s
           viewer,
           () => currentReport,
         );
+        return;
+      }
+
+      if (req.url === "/api/baselines" && (req.method === "POST" || req.method === "PATCH" || req.method === "DELETE")) {
+        await handleManageBaselines(req, res, options.baselines, options.onEvaluateForViewer, viewer, () => currentReport);
         return;
       }
 
@@ -438,6 +455,58 @@ async function handleSetBaselineSelection(
   }
 }
 
+// A whole baseline arrives as one request (a few MB of exported policies,
+// base64-encoded) — far over the limit every other endpoint lives under,
+// and only an Admin gets this far. manage.ts enforces its own, tighter
+// limit on what the files decode to.
+const MAX_BASELINE_UPLOAD_BYTES = 48_000_000;
+
+/**
+ * POST adds a baseline from uploaded files, PATCH renames one, DELETE
+ * removes one. Admin only: these write and delete files on the machine
+ * the server runs on. Answers with fresh baseline verdicts, since the set
+ * of baselines the report is judged against just changed.
+ */
+async function handleManageBaselines(
+  req: IncomingMessage,
+  res: ServerResponse,
+  baselines: StartServerOptions["baselines"],
+  onEvaluateForViewer: StartServerOptions["onEvaluateForViewer"],
+  viewer: ViewerIdentity,
+  getReport: () => unknown,
+): Promise<void> {
+  if (!baselines || !onEvaluateForViewer) {
+    res.writeHead(501, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Baselines can't be managed from this session." }));
+    return;
+  }
+  if (!can(viewer.role, "manageBaselines")) {
+    res.writeHead(403, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Only the Admin role can add, rename or remove baselines." }));
+    return;
+  }
+
+  try {
+    const body = JSON.parse(await readRequestBody(req, req.method === "POST" ? MAX_BASELINE_UPLOAD_BYTES : MAX_REQUEST_BODY_BYTES)) as Record<string, unknown>;
+    let pack: string | undefined;
+    if (req.method === "POST") pack = await baselines.add(body as unknown as AddPackInput);
+    else if (req.method === "PATCH") await baselines.rename(String(body.pack ?? ""), String(body.name ?? ""));
+    else await baselines.remove(String(body.pack ?? ""));
+
+    const raw = getReport();
+    const report = raw ? await onEvaluateForViewer(raw, viewer) : null;
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ ...(pack ? { pack } : {}), ...(report ? (baselineVerdicts(report) as object) : {}) }));
+  } catch (err) {
+    if (err instanceof BaselineInputError) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: err.message }));
+      return;
+    }
+    sendApiError(res, err);
+  }
+}
+
 /**
  * What changes about a report when only the baselines do — the browser
  * already holds everything else. Per real setting just its verdict
@@ -452,6 +521,7 @@ export function baselineVerdicts(report: unknown): unknown {
     belowBaselineCount: number;
     baselinePacks?: unknown;
     activeBaselinePacks?: unknown;
+    baselineFolder?: unknown;
   };
   const verdicts: Record<string, { state: string; recs: unknown; checks: unknown }> = {};
   const missing: unknown[] = [];
@@ -465,6 +535,7 @@ export function baselineVerdicts(report: unknown): unknown {
     belowBaselineCount: r.belowBaselineCount,
     baselinePacks: r.baselinePacks ?? [],
     activeBaselinePacks: r.activeBaselinePacks ?? null,
+    ...(r.baselineFolder ? { baselineFolder: r.baselineFolder } : {}),
   };
 }
 
@@ -685,7 +756,7 @@ const MAX_REQUEST_BODY_BYTES = 1_000_000;
 
 export class PayloadTooLargeError extends Error {}
 
-function readRequestBody(req: IncomingMessage): Promise<string> {
+function readRequestBody(req: IncomingMessage, maxBytes: number = MAX_REQUEST_BODY_BYTES): Promise<string> {
   return new Promise((resolve, reject) => {
     let data = "";
     let bytes = 0;
@@ -693,7 +764,7 @@ function readRequestBody(req: IncomingMessage): Promise<string> {
     req.on("data", (chunk) => {
       if (rejected) return; // still draining the rest of an over-limit body — see below
       bytes += chunk.length;
-      if (bytes > MAX_REQUEST_BODY_BYTES) {
+      if (bytes > maxBytes) {
         // Not req.destroy() — that tears down the shared socket, which
         // means the 413 the caller's about to write can never actually
         // reach the client; they'd just see the connection reset instead.
@@ -702,7 +773,7 @@ function readRequestBody(req: IncomingMessage): Promise<string> {
         // out over the same connection.
         rejected = true;
         data = "";
-        reject(new PayloadTooLargeError(`Request body exceeds the ${MAX_REQUEST_BODY_BYTES}-byte limit.`));
+        reject(new PayloadTooLargeError(`Request body exceeds the ${maxBytes}-byte limit.`));
         return;
       }
       data += chunk;

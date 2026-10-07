@@ -26,7 +26,7 @@ export function baselineDirs(explicit?: string): string[] {
   return explicit ? [explicit] : [bundledBaselinesDir(), userBaselinesDir()];
 }
 
-const ANNOTATIONS_FILE = "baseline.yml";
+export const ANNOTATIONS_FILE = "baseline.yml";
 const SEVERITIES = new Set<string>(["critical", "high", "medium", "low"]);
 const COMPARE_MODES = new Set<string>(["exact", "atMost", "atLeast"]);
 
@@ -175,11 +175,20 @@ function decode(bytes: Buffer): string {
   return bytes.toString("utf8");
 }
 
+/** Whether these bytes are a Settings Catalog policy export — what an upload is checked with before anything is written. */
+export function isExportedPolicy(bytes: Buffer): boolean {
+  return parseExportedPolicy(bytes) !== undefined;
+}
+
 /** The file as a Settings Catalog policy export, or undefined if it's anything else — including JSON that doesn't parse. */
 async function readExportedPolicy(file: string): Promise<ExportedPolicy | undefined> {
+  return parseExportedPolicy(await readFile(file));
+}
+
+function parseExportedPolicy(bytes: Buffer): ExportedPolicy | undefined {
   let parsed: unknown;
   try {
-    parsed = JSON.parse(decode(await readFile(file)));
+    parsed = JSON.parse(decode(bytes));
   } catch {
     return undefined;
   }

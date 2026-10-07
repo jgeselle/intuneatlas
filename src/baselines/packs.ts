@@ -8,7 +8,11 @@ export interface BaselinePack {
   /** The pack's own display name — the `source` its rules cite, since that's already a human-authored, correctly-capitalized description of the specific document (e.g. "CIS Microsoft Windows 11 Benchmark, L1"). */
   name: string;
   platforms: string[];
+  /** How many exported policies it's made of, and how many settings they hold between them. */
+  policyCount: number;
   ruleCount: number;
+  /** Whether it lives in the user's own baselines folder, where it can be renamed and removed from the UI. */
+  editable?: boolean;
 }
 
 /** Groups a loaded rule set by pack, for the baseline-selection picker — always every discovered pack, regardless of any viewer's current selection. */
@@ -26,6 +30,7 @@ export function listBaselinePacks(rules: BaselineRule[]): BaselinePack[] {
       sourceLabel: prettifySegment(path.split("/")[0] ?? ""),
       name: groupRules[0].source,
       platforms: Array.from(new Set(groupRules.map((r) => r.platform))),
+      policyCount: new Set(groupRules.map((r) => r.policyName)).size,
       ruleCount: groupRules.length,
     }))
     .sort((a, b) => a.sourceLabel.localeCompare(b.sourceLabel) || a.name.localeCompare(b.name));

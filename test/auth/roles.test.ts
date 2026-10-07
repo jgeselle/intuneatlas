@@ -81,3 +81,10 @@ test("can: admin -> everything, including any change or note regardless of who c
   assert.equal(can("admin", "editChange"), true);
   assert.equal(can("admin", "deleteNote"), true);
 });
+
+test("can: managing baselines (writing and deleting files on the server) is Admin only", () => {
+  assert.equal(can("admin", "manageBaselines"), true);
+  assert.equal(can("contributor", "manageBaselines"), false);
+  assert.equal(can("viewer", "manageBaselines"), false);
+  assert.equal(can(null, "manageBaselines"), false);
+});

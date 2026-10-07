@@ -2,7 +2,10 @@ import { readFile } from "node:fs/promises";
 import open from "open";
 import { resolveClientId } from "../auth/index.js";
 import { createWebSessionManager } from "../auth/webSession.js";
-import { baselineDirs, loadBaselines } from "../baselines/loader.js";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+import { baselineDirs, loadBaselines, userBaselinesDir } from "../baselines/loader.js";
+import { addPack, removePack, renamePack } from "../baselines/manage.js";
 import { listBaselinePacks, type BaselinePack } from "../baselines/packs.js";
 import { applyBaselinesToReport, baselineDefinitionIds, buildReport, type ScanReport } from "../scan/report.js";
 import {
@@ -37,7 +40,7 @@ export interface UiOptions {
 /** Raw — settings carry no baseline judgment yet, notes/changes are tenant-wide and shared. */
 type RawEnrichedReport = ScanReport & { notes: Record<string, Note[]>; changes: Record<string, StagedChange> };
 /** What actually gets served — judged for one specific viewer's own active-baseline selection. */
-type ViewerReport = RawEnrichedReport & { baselinePacks: BaselinePack[]; activeBaselinePacks: string[] | null };
+type ViewerReport = RawEnrichedReport & { baselinePacks: BaselinePack[]; activeBaselinePacks: string[] | null; baselineFolder?: string };
 
 export async function runUi(options: UiOptions): Promise<void> {
   const host = options.host ?? "127.0.0.1";
@@ -67,6 +70,16 @@ export async function runUi(options: UiOptions): Promise<void> {
     session,
     onScanRequest: async (graphToken) => enrichReport(await runViewerTriggeredScan(tenantId, graphToken, baselinePath)),
     onEvaluateForViewer: (report, viewer) => evaluateForViewer(report as RawEnrichedReport, viewer, baselinePath),
+    // With --baseline the baselines come from a folder of the operator's choosing; that isn't the app's to write to.
+    ...(baselinePath
+      ? {}
+      : {
+          baselines: {
+            add: (input) => addPack(userBaselinesDir(), input),
+            rename: (pack, name) => renamePack(userBaselinesDir(), pack, name),
+            remove: (pack) => removePack(userBaselinesDir(), pack),
+          },
+        }),
     onSetBaselineSelection: (viewerId, packs) => {
       if (packs === null) clearSelectedPacks(viewerId);
       else setSelectedPacks(viewerId, packs);
@@ -149,7 +162,12 @@ async function evaluateForViewer(
     ...evaluated,
     notes: report.notes,
     changes: report.changes,
-    baselinePacks: listBaselinePacks(baselineRules),
+    // A baseline can be renamed or removed from the UI only if it sits in the user's own folder.
+    baselinePacks: listBaselinePacks(baselineRules).map((pack) => ({
+      ...pack,
+      editable: !baselinePath && existsSync(join(userBaselinesDir(), ...pack.path.split("/"))),
+    })),
     activeBaselinePacks: activePacks ?? null,
+    ...(baselinePath ? {} : { baselineFolder: userBaselinesDir() }),
   };
 }
