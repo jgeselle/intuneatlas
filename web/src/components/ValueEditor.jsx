@@ -69,7 +69,7 @@ function ChildrenEditor({ declaredIds, nodes, schemas, onChange }) {
           value=""
           onChange={(e) => e.target.value && onChange([...nodes, defaultNode(schemas[e.target.value])])}
           aria-label="Add a sub-setting"
-          className={FIELD + " text-stone-500"}
+          className={FIELD + " pr-8 text-stone-500"}
         >
           <option value="">Add a sub-setting…</option>
           {addable.map((id) => (
@@ -110,7 +110,7 @@ function ValueEditor({ node, schemas, onChange }) {
             // Sub-settings belong to the option they were under; a different option starts without any.
             if (option) onChange({ kind: "choice", definitionId: node.definitionId, name: node.name, optionId: option.id, label: option.label });
           }}
-          className={FIELD}
+          className={FIELD + " pr-8"}
         >
           {/* A value Intune's definition doesn't list (an option id that never resolved) still has to be showable. */}
           {!selected && <option value={node.optionId}>{node.label}</option>}
