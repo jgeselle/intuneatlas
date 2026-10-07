@@ -46,7 +46,7 @@ const RESPONSE_HEADERS = {
   "Referrer-Policy": "strict-origin-when-cross-origin",
   "Permissions-Policy": "geolocation=(), camera=(), microphone=(), interest-cohort=()",
   "Content-Security-Policy":
-    "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src 'self' data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+    "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src 'self' data:; font-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
   // Browser always revalidates with Cloudflare — freshness comes from the
   // edge cache above, not from letting a visitor's browser hold onto a
   // stale star count on its own.

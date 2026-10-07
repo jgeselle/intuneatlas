@@ -19,7 +19,7 @@
 <meta name="twitter:description" content="Conflicts, coverage gaps, and baseline drift across every Intune profile. MIT licensed, runs on your machine.">
 
 <!-- inline favicon: no extra request, no 404 -->
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230F766E' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpolygon points='16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2326704B' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='10'/%3E%3Cpolygon points='16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76'/%3E%3C/svg%3E">
 
 <!-- structured data: lets search + AI answer engines parse what this is without scraping prose -->
 <script type="application/ld+json">
@@ -52,13 +52,20 @@
   ]
 }
 </script>
+<!-- Self-hosted: the CSP (see /_headers and functions/index.js) allows fonts from this origin only. -->
+<link rel="preload" href="/assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/assets/fonts/instrument-serif-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
 <style>
+  @font-face{font-family:"Inter";font-style:normal;font-weight:100 900;font-display:swap;src:url(/assets/fonts/inter-latin-wght-normal.woff2) format("woff2")}
+  @font-face{font-family:"Space Grotesk";font-style:normal;font-weight:300 700;font-display:swap;src:url(/assets/fonts/space-grotesk-latin-wght-normal.woff2) format("woff2")}
+  @font-face{font-family:"Instrument Serif";font-style:normal;font-weight:400;font-display:swap;src:url(/assets/fonts/instrument-serif-latin-400-normal.woff2) format("woff2")}
+  @font-face{font-family:"Instrument Serif";font-style:italic;font-weight:400;font-display:swap;src:url(/assets/fonts/instrument-serif-latin-400-italic.woff2) format("woff2")}
   :root{
-    --ink:#0A2B28;
-    --ink-2:#0F3A35;
-    --teal:#0F766E;
-    --teal-2:#115E59;
-    --teal-bright:#5EEAD4;
+    --ink:#0A2B1A;
+    --ink-2:#113F28;
+    --green:#26704B;
+    --green-2:#1B5739;
+    --green-bright:#8DE4B2;
     --paper:#FAF9F7;
     --line:#E7E5E4;
     --line-2:#D6D3D1;
@@ -69,7 +76,11 @@
     --amber-bg:#FEF3C7;
     --red:#B91C1C;
     --red-bg:#FEE2E2;
-    --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    /* Three tiers, same as the app (web/src/index.css): Inter for body,
+       Space Grotesk for headings, Instrument Serif only for the hero. */
+    --sans:"Inter",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --head:"Space Grotesk",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --display:"Instrument Serif",ui-serif,Georgia,"Times New Roman",serif;
     --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
   }
   *,*::before,*::after{box-sizing:border-box}
@@ -79,9 +90,9 @@
     font-family:var(--sans);font-size:16px;line-height:1.65;
     -webkit-font-smoothing:antialiased;
   }
-  h1,h2,h3,h4{margin:0;line-height:1.2;font-weight:600;letter-spacing:-.02em}
+  h1,h2,h3,h4{margin:0;line-height:1.2;font-weight:600;letter-spacing:-.02em;font-family:var(--head)}
   p{margin:0}
-  a{color:var(--teal-2)}
+  a{color:var(--green-2)}
   ul{margin:0;padding:0;list-style:none}
 
   .wrap{max-width:960px;margin:0 auto;padding:0 22px}
@@ -101,7 +112,7 @@
     display:flex;align-items:center;gap:8px;font-family:var(--mono);
     font-size:.875rem;text-decoration:none;color:var(--text);min-width:0;
   }
-  .repo svg{flex:none;color:var(--teal)}
+  .repo svg{flex:none;color:var(--green)}
   .repo .owner{color:var(--muted)}
   .repo b{font-weight:600}
   .topnav{display:none;margin-left:auto;gap:22px;font-size:.875rem}
@@ -122,11 +133,13 @@
 
   /* ------------------------------------------------------------ hero --- */
   .hero{padding:60px 0 20px}
+  /* the one place the serif appears: it's condensed, so it runs larger
+     and at its only weight (400) rather than the old bold sans */
   .hero h1{
-    font-size:clamp(2.25rem,6vw,3.5rem);
-    letter-spacing:-.035em;font-weight:700;line-height:1.1;max-width:15em;
+    font-family:var(--display);font-size:clamp(2.75rem,7.6vw,4.5rem);
+    letter-spacing:-.01em;font-weight:400;line-height:1.02;max-width:13em;
   }
-  .hero h1 .accent{color:var(--teal-2)}
+  .hero h1 .accent{color:var(--green-2);font-style:italic}
   .tagline .highlight{
     background:var(--line);border-radius:4px;padding:.05em .35em;
     box-decoration-break:clone;-webkit-box-decoration-break:clone;
@@ -149,17 +162,17 @@
   .cmd{
     display:flex;align-items:center;gap:12px;background:var(--ink);
     border-radius:10px;padding:14px 14px 14px 16px;
-    box-shadow:0 10px 30px rgba(10,43,40,.14);
+    box-shadow:0 10px 30px rgba(10,43,26,.14);
   }
   .cmd code{
-    font-family:var(--mono);font-size:.8125rem;color:#D7F0EB;
+    font-family:var(--mono);font-size:.8125rem;color:#DCEFE3;
     overflow-x:auto;white-space:nowrap;flex:1;min-width:0;
   }
-  .cmd code .p{color:#5B9A92;user-select:none}
-  .cmd code .f{color:var(--teal-bright)}
+  .cmd code .p{color:#6C997E;user-select:none}
+  .cmd code .f{color:var(--green-bright)}
   .copy{
     flex:none;border:1px solid rgba(255,255,255,.2);background:transparent;
-    color:#9FCFC7;border-radius:6px;padding:5px 10px;cursor:pointer;
+    color:#AACEB8;border-radius:6px;padding:5px 10px;cursor:pointer;
     font-family:var(--mono);font-size:.6875rem;transition:.15s;
   }
   .copy:hover{border-color:rgba(255,255,255,.5);color:#fff}
@@ -174,31 +187,31 @@
   /* ------------------------------------------------------- terminal --- */
   .term{
     background:var(--ink);border-radius:12px;overflow:hidden;margin-top:40px;
-    box-shadow:0 18px 46px rgba(10,43,40,.18);
+    box-shadow:0 18px 46px rgba(10,43,26,.18);
   }
   .term-bar{
     display:flex;align-items:center;gap:8px;padding:11px 14px;
     border-bottom:1px solid rgba(255,255,255,.09);
   }
   .term-bar i{width:9px;height:9px;border-radius:999px;background:rgba(255,255,255,.16);display:block}
-  .term-bar span{font-family:var(--mono);font-size:.6875rem;color:#6FA9A1;margin-left:6px}
+  .term-bar span{font-family:var(--mono);font-size:.6875rem;color:#7EA88E;margin-left:6px}
   .term pre{
     margin:0;padding:18px 16px 20px;overflow-x:auto;
-    font-family:var(--mono);font-size:.75rem;line-height:1.85;color:#C7E5E0;
+    font-family:var(--mono);font-size:.75rem;line-height:1.85;color:#CEE4D6;
   }
-  .term .p{color:#5B9A92}
-  .term .ok{color:var(--teal-bright)}
+  .term .p{color:#6C997E}
+  .term .ok{color:var(--green-bright)}
   .term .crit{color:#FCA5A5;font-weight:600}
   .term .conf{color:#FCA5A5;font-weight:600}
   .term .warnk{color:#FCD34D;font-weight:600}
-  .term .dim{color:#6FA9A1}
-  .term .path{color:#8FC9C0}
+  .term .dim{color:#7EA88E}
+  .term .path{color:#9DC8AE}
   .term .val{color:#fff}
 
   /* rendered fragment of the local UI */
   .idx{
     margin-top:22px;border:1px solid var(--line);border-radius:12px;background:#fff;overflow:hidden;
-    box-shadow:0 1px 2px rgba(10,43,40,.04),0 14px 36px rgba(10,43,40,.09);
+    box-shadow:0 1px 2px rgba(10,43,26,.04),0 14px 36px rgba(10,43,26,.09);
   }
   .idx-bar{
     display:flex;align-items:center;gap:10px;padding:11px 14px;
@@ -250,7 +263,7 @@
   .chip-conflict{background:var(--red-bg);color:var(--red);border-color:#FCA5A5}
   .chip-below{background:var(--amber-bg);color:var(--amber);border-color:#FCD34D}
   .chip-stone{background:#F5F5F4;color:var(--muted);border-color:var(--line-2)}
-  .chip-teal{background:#F0FDFA;color:var(--teal-2);border-color:#99F6E4}
+  .chip-green{background:#F3FDF6;color:var(--green-2);border-color:#B0F4CB}
 
   /* code sample */
   .code{
@@ -266,7 +279,7 @@
     font-family:var(--mono);font-size:.75rem;line-height:1.8;color:#292524;
   }
   .code .c{color:var(--faint)}
-  .code .k{color:var(--teal-2)}
+  .code .k{color:var(--green-2)}
   .code .s{color:#9A3412}
 
   /* status table */
@@ -278,7 +291,7 @@
   .status li span.what{min-width:0}
   .status li em{display:block;font-style:normal;font-size:.8125rem;color:var(--muted);margin-top:2px}
   .state{font-family:var(--mono);font-size:.6875rem;letter-spacing:.06em;text-transform:uppercase;flex:none}
-  .state.good{color:var(--teal-2)}
+  .state.good{color:var(--green-2)}
   .state.part{color:var(--amber)}
   .state.none{color:var(--faint)}
 
@@ -293,14 +306,14 @@
   .issue .num{font-family:var(--mono);font-size:.75rem;color:var(--faint);flex:none}
   .issue .tag{
     font-family:var(--mono);font-size:.625rem;padding:2px 7px;border-radius:999px;
-    border:1px solid #99F6E4;background:#F0FDFA;color:var(--teal-2);margin-left:auto;flex:none;
+    border:1px solid #B0F4CB;background:#F3FDF6;color:var(--green-2);margin-left:auto;flex:none;
   }
   .issue .tag.help{border-color:#FCD34D;background:var(--amber-bg);color:var(--amber)}
 
   /* notice */
   .notice{
     margin-top:32px;padding:16px 18px;border:1px solid var(--line-2);
-    border-left:2px solid var(--teal);border-radius:0 9px 9px 0;background:#fff;
+    border-left:2px solid var(--green);border-radius:0 9px 9px 0;background:#fff;
     font-size:.875rem;color:var(--muted);line-height:1.65;
   }
 
@@ -310,7 +323,7 @@
   .foot a{color:var(--muted);text-decoration:none}
   .foot a:hover{color:var(--text)}
 
-  a:focus-visible,button:focus-visible{outline:2px solid var(--teal);outline-offset:3px;border-radius:5px}
+  a:focus-visible,button:focus-visible{outline:2px solid var(--green);outline-offset:3px;border-radius:5px}
 </style>
 </head>
 <body>
@@ -421,7 +434,7 @@
             <span>macOS · FileVault · 342 devices</span>
           </span>
           <span class="idx-val">Enabled</span>
-          <span class="chip chip-teal">Baseline</span>
+          <span class="chip chip-green">Baseline</span>
         </div>
       </div>
     </div>
@@ -456,7 +469,7 @@
           <p>The profile looks healthy in the portal but targets no group. Silent, and invisible in every per-policy view.</p>
         </div>
         <div class="box">
-          <span class="chip chip-teal">Documented</span>
+          <span class="chip chip-green">Documented</span>
           <h3>Someone wrote down why</h3>
           <p>Notes live in a file in your repo, keyed by path. Findings print with their thread attached, so context survives the person who set it.</p>
         </div>
