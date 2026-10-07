@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
-import { Sliders, WarningCircle, Warning, Prohibit, Question, MagnifyingGlass, ChatCircle } from "@phosphor-icons/react";
+import { Sliders, WarningCircle, Warning, Prohibit, Question, MagnifyingGlass, ChatCircle, ListChecks } from "@phosphor-icons/react";
 import { Chip, ScopePrefix, Stat } from "../components/bits.jsx";
 import { STATE_STYLE } from "../lib/styles.js";
 import { platformLabel } from "../lib/format.js";
@@ -11,6 +11,7 @@ const SETTING_ROW_HEIGHT = 61; // one list row at its common (non-wrapping) heig
 function SettingsView({
   entries,
   notes = {},
+  changes = {},
   query,
   setQuery,
   platform,
@@ -19,6 +20,13 @@ function SettingsView({
   scopeLabel,
 }) {
   const [state, setState] = useState("All");
+  // How many changes are staged per setting — a setting can have several: one per policy, existing or new.
+  const stagedCount = useMemo(() => {
+    const counts = {};
+    // A change made before changes recorded their setting is keyed by the setting itself.
+    for (const change of Object.values(changes)) counts[change.settingKey || change.targetKey] = (counts[change.settingKey || change.targetKey] ?? 0) + 1;
+    return counts;
+  }, [changes]);
   const platforms = ["All", ...Array.from(new Set(entries.map((e) => e.platform)))];
   const states = ["All", "Below baseline", "Conflict", "Missing", "Not assigned", "Meets baseline", "Not checked"];
 
@@ -170,6 +178,16 @@ function SettingsView({
                             >
                               <ChatCircle className="h-3.5 w-3.5" />
                               <span className="tabular-nums">{(notes[item.entry.key] || []).length}</span>
+                            </span>
+                          )}
+                          {/* Same icon as the Change log in the sidebar: something is staged for this setting. */}
+                          {stagedCount[item.entry.key] > 0 && (
+                            <span
+                              className="inline-flex shrink-0 items-center gap-0.5 text-xs text-teal-700"
+                              title={stagedCount[item.entry.key] === 1 ? "1 staged change" : stagedCount[item.entry.key] + " staged changes"}
+                            >
+                              <ListChecks weight="bold" className="h-3.5 w-3.5" />
+                              <span className="tabular-nums">{stagedCount[item.entry.key]}</span>
                             </span>
                           )}
                         </div>

@@ -658,6 +658,7 @@ export default function App({ initialReport, session }) {
           {view === "configuration" && (
             <SettingsView
               entries={settingIndex}
+              changes={changes}
               scopeLabel={scopeLabel}
               notes={notes}
               query={query}
