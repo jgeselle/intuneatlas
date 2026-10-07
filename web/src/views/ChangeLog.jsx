@@ -2,7 +2,7 @@ import { useState } from "react";
 import { ArrowCounterClockwise, Check, Clock, PaperPlaneTilt, PencilSimple } from "@phosphor-icons/react";
 import { Chip, Diff } from "../components/bits.jsx";
 
-function ChangeCard({ change, onUpdateField, onRevert, viewer, inGroup = false }) {
+function ChangeCard({ change, onUpdateField, onRevert, viewer, inGroup = false, onOpen }) {
   const [reason, setReason] = useState(change.reason);
   const reviewedByMe = change.reviewedBy === viewer.name;
   // Contributors can only touch changes they staged themselves; Admins can
@@ -21,7 +21,20 @@ function ChangeCard({ change, onUpdateField, onRevert, viewer, inGroup = false }
             </Chip>
             {change.stagedByName && <span className="text-xs text-stone-400">staged by {change.stagedByName}</span>}
           </div>
-          <h3 className="mt-2 text-sm font-medium">{change.targetName}</h3>
+          <h3 className="mt-2 text-sm font-medium">
+            {/* The setting's name opens its panel — where the staged value can be looked at in context and edited. */}
+            {onOpen ? (
+              <button
+                type="button"
+                onClick={onOpen}
+                className="rounded text-left hover:text-teal-700 hover:underline focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500"
+              >
+                {change.targetName}
+              </button>
+            ) : (
+              change.targetName
+            )}
+          </h3>
           {/* Inside a new policy's group the name is the group's heading already. */}
           {change.policyName && !inGroup && <div className="mt-0.5 truncate text-xs text-stone-500">{change.policyName}</div>}
         </div>
@@ -82,7 +95,7 @@ function ChangeCard({ change, onUpdateField, onRevert, viewer, inGroup = false }
  * policy's name — together they are the policy to be created. Renaming it
  * renames it for all of them.
  */
-function NewPolicyGroup({ name, changes, onUpdateField, onRevert, viewer }) {
+function NewPolicyGroup({ name, changes, onUpdateField, onRevert, viewer, openerFor }) {
   const [renaming, setRenaming] = useState(false);
   const [draft, setDraft] = useState(name);
   // Same rule as a single change: your own, unless you're an Admin — and a rename touches every change in the group.
@@ -147,14 +160,18 @@ function NewPolicyGroup({ name, changes, onUpdateField, onRevert, viewer }) {
       </div>
       <ul className="mt-3 space-y-3">
         {changes.map((c) => (
-          <ChangeCard key={c.id} change={c} onUpdateField={onUpdateField} onRevert={onRevert} viewer={viewer} inGroup />
+          <ChangeCard key={c.id} change={c} onUpdateField={onUpdateField} onRevert={onRevert} viewer={viewer} inGroup onOpen={openerFor(c)} />
         ))}
       </ul>
     </section>
   );
 }
 
-function ChangeLog({ changes, onUpdateField, onRevert, viewer }) {
+function ChangeLog({ changes, onUpdateField, onRevert, viewer, onOpen, canOpen }) {
+  // A change made before changes recorded their setting is keyed by the setting itself.
+  const settingKeyOf = (change) => change.settingKey || change.targetKey;
+  // Only where there is a setting to open: one that has since left the tenant has no panel.
+  const openerFor = (change) => (onOpen && canOpen?.(settingKeyOf(change)) ? () => onOpen(settingKeyOf(change)) : undefined);
   const list = Object.values(changes).sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
   const ready = list.filter((c) => c.ready).length;
   const toExisting = list.filter((c) => c.targetKind !== "new");
@@ -198,14 +215,14 @@ function ChangeLog({ changes, onUpdateField, onRevert, viewer }) {
       ) : (
         <div className="space-y-6">
           {newPolicies.map(([name, changes]) => (
-            <NewPolicyGroup key={name} name={name} changes={changes} onUpdateField={onUpdateField} onRevert={onRevert} viewer={viewer} />
+            <NewPolicyGroup key={name} name={name} changes={changes} onUpdateField={onUpdateField} onRevert={onRevert} viewer={viewer} openerFor={openerFor} />
           ))}
           {toExisting.length > 0 && (
             <section>
               {newPolicies.length > 0 && <h2 className="font-heading text-sm font-semibold">Changes to existing policies</h2>}
               <ul className={"space-y-3 " + (newPolicies.length > 0 ? "mt-3" : "")}>
                 {toExisting.map((c) => (
-                  <ChangeCard key={c.id} change={c} onUpdateField={onUpdateField} onRevert={onRevert} viewer={viewer} />
+                  <ChangeCard key={c.id} change={c} onUpdateField={onUpdateField} onRevert={onRevert} viewer={viewer} onOpen={openerFor(c)} />
                 ))}
               </ul>
             </section>

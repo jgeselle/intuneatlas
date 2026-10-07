@@ -484,7 +484,10 @@ export default function App({ initialReport, session }) {
     { id: "baselines", label: "Baselines", icon: Stack, count: (report.baselinePacks ?? []).length },
   ];
 
-  const openSetting = open?.type === "setting" ? settingIndex.find((e) => e.key === open.key) : null;
+  // A setting is opened from what the current page shows; one opened from the change log may not be
+  // part of the chosen group's view at all (the change log isn't narrowed), so the whole tenant backs it up.
+  const findSetting = (key) => settingIndex.find((e) => e.key === key) ?? wholeTenant.find((e) => e.key === key);
+  const openSetting = open?.type === "setting" ? findSetting(open.key) : null;
   const openCompliance = open?.type === "compliance" ? compliancePolicies.find((p) => p.id === open.id) : null;
   const openEnrollment = open?.type === "enrollment" ? enrollmentConfigurations.find((p) => p.id === open.id) : null;
 
@@ -708,7 +711,14 @@ export default function App({ initialReport, session }) {
           )}
 
           {view === "changes" && (
-            <ChangeLog changes={changes} onUpdateField={updateChangeField} onRevert={revertEntryChange} viewer={session} />
+            <ChangeLog
+              changes={changes}
+              onUpdateField={updateChangeField}
+              onRevert={revertEntryChange}
+              viewer={session}
+              onOpen={(key) => setOpen({ type: "setting", key })}
+              canOpen={(key) => Boolean(findSetting(key))}
+            />
           )}
         </div>
       </main>
