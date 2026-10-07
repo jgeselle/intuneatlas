@@ -301,15 +301,22 @@ export default function App({ initialReport, session }) {
   //
   // `source` is the existing policy whose value is being changed — or null
   // to stage the setting into a policy that doesn't exist yet, created
-  // under `newPolicyName`. A setting has at most one such staging, so
-  // renaming the new policy later never changes the key.
+  // under `newPolicyName`. A setting can be staged into several new
+  // policies (the same setting in two policies is normal: they get
+  // assigned to different groups). Each such staging has its own key,
+  // which doesn't contain the name — so renaming the policy never changes
+  // it — and staging again for the same name replaces that one.
   async function stageChange(entry, source, { ruleId, from, to, toStructured, reason, newPolicyName }) {
+    const sameNewPolicy = Object.values(changes).find(
+      (c) => c.targetKind === "new" && c.settingKey === entry.key && c.policyName === newPolicyName,
+    );
+    const newKey = sameNewPolicy?.targetKey ?? entry.key + "::new::" + Date.now().toString(36);
     try {
       const res = await fetch("/api/changes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          targetKey: source ? entry.key + "::policy::" + source.policyId : entry.key + "::new",
+          targetKey: source ? entry.key + "::policy::" + source.policyId : newKey,
           targetName: entry.name,
           settingKey: entry.key,
           policyId: source ? source.policyId : "",

@@ -306,8 +306,8 @@ function SettingDrawer({ entry, notes, onAddNote, onDeleteNote, onClose, changes
   const existingChanges = changes.filter((c) => c.targetKind !== "new");
   const changeFor = (source, n) =>
     existingChanges.find((c) => c.policyId === source.policyId) ?? (n === 0 ? existingChanges.find((c) => !c.policyId) : undefined);
-  // At most one: the setting staged into a policy that doesn't exist yet.
-  const newPolicyChange = changes.find((c) => c.targetKind === "new");
+  // The setting as staged into policies that don't exist yet — any number of them, one per policy name.
+  const newPolicyChanges = changes.filter((c) => c.targetKind === "new");
 
   // The policy cards a baseline's value can be filled into: the ones that
   // reach devices, can be edited, and have nothing staged.
@@ -332,7 +332,7 @@ function SettingDrawer({ entry, notes, onAddNote, onDeleteNote, onClose, changes
         <h3 className={SECTION_HEADING}>
           Policies {entry.sources.length ? <span className="tabular-nums text-stone-400">· {entry.sources.length}</span> : null}
         </h3>
-        {entry.sources.length === 0 && !newPolicyChange ? (
+        {entry.sources.length === 0 && newPolicyChanges.length === 0 ? (
           <p className="mt-2 rounded-md border border-dashed border-stone-300 bg-stone-50 p-3 text-xs leading-relaxed text-stone-500">
             No policy in this tenant configures this setting.
           </p>
@@ -368,7 +368,9 @@ function SettingDrawer({ entry, notes, onAddNote, onDeleteNote, onClose, changes
                 />
               );
             })}
-            {newPolicyChange && <NewPolicyCard change={newPolicyChange} canRevert={canRevert(newPolicyChange)} onRevert={onRevert} />}
+            {newPolicyChanges.map((change) => (
+              <NewPolicyCard key={change.id} change={change} canRevert={canRevert(change)} onRevert={onRevert} />
+            ))}
           </ul>
         )}
       </section>
@@ -395,9 +397,8 @@ function SettingDrawer({ entry, notes, onAddNote, onDeleteNote, onClose, changes
                   canUse={fills.length > 0}
                   isSelected={fills.length > 0 && fills.every(({ n, next }) => renderNode(drafts[n]) === renderNode(next))}
                   onUse={() => setDrafts((d) => d.map((v, i) => fills.find(({ n }) => n === i)?.next ?? v))}
-                  // One new-policy staging per setting; while there is one, it's reverted before another can be made.
                   onStageNew={
-                    canStage && onStageNew && !newPolicyChange
+                    canStage && onStageNew
                       ? (newPolicyName, reason) =>
                           onStageNew({
                             newPolicyName,
