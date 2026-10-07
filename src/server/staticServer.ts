@@ -233,7 +233,7 @@ export async function startServer(options: StartServerOptions): Promise<{ url: s
       }
 
       if (req.method === "GET" && req.url?.startsWith("/api/baselines/compare?")) {
-        await handleCompareBaselines(req, res, options.onCompareBaselines, viewer, () => currentReport);
+        await handleCompareBaselines(req, res, options.onCompareBaselines, options.onScopeReport, viewer, () => currentReport);
         return;
       }
 
@@ -508,9 +508,18 @@ async function handleScope(
   try {
     const raw = getReport();
     const scoped = raw ? await onScopeReport(raw, group) : null;
-    const judged = (scoped && onEvaluateForViewer ? await onEvaluateForViewer(scoped, viewer) : scoped) as { settings?: unknown; conflictCount?: unknown; belowBaselineCount?: unknown } | null;
+    const judged = (scoped && onEvaluateForViewer ? await onEvaluateForViewer(scoped, viewer) : scoped) as Record<string, unknown> | null;
     res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ group, settings: judged?.settings ?? [], conflictCount: judged?.conflictCount ?? 0, belowBaselineCount: judged?.belowBaselineCount ?? 0 }));
+    res.end(
+      JSON.stringify({
+        group,
+        settings: judged?.settings ?? [],
+        compliancePolicies: judged?.compliancePolicies ?? [],
+        enrollmentConfigurations: judged?.enrollmentConfigurations ?? [],
+        conflictCount: judged?.conflictCount ?? 0,
+        belowBaselineCount: judged?.belowBaselineCount ?? 0,
+      }),
+    );
   } catch (err) {
     if (err instanceof BaselineInputError) {
       res.writeHead(400, { "Content-Type": "application/json" });
@@ -525,6 +534,7 @@ async function handleCompareBaselines(
   req: IncomingMessage,
   res: ServerResponse,
   onCompareBaselines: StartServerOptions["onCompareBaselines"],
+  onScopeReport: StartServerOptions["onScopeReport"],
   viewer: ViewerIdentity,
   getReport: () => unknown,
 ): Promise<void> {
@@ -542,13 +552,16 @@ async function handleCompareBaselines(
   const params = new URL(req.url ?? "", "http://localhost").searchParams;
   const from = params.get("from") ?? "";
   const to = params.get("to") ?? "";
+  // Optional: judge where the tenant stands as one group gets it, rather than tenant-wide.
+  const group = params.get("group") ?? "";
   if (!from || !to || from === to) {
     res.writeHead(400, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ error: "Choose two different baselines to compare." }));
     return;
   }
   try {
-    const raw = getReport();
+    const whole = getReport();
+    const raw = whole && group && onScopeReport ? await onScopeReport(whole, group) : whole;
     const changes = raw ? await onCompareBaselines(raw, from, to) : [];
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ from, to, changes }));

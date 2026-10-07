@@ -68,7 +68,10 @@ export async function buildReport(token: string, flow: string, tenant: string, b
   // to land in the same bucket to be conflict-checked against each other.
   // Group names and nesting, for the groups any of those policies name. Optional: without
   // Group.Read.All this comes back unavailable and everything works on group ids alone.
-  const groups = await fetchGroupDirectory(token, [...policies, ...legacyPolicies].flatMap((p) => groupIdsIn(p.assignments)));
+  const groups = await fetchGroupDirectory(token, [
+    ...[...policies, ...legacyPolicies].flatMap((p) => groupIdsIn(p.assignments)),
+    ...[...compliancePolicies, ...enrollmentConfigurations].flatMap((p) => groupIdsIn(p.targets ?? [])),
+  ]);
   const settingIndex = buildSettingIndex([...policies, ...legacyPolicies], groups);
   const known = new Set(settingIndex.flatMap((e) => Object.keys(e.schemas ?? {})));
   const unknown = baselineDefinitionIds.filter((id) => !known.has(id));

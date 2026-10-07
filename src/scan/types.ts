@@ -129,6 +129,8 @@ export interface RawSimplePolicy {
   deployed: boolean;
   /** Enrollment configurations only — lower value wins when multiple target the same user. */
   priority?: number;
+  /** Who it's assigned to — absent on scans stored before targets were kept. */
+  targets?: AssignmentTarget[];
 }
 
 /**

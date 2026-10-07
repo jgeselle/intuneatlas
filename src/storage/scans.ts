@@ -36,6 +36,7 @@ interface PolicySnapshotRow {
   platform: string;
   deployed: number;
   priority: number | null;
+  targets_json: string | null;
 }
 
 /** Persists a scan and every row of it — the scan-history record this whole storage layer exists for. */
@@ -82,14 +83,14 @@ export function recordScan(report: ScanReport): void {
     }
 
     const insertPolicy = db.prepare(`
-      INSERT INTO policy_snapshot (scan_id, kind, policy_id, name, platform, deployed, priority)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO policy_snapshot (scan_id, kind, policy_id, name, platform, deployed, priority, targets_json)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `);
     for (const p of report.compliancePolicies) {
-      insertPolicy.run(scanId, "compliance", p.id, p.name, p.platform, p.deployed ? 1 : 0, p.priority ?? null);
+      insertPolicy.run(scanId, "compliance", p.id, p.name, p.platform, p.deployed ? 1 : 0, p.priority ?? null, p.targets ? JSON.stringify(p.targets) : null);
     }
     for (const p of report.enrollmentConfigurations) {
-      insertPolicy.run(scanId, "enrollment", p.id, p.name, p.platform, p.deployed ? 1 : 0, p.priority ?? null);
+      insertPolicy.run(scanId, "enrollment", p.id, p.name, p.platform, p.deployed ? 1 : 0, p.priority ?? null, p.targets ? JSON.stringify(p.targets) : null);
     }
 
     db.exec("COMMIT");
@@ -129,7 +130,7 @@ export function getLatestScan(tenant?: string): ScanReport | undefined {
   }));
 
   const policyRows = db
-    .prepare(`SELECT kind, policy_id, name, platform, deployed, priority FROM policy_snapshot WHERE scan_id = ?`)
+    .prepare(`SELECT kind, policy_id, name, platform, deployed, priority, targets_json FROM policy_snapshot WHERE scan_id = ?`)
     .all(scan.id) as unknown as PolicySnapshotRow[];
 
   const toSimplePolicy = (r: PolicySnapshotRow): RawSimplePolicy => ({
@@ -138,6 +139,7 @@ export function getLatestScan(tenant?: string): ScanReport | undefined {
     platform: r.platform,
     deployed: Boolean(r.deployed),
     ...(r.priority !== null ? { priority: r.priority } : {}),
+    ...(r.targets_json ? { targets: JSON.parse(r.targets_json) as RawSimplePolicy["targets"] } : {}),
   });
 
   const compliancePolicies = policyRows.filter((r) => r.kind === "compliance").map(toSimplePolicy);

@@ -340,7 +340,14 @@ test("/api/scope: narrows the report to a group, judges it for the viewer, and n
   try {
     const res = await get(18794, "group=grp-pilot");
     assert.equal(res.status, 200);
-    assert.deepEqual(res.body, { group: "grp-pilot", settings: [{ key: "a", scopedTo: "grp-pilot" }], conflictCount: 0, belowBaselineCount: 1 });
+    assert.deepEqual(res.body, {
+      group: "grp-pilot",
+      settings: [{ key: "a", scopedTo: "grp-pilot" }],
+      compliancePolicies: [],
+      enrollmentConfigurations: [],
+      conflictCount: 0,
+      belowBaselineCount: 1,
+    });
     assert.equal((await get(18794, "group=")).status, 400);
   } finally {
     server.close();
@@ -356,6 +363,29 @@ test("/api/scope: narrows the report to a group, judges it for the viewer, and n
   server = await start(18796, "admin", false);
   try {
     assert.equal((await get(18796, "group=grp-pilot")).status, 501);
+  } finally {
+    server.close();
+  }
+});
+
+test("/api/baselines/compare: with a group, the comparison is judged against the report as that group gets it", async () => {
+  const identity: ViewerIdentity = { id: "oid", name: "Someone", email: "s@x.com", role: "viewer" };
+  const seen: unknown[] = [];
+  const { server } = await startServer({
+    report: { whole: true },
+    host: "127.0.0.1",
+    startPort: 18797,
+    session: mockSession({ getSession: async () => identity }),
+    onScopeReport: (_report, groupId) => ({ scopedTo: groupId }),
+    onCompareBaselines: async (report) => {
+      seen.push(report);
+      return [];
+    },
+  });
+  try {
+    await fetch("http://127.0.0.1:18797/api/baselines/compare?from=a%2F1&to=b%2F2");
+    await fetch("http://127.0.0.1:18797/api/baselines/compare?from=a%2F1&to=b%2F2&group=grp-pilot");
+    assert.deepEqual(seen, [{ whole: true }, { scopedTo: "grp-pilot" }]);
   } finally {
     server.close();
   }

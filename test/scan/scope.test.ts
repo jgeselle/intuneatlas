@@ -116,10 +116,37 @@ test("scopeToGroup: baselines applied afterwards judge the group's own value, an
   assert.equal(state(RINGS, "defer"), "Below baseline", "tenant-wide: met only if every assigned value meets it");
   assert.equal(state(scopeToGroup(RINGS, "kiosks"), "kioskmode"), "Meets baseline");
   assert.equal(state(scopeToGroup(RINGS, "pilot"), "kioskmode"), "Missing", "nothing aimed at pilot sets it");
+  // ...and it keeps its real name and path: the tenant knows the setting, just not for this group.
+  const named = report([policy("k", [group("kiosks")], { kioskmode: 1 })]);
+  named.settings[0].name = "Kiosk mode";
+  named.settings[0].schemas!.kioskmode.name = "Kiosk mode";
+  const missing = applyBaselinesToReport(scopeToGroup(named, "pilot"), rules).settings.find((e) => e.definitionId === "kioskmode")!;
+  assert.deepEqual([missing.state, missing.name, missing.cspPath], ["Missing", "Kiosk mode", "./kioskmode"]);
 });
 
 test("scopeToGroup: a scan stored before targets were kept can't place its policies — they are left out", () => {
   const old = report([policy("a", [group("pilot")], { x: 1 })]);
   for (const entry of old.settings) for (const source of entry.sources) delete source.targets;
   assert.deepEqual(scopeToGroup(old, "pilot").settings, []);
+});
+
+test("scopeToGroup: compliance and enrollment policies are kept only if they reach the group", () => {
+  const base = report([policy("a", [group("pilot")], { x: 1 })], NESTED);
+  const simplePolicy = (id: string, targets?: AssignmentTarget[]) => ({ id, name: id, platform: "windows10", deployed: Boolean(targets?.length), ...(targets ? { targets } : {}) });
+  const withPolicies: ScanReport = {
+    ...base,
+    compliancePolicies: [
+      simplePolicy("for-pilot", [group("pilot")]),
+      simplePolicy("for-prod", [group("prod")]),
+      simplePolicy("for-everyone", [{ kind: "allLicensedUsers" }]),
+      simplePolicy("via-parent", [group("windows")]),
+      simplePolicy("everyone-but-pilot", [{ kind: "allDevices" }, group("pilot", true)]),
+      simplePolicy("unassigned", []),
+      simplePolicy("from-an-older-scan"),
+    ],
+    enrollmentConfigurations: [simplePolicy("enroll-prod", [group("prod")]), simplePolicy("enroll-all", [{ kind: "allDevices" }])],
+  };
+  const pilot = scopeToGroup(withPolicies, "pilot");
+  assert.deepEqual(pilot.compliancePolicies.map((p) => p.id), ["for-pilot", "for-everyone", "via-parent"]);
+  assert.deepEqual(pilot.enrollmentConfigurations.map((p) => p.id), ["enroll-all"]);
 });

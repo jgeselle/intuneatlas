@@ -37,5 +37,6 @@ export function mapSimplePolicy(item: GraphSimplePolicy): RawSimplePolicy {
     platform: platformFromODataType(item["@odata.type"]),
     deployed: isDeployed(assignments),
     ...(item.priority !== undefined ? { priority: item.priority } : {}),
+    targets: assignments,
   };
 }

@@ -59,7 +59,8 @@ export function getDb(): DatabaseSync {
       name TEXT NOT NULL,
       platform TEXT NOT NULL,
       deployed INTEGER NOT NULL,
-      priority INTEGER
+      priority INTEGER,
+      targets_json TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_policy_snapshot_scan ON policy_snapshot(scan_id);
 
@@ -144,6 +145,12 @@ function migrate(db: DatabaseSync): void {
   // kept; those settings simply stay free-text until the next scan.
   if (!settingsColumns.some((c) => c.name === "definition_json")) {
     db.exec(`ALTER TABLE settings_snapshot ADD COLUMN definition_json TEXT`);
+  }
+
+  // targets_json — who a compliance or enrollment policy is assigned to.
+  const policyColumns = db.prepare(`PRAGMA table_info(policy_snapshot)`).all() as Array<{ name: string }>;
+  if (!policyColumns.some((c) => c.name === "targets_json")) {
+    db.exec(`ALTER TABLE policy_snapshot ADD COLUMN targets_json TEXT`);
   }
 
   const scanColumns = db.prepare(`PRAGMA table_info(scans)`).all() as Array<{ name: string }>;
