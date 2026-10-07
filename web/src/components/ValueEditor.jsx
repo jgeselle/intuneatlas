@@ -1,5 +1,6 @@
 import { Plus, X } from "@phosphor-icons/react";
 import { defaultNode } from "../lib/settingValue.js";
+import { Dropdown } from "./Dropdown.jsx";
 
 const FIELD =
   "w-full rounded-md border border-stone-300 bg-white px-2.5 py-1.5 text-sm focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600";
@@ -65,19 +66,13 @@ function ChildrenEditor({ declaredIds, nodes, schemas, onChange }) {
         </div>
       ))}
       {addable.length > 0 && (
-        <select
-          value=""
-          onChange={(e) => e.target.value && onChange([...nodes, defaultNode(schemas[e.target.value])])}
-          aria-label="Add a sub-setting"
-          className={FIELD + " pr-8 text-stone-500"}
-        >
-          <option value="">Add a sub-setting…</option>
-          {addable.map((id) => (
-            <option key={id} value={id}>
-              {schemas[id].name}
-            </option>
-          ))}
-        </select>
+        <Dropdown
+          value={null}
+          options={addable.map((id) => ({ value: id, label: schemas[id].name }))}
+          onChange={(id) => onChange([...nodes, defaultNode(schemas[id])])}
+          placeholder="Add a sub-setting…"
+          ariaLabel="Add a sub-setting"
+        />
       )}
     </div>
   );
@@ -103,23 +98,17 @@ function ValueEditor({ node, schemas, onChange }) {
     const selected = options.find((o) => o.id === node.optionId);
     return (
       <>
-        <select
+        <Dropdown
           value={node.optionId}
-          onChange={(e) => {
-            const option = options.find((o) => o.id === e.target.value);
+          // A value Intune's definition doesn't list (an option id that never resolved) still has to be showable.
+          options={[...(selected ? [] : [{ value: node.optionId, label: node.label }]), ...options.map((o) => ({ value: o.id, label: o.label }))]}
+          onChange={(optionId) => {
+            const option = options.find((o) => o.id === optionId);
             // Sub-settings belong to the option they were under; a different option starts without any.
             if (option) onChange({ kind: "choice", definitionId: node.definitionId, name: node.name, optionId: option.id, label: option.label });
           }}
-          className={FIELD + " pr-8"}
-        >
-          {/* A value Intune's definition doesn't list (an option id that never resolved) still has to be showable. */}
-          {!selected && <option value={node.optionId}>{node.label}</option>}
-          {options.map((o) => (
-            <option key={o.id} value={o.id}>
-              {o.label}
-            </option>
-          ))}
-        </select>
+          ariaLabel={node.name || "Value"}
+        />
         {(selected?.childIds?.length > 0 || node.children?.length > 0) && (
           <ChildrenEditor
             declaredIds={selected?.childIds ?? []}
