@@ -182,6 +182,7 @@ test("findUncoveredEntries: a setting a baseline expects but no policy configure
   assert.equal(missing.state, "Missing");
   assert.equal(missing.name, "Backup directory");
   assert.equal(missing.cspPath, "./LAPS/BackupDirectory");
+  assert.equal(missing.category, "LAPS", "filed under its real category, with the settings around it");
   assert.equal(missing.definitionId, "laps");
   assert.deepEqual(missing.values, []);
   assert.deepEqual(missing.recs, [{ ruleId: "laps-rule", current: "Not configured", recommended: "Entra ID", source: "OIB v4" }]);
@@ -191,6 +192,7 @@ test("findUncoveredEntries: a setting a baseline expects but no policy configure
 test("findUncoveredEntries: without a lookup for it, a Missing setting falls back to its raw id rather than vanishing", () => {
   const [missing] = findUncoveredEntries([], [lapsRule()]);
   assert.equal(missing.name, "laps");
+  assert.equal(missing.category, "Other");
   assert.equal(missing.cspPath, "");
   assert.equal(missing.recs[0].recommended, "laps_1");
 });

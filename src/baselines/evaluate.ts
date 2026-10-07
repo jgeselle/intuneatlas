@@ -145,7 +145,9 @@ export function findUncoveredEntries(entries: SettingIndexEntry[], rules: Baseli
       key: `uncovered::${groupKey}`,
       name: schemas[definitionId]?.name ?? definitionId,
       cspPath: definitions?.info[definitionId]?.cspPath ?? "",
-      category: "Missing from the tenant",
+      // Its real category, so it sits with its neighbours in the list (the Missing state and filter already
+      // set it apart). "Other" only until a scan has looked the definition up.
+      category: definitions?.info[definitionId]?.category || "Other",
       platform,
       values: [],
       sources: [],

@@ -131,7 +131,10 @@ export function applyBaselinesToReport(report: ScanReport, baselineRules: Baseli
   // belowBaselineCount is computed from the real scanned entries, so that
   // count stays truthful to what was actually found in the tenant rather
   // than what the baseline merely wishes existed.
-  const settingsWithGaps = [...evaluated, ...findUncoveredEntries(evaluated, activeRules, report.baselineDefinitions)];
+  // Missing settings carry their real category, so they're sorted in with the rest rather than tacked on the end.
+  const settingsWithGaps = [...evaluated, ...findUncoveredEntries(evaluated, activeRules, report.baselineDefinitions)].sort(
+    (a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name) || a.key.localeCompare(b.key),
+  );
 
   return {
     ...report,
