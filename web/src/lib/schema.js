@@ -18,6 +18,25 @@ function editorKind(schema) {
   return "text";
 }
 
+/**
+ * Whether one policy's value of this setting can be edited as a single
+ * field. A value spanning several lines is several things at once (a
+ * list's items, a group's children, a choice plus its sub-settings) —
+ * but one line isn't proof of the opposite: a list with one item, or a
+ * group with one child, renders as a single line too (found on a live
+ * tenant: a one-rule Attack Surface Reduction policy). So the
+ * definition's kind decides whenever there is one.
+ */
+function isSingleValue(schema, value) {
+  if (String(value).includes("\n")) return false;
+  return !schema || schema.kind === "choice" || schema.kind === "simple" || schema.kind === "unknown";
+}
+
+/** An option that brings sub-settings with it can't be picked until those can be filled in too. */
+function needsSubSettings(option) {
+  return Boolean(option.childIds?.length);
+}
+
 /** The option a piece of text refers to — baseline rules and stored values use labels, not always in the same case. */
 function matchOption(schema, text) {
   const wanted = String(text ?? "").trim().toLowerCase();
@@ -36,7 +55,11 @@ function rangeLabel(schema) {
 /** Why `value` can't be staged for this setting, or null if it can. */
 function validationError(schema, value) {
   const kind = editorKind(schema);
-  if (kind === "choice") return matchOption(schema, value) ? null : "Pick one of the listed options.";
+  if (kind === "choice") {
+    const option = matchOption(schema, value);
+    if (!option) return "Pick one of the listed options.";
+    return needsSubSettings(option) ? "This option has sub-settings, which can’t be edited here yet." : null;
+  }
   if (kind === "integer") {
     if (!/^-?\d+$/.test(String(value).trim())) return "Enter a whole number.";
     const n = Number(value);
@@ -59,9 +82,12 @@ function validationError(schema, value) {
  */
 function usableValue(schema, expected) {
   const kind = editorKind(schema);
-  if (kind === "choice") return matchOption(schema, expected)?.label ?? null;
+  if (kind === "choice") {
+    const option = matchOption(schema, expected);
+    return option && !needsSubSettings(option) ? option.label : null;
+  }
   if (kind === "integer") return validationError(schema, expected) ? null : String(expected).trim();
   return expected;
 }
 
-export { rootSchema, editorKind, matchOption, rangeLabel, validationError, usableValue };
+export { rootSchema, editorKind, isSingleValue, needsSubSettings, matchOption, rangeLabel, validationError, usableValue };

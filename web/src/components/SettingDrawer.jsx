@@ -4,7 +4,7 @@ import { DrawerShell } from "./DrawerShell.jsx";
 import { Chip, Diff, RefPath, HistorySection, ValueDisplay } from "./bits.jsx";
 import { STATE_STYLE, SEVERITY_STYLE } from "../lib/styles.js";
 import { platformLabel, refLabel } from "../lib/format.js";
-import { rootSchema, editorKind, rangeLabel, validationError, usableValue } from "../lib/schema.js";
+import { rootSchema, editorKind, isSingleValue, needsSubSettings, rangeLabel, validationError, usableValue } from "../lib/schema.js";
 
 
 const SECTION_HEADING = "font-sans text-xs font-semibold uppercase tracking-wide text-stone-500";
@@ -135,8 +135,10 @@ function ValueField({ schema, value, onChange, tone }) {
         {/* A value Intune's definition doesn't list (an option id that never resolved) still has to be showable. */}
         {!schema.options.some((o) => o.label === value) && <option value={value}>{value}</option>}
         {schema.options.map((o) => (
-          <option key={o.id} value={o.label}>
+          // Selectable only if it's the value already set: picking it fresh would also need its sub-settings.
+          <option key={o.id} value={o.label} disabled={needsSubSettings(o) && o.label !== value}>
             {o.label}
+            {needsSubSettings(o) ? " (has sub-settings)" : ""}
           </option>
         ))}
       </select>
@@ -179,11 +181,10 @@ function ValueField({ schema, value, onChange, tone }) {
  */
 function PolicyValueCard({ source, schema, inConflict, canStage, change, canRevert, draft, setDraft, onStage, onRevert }) {
   const [reason, setReason] = useState("");
-  // Compound values (a group's children, a collection's items, a
-  // dependent choice's child) are newline-joined — editing those means
-  // replacing several discrete things at once, which needs its own
-  // controls this doesn't have yet. Shown, not editable.
-  const isCompound = source.value.includes("\n");
+  // Compound values (a list's items, a group's children, a choice with
+  // sub-settings) mean replacing several discrete things at once, which
+  // needs its own controls this doesn't have yet. Shown, not editable.
+  const isCompound = !isSingleValue(schema, source.value);
   const editable = canStage && !isCompound && !change;
   const dirty = editable && draft !== source.value;
   const error = dirty && draft.trim() ? validationError(schema, draft) : null;
@@ -193,7 +194,9 @@ function PolicyValueCard({ source, schema, inConflict, canStage, change, canReve
   return (
     <li className={"rounded-md border p-3 " + (alert ? "border-red-200 bg-red-50" : "border-stone-200")}>
       <div className="flex items-baseline justify-between gap-3">
-        <span className={"min-w-0 truncate text-xs font-medium " + (alert ? "text-red-900" : "text-stone-700")}>{source.policyName}</span>
+        <span className={"min-w-0 truncate text-xs font-medium " + (alert ? "text-red-900" : "text-stone-700")} title={source.policyName}>
+          {source.policyName}
+        </span>
         <span className={"shrink-0 text-xs " + (source.deployed ? "text-stone-500" : "text-stone-400")}>
           {source.deployed ? "Assigned" : "Not assigned"}
         </span>
@@ -301,7 +304,7 @@ function SettingDrawer({ entry, notes, onAddNote, onDeleteNote, onClose, changes
   // reach devices, hold a single editable value, and have nothing staged.
   const fillable = entry.sources
     .map((source, n) => ({ source, n }))
-    .filter(({ source, n }) => canStage && source.deployed && !source.value.includes("\n") && !changeFor(source, n));
+    .filter(({ source, n }) => canStage && source.deployed && isSingleValue(schema, source.value) && !changeFor(source, n));
 
   return (
     <DrawerShell
