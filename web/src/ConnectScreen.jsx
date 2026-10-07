@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { Compass } from "@phosphor-icons/react";
 
 function ConnectScreen({ onConnected, session }) {
   const [scanning, setScanning] = useState(false);
@@ -25,10 +24,7 @@ function ConnectScreen({ onConnected, session }) {
   return (
     <div className="flex min-h-screen items-center justify-center bg-stone-50 px-4">
       <div className="w-full max-w-sm rounded-lg border border-stone-200 bg-white p-6">
-        <div className="flex items-center gap-2.5">
-          <Compass className="h-6 w-6 shrink-0 text-teal-700" />
-          <div className="text-sm font-semibold">IntuneAtlas</div>
-        </div>
+        <div className="font-display text-2xl leading-none text-teal-800">IntuneAtlas</div>
         <h1 className="mt-4 text-lg font-semibold">No scan yet</h1>
         <p className="mt-1 text-sm text-stone-500">
           {session ? `Signed in as ${session.name}. ` : ""}

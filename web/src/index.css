@@ -1,1 +1,8 @@
 @import "tailwindcss";
+/* Self-hosted (bundled by Vite), not Google Fonts: the UI is served from
+   the user's own machine and shouldn't phone out for a wordmark. */
+@import "@fontsource/instrument-serif/latin-400.css";
+
+@theme {
+  --font-display: "Instrument Serif", ui-serif, Georgia, serif;
+}
