@@ -96,6 +96,16 @@
     font-family: var(--font-heading);
   }
 
+  /* Tailwind 4 leaves buttons on the default arrow cursor; anything that
+     can be clicked gets the pointing hand, and disabled controls don't. */
+  button:not(:disabled),
+  select:not(:disabled),
+  [role="button"],
+  input[type="checkbox"]:not(:disabled),
+  label:has(input[type="checkbox"]:not(:disabled)) {
+    cursor: pointer;
+  }
+
   /* Hover/focus/selected states ease instead of snapping. Any element
      with its own Tailwind `transition-*` utility overrides this. */
   a,
