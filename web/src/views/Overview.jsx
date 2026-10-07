@@ -1,6 +1,6 @@
 import { Sliders, ShieldCheck, DeviceMobile, Warning, CheckCircle, Check, Clock } from "@phosphor-icons/react";
-import { Chip, Stat, NotAvailableYet } from "../components/bits.jsx";
-import { SEVERITY_STYLE } from "../lib/styles.js";
+import { SeverityChip, Stat, NotAvailableYet } from "../components/bits.jsx";
+import { severityRank } from "../lib/styles.js";
 import { platformLabel } from "../lib/format.js";
 
 function Overview({ settingIndex, compliancePolicies, enrollmentConfigurations, changes, onGo, onOpen }) {
@@ -15,7 +15,7 @@ function Overview({ settingIndex, compliancePolicies, enrollmentConfigurations, 
   // once if more than one baseline flags it.
   const recs = settingIndex
     .flatMap((e) => e.recs.map((rec) => ({ entry: e, rec })))
-    .sort((a, b) => SEVERITY_STYLE[a.rec.severity].rank - SEVERITY_STYLE[b.rec.severity].rank);
+    .sort((a, b) => severityRank(a.rec.severity) - severityRank(b.rec.severity));
   const complianceDeployed = compliancePolicies.filter((p) => p.deployed).length;
   const enrollmentDeployed = enrollmentConfigurations.filter((p) => p.deployed).length;
   const changeList = Object.values(changes).sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
@@ -76,7 +76,7 @@ function Overview({ settingIndex, compliancePolicies, enrollmentConfigurations, 
                         {platformLabel(e.platform)} · {e.category} · {rec.source}
                       </span>
                     </span>
-                    <Chip className={SEVERITY_STYLE[rec.severity].chip}>{SEVERITY_STYLE[rec.severity].label}</Chip>
+                    <SeverityChip severity={rec.severity} />
                   </button>
                 </li>
               ))}

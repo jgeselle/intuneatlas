@@ -15,4 +15,9 @@ const SEVERITY_STYLE = {
   low: { chip: "bg-stone-50 text-stone-500 ring-stone-200", label: "Low", rank: 3 },
 };
 
-export { STATE_STYLE, SEVERITY_STYLE };
+/** Sort position for a recommendation: by severity where the baseline gives one, unrated ones after. */
+function severityRank(severity) {
+  return SEVERITY_STYLE[severity]?.rank ?? 4;
+}
+
+export { STATE_STYLE, SEVERITY_STYLE, severityRank };

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { CheckCircle } from "@phosphor-icons/react";
-import { Chip, Diff } from "../components/bits.jsx";
-import { SEVERITY_STYLE } from "../lib/styles.js";
+import { Differences, SeverityChip } from "../components/bits.jsx";
+import { SEVERITY_STYLE, severityRank } from "../lib/styles.js";
 import { platformLabel } from "../lib/format.js";
 
 // One row per (setting, recommendation) — a setting can have several,
@@ -13,11 +13,19 @@ function flattenRecs(settingIndex) {
   return settingIndex.flatMap((e) => e.recs.map((rec) => ({ entry: e, rec })));
 }
 
+/** Exactly where the setting falls short of this baseline — from the matching check, or the whole value if there is none. */
+function differencesFor(entry, rec) {
+  const check = (entry.checks ?? []).find((c) => c.ruleId === rec.ruleId);
+  return check?.differences ?? [{ path: [], expected: rec.recommended, actual: rec.current }];
+}
+
 function Recommendations({ settingIndex, onOpen }) {
   const [severityFilter, setSeverityFilter] = useState("All");
   const [sourceFilter, setSourceFilter] = useState("All");
 
-  const all = flattenRecs(settingIndex).sort((a, b) => SEVERITY_STYLE[a.rec.severity].rank - SEVERITY_STYLE[b.rec.severity].rank);
+  const all = flattenRecs(settingIndex).sort((a, b) => severityRank(a.rec.severity) - severityRank(b.rec.severity));
+  // Severity only exists where a baseline's annotations give one — with none at all there's nothing to filter by.
+  const anyRated = all.some((r) => r.rec.severity);
   const sources = ["All", ...Array.from(new Set(all.map((r) => r.rec.source)))];
   const levels = ["All", "critical", "high", "medium", "low"];
 
@@ -53,6 +61,7 @@ function Recommendations({ settingIndex, onOpen }) {
         </div>
       )}
 
+      {anyRated && (
       <div className="flex gap-1 overflow-x-auto">
         {levels.map((l) => (
           <button
@@ -70,6 +79,7 @@ function Recommendations({ settingIndex, onOpen }) {
           </button>
         ))}
       </div>
+      )}
 
       <div className="space-y-3">
         {shown.map(({ entry: e, rec }) => (
@@ -77,7 +87,7 @@ function Recommendations({ settingIndex, onOpen }) {
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <Chip className={SEVERITY_STYLE[rec.severity].chip}>{SEVERITY_STYLE[rec.severity].label}</Chip>
+                  <SeverityChip severity={rec.severity} />
                   <span className="truncate text-xs text-stone-500">
                     {platformLabel(e.platform)} · {e.category}
                   </span>
@@ -92,10 +102,10 @@ function Recommendations({ settingIndex, onOpen }) {
               </div>
             </div>
             <div className="mt-3">
-              <Diff from={rec.current} to={rec.recommended} />
+              <Differences differences={differencesFor(e, rec)} />
             </div>
-            <p className="mt-3 text-sm leading-relaxed text-stone-600">{rec.why}</p>
-            <p className="mt-2 text-xs text-stone-400">Source: {rec.source}</p>
+            {rec.why && <p className="mt-3 text-sm leading-relaxed text-stone-600">{rec.why}</p>}
+            <p className="mt-2 text-xs text-stone-400">{rec.source}</p>
           </article>
         ))}
 

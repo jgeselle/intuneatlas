@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Check, CaretRight, Copy, Trash } from "@phosphor-icons/react";
+import { SEVERITY_STYLE } from "../lib/styles.js";
 
 function Chip({ className = "", children }) {
   return (
@@ -45,6 +46,49 @@ function Diff({ from, to }) {
       <span className="rounded border border-teal-200 bg-teal-50 px-2 py-1 font-medium text-teal-800">{to}</span>
     </div>
   );
+}
+
+/** A baseline's severity for a setting — nothing at all when the baseline doesn't rate it (a plain exported policy doesn't). */
+function SeverityChip({ severity, className = "" }) {
+  const style = SEVERITY_STYLE[severity];
+  return style ? <Chip className={className + " " + style.chip}>{style.label}</Chip> : null;
+}
+
+/**
+ * Where a setting falls short of a baseline, one row per shortfall: the
+ * sub-setting it concerns (if it isn't the setting itself), what the
+ * tenant has, and what the baseline expects. Only the shortfalls — a
+ * baseline is a floor, so whatever else the tenant configures isn't
+ * listed as a difference.
+ */
+function Differences({ differences }) {
+  return (
+    <ul className="space-y-2">
+      {differences.map((d, i) => (
+        <li key={i}>
+          {d.path.length > 0 && <div className="mb-1 text-xs font-medium leading-snug text-stone-600">{d.path.join(" › ")}</div>}
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <span
+              className={
+                "min-w-0 break-words rounded border border-stone-200 bg-stone-50 px-2 py-1 text-stone-500 " +
+                (d.actual === null ? "italic" : "line-through decoration-stone-300")
+              }
+            >
+              {d.actual === null ? "Not set" : clip(d.actual)}
+            </span>
+            <CaretRight className="h-4 w-4 shrink-0 text-stone-400" />
+            <span className="min-w-0 break-words rounded border border-teal-200 bg-teal-50 px-2 py-1 font-medium text-teal-800">{clip(d.expected)}</span>
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Some single values are enormous (an encoded XML blob); a comparison row shows enough to recognise it. */
+function clip(text) {
+  const s = String(text);
+  return s.length > 120 ? s.slice(0, 120) + "…" : s;
 }
 
 /** The setting's reference path with a copy button — part of what identifies the setting, so it sits in the drawer header. */
@@ -243,4 +287,4 @@ function NotAvailableYet({ title, children }) {
   );
 }
 
-export { Chip, Diff, RefPath, HistorySection, Stat, NotAvailableYet, ValueDisplay };
+export { Chip, SeverityChip, Diff, Differences, RefPath, HistorySection, Stat, NotAvailableYet, ValueDisplay };

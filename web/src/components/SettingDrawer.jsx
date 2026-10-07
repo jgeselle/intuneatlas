@@ -1,25 +1,26 @@
 import { useState } from "react";
 import { WarningCircle, CheckCircle, MinusCircle } from "@phosphor-icons/react";
 import { DrawerShell } from "./DrawerShell.jsx";
-import { Chip, Diff, RefPath, HistorySection, ValueDisplay } from "./bits.jsx";
-import { STATE_STYLE, SEVERITY_STYLE } from "../lib/styles.js";
+import { Chip, SeverityChip, Diff, Differences, RefPath, HistorySection, ValueDisplay } from "./bits.jsx";
+import { STATE_STYLE } from "../lib/styles.js";
 import { platformLabel, refLabel } from "../lib/format.js";
-import { matchOption, rangeLabel } from "../lib/schema.js";
-import { renderNode, nodeFromText, validateNode, normalizeNode } from "../lib/settingValue.js";
+import { rangeLabel } from "../lib/schema.js";
+import { renderNode, nodeFromText, validateNode, normalizeNode, applyExpected } from "../lib/settingValue.js";
 import { ValueEditor } from "./ValueEditor.jsx";
 
 
 const SECTION_HEADING = "font-sans text-xs font-semibold uppercase tracking-wide text-stone-500";
 
 /**
- * One baseline's rule for this setting: who expects what, whether the
- * current value satisfies it, and why the rule exists. Shown for every
- * covering rule — passing ones too — since "which baseline says what" is
- * exactly what's otherwise invisible on a setting that isn't failing.
- * Several can coexist, and can disagree with each other.
+ * One baseline's position on this setting: which baseline (and which
+ * policy inside it) expects what, whether the tenant's value meets it,
+ * and — where the baseline's annotations say — how much it matters and
+ * why. Shown for every baseline that covers the setting, passing ones
+ * too. Several can coexist, and can disagree with each other.
  */
-function BaselineCheckCard({ check, current, canUse, isSelected, onUse }) {
-  // canUse is false when the expectation isn't something that can be staged as a value.
+const COMPARE_SUFFIX = { exact: "", atMost: " or less", atLeast: " or more" };
+
+function BaselineCheckCard({ check, canUse, isSelected, onUse }) {
   const failed = check.passed === false;
   const Icon = check.passed === true ? CheckCircle : failed ? WarningCircle : MinusCircle;
   const iconTone = check.passed === true ? "text-teal-600" : failed ? "text-amber-500" : "text-stone-400";
@@ -28,24 +29,41 @@ function BaselineCheckCard({ check, current, canUse, isSelected, onUse }) {
     <li className="rounded-md border border-stone-200 p-3">
       <div className="flex items-start gap-2">
         <Icon className={"mt-0.5 h-4 w-4 shrink-0 " + iconTone} />
-        <span className="min-w-0 flex-1 text-sm font-medium leading-snug text-stone-800">{check.source}</span>
-        <Chip className={"shrink-0 " + SEVERITY_STYLE[check.severity].chip}>{SEVERITY_STYLE[check.severity].label}</Chip>
+        <div className="min-w-0 flex-1">
+          <div className="text-sm font-medium leading-snug text-stone-800">{check.source}</div>
+          {check.policyName && (
+            <div className="mt-0.5 truncate text-xs text-stone-500" title={check.policyName}>
+              {check.policyName}
+            </div>
+          )}
+        </div>
+        <SeverityChip severity={check.severity} className="shrink-0" />
       </div>
 
       <div className="mt-2.5">
-        {failed ? (
-          <Diff from={current} to={check.expected} />
+        {failed && check.differences?.length ? (
+          <Differences differences={check.differences} />
         ) : (
-          <div className="flex flex-wrap items-center gap-2 text-sm">
-            <span className="text-xs text-stone-500">Expects</span>
-            <span className="rounded border border-stone-200 bg-stone-50 px-2 py-1 font-medium text-stone-700">{check.expected}</span>
-            {check.passed === true && <span className="text-xs text-teal-700">Satisfied</span>}
-            {check.passed === null && <span className="text-xs text-stone-400">Not judged in this state</span>}
-          </div>
+          <>
+            <div className="flex items-center gap-2 text-xs">
+              <span className="text-stone-500">Expects</span>
+              {check.passed === true && <span className="text-teal-700">Satisfied</span>}
+              {check.passed === null && <span className="text-stone-400">Not judged in this state</span>}
+            </div>
+            <div className="mt-1 rounded border border-stone-200 bg-stone-50 px-2 py-1 text-sm font-medium text-stone-700">
+              <ValueDisplay value={check.expected + COMPARE_SUFFIX[check.compare ?? "exact"]} compact={check.expected.includes("\n")} />
+            </div>
+          </>
         )}
       </div>
 
-      <p className="mt-2 text-xs leading-relaxed text-stone-600">{check.why}</p>
+      {check.alternatives?.length > 0 && (
+        <div className="mt-2 text-xs text-stone-500">
+          Also accepted by this baseline: {check.alternatives.map((a) => a.replace(/\n/g, ", ")).join(" · ")}
+        </div>
+      )}
+      {check.why && <p className="mt-2 text-xs leading-relaxed text-stone-600">{check.why}</p>}
+      {check.reference && <p className="mt-1 text-xs text-stone-400">{check.reference}</p>}
 
       {failed && canUse && (
         <button
@@ -174,25 +192,6 @@ function initialDraft(source) {
 }
 
 /**
- * A baseline's expectation filled into a draft — only where it is a
- * value the setting can take: one of a choice's real options, or a
- * number/text that passes the definition's limits. An expectation like
- * "7 or less" isn't a value, so it yields null.
- */
-function draftWithExpected(draft, schemas, expected) {
-  const schema = schemas?.[draft.definitionId];
-  if (draft.kind === "choice") {
-    const option = matchOption(schema, expected);
-    return option ? { kind: "choice", definitionId: draft.definitionId, name: draft.name, optionId: option.id, label: option.label } : null;
-  }
-  if (draft.kind === "simple") {
-    const next = { ...draft, value: String(expected).trim() };
-    return validateNode(next, schemas) ? null : next;
-  }
-  return null;
-}
-
-/**
  * Reads top to bottom as: what the setting is (name, state, reference
  * path, all in the header) -> which policies set it, each with its value
  * editable in place -> what the baselines expect -> notes. The sections are the same for every setting; only what's inside
@@ -290,14 +289,14 @@ function SettingDrawer({ entry, notes, onAddNote, onDeleteNote, onClose, changes
         ) : (
           <ul className="mt-2 space-y-2">
             {checks.map((check) => {
+              // Only cards whose value actually came with structure can take a baseline's structured value.
               const fills = fillable
-                .map(({ n }) => ({ n, next: draftWithExpected(drafts[n], schemas, check.expected) }))
-                .filter(({ next }) => next !== null);
+                .filter(({ source }) => source.structured)
+                .map(({ n }) => ({ n, next: applyExpected(drafts[n], check.expectedNode) }));
               return (
                 <BaselineCheckCard
                   key={check.ruleId}
                   check={check}
-                  current={entry.values[0] ?? "Not configured"}
                   canUse={fills.length > 0}
                   isSelected={fills.length > 0 && fills.every(({ n, next }) => renderNode(drafts[n]) === renderNode(next))}
                   onUse={() => setDrafts((d) => d.map((v, i) => fills.find(({ n }) => n === i)?.next ?? v))}

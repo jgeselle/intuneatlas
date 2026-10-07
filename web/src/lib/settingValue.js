@@ -166,4 +166,47 @@ function withoutChildren(node) {
   return rest;
 }
 
-export { renderNode, defaultNode, nodeFromText, validateNode, normalizeNode };
+/**
+ * A draft brought up to a baseline's value. The baseline is a floor, so
+ * this adds and corrects what the baseline specifies and leaves the rest
+ * of the draft alone: its sub-settings are set, its list items and ticked
+ * options are added, and anything else already there stays.
+ */
+function applyExpected(draft, expected) {
+  if (!draft || draft.kind !== expected.kind) return expected;
+  const overlay = (mine, theirs) => {
+    const merged = mine.map((child) => {
+      const match = theirs.find((t) => t.definitionId === child.definitionId);
+      return match ? applyExpected(child, match) : child;
+    });
+    return [...merged, ...theirs.filter((t) => !mine.some((child) => child.definitionId === t.definitionId))];
+  };
+
+  switch (expected.kind) {
+    case "simple":
+      return { ...draft, value: expected.value };
+    case "choice": {
+      // Sub-settings only carry over while the option stays the same.
+      const kept = draft.optionId === expected.optionId ? (draft.children ?? []) : [];
+      const children = overlay(kept, expected.children ?? []);
+      const { children: _dropped, ...rest } = draft;
+      return { ...rest, optionId: expected.optionId, label: expected.label, ...(children.length ? { children } : {}) };
+    }
+    case "simpleCollection": {
+      const has = (item) => draft.items.some((mine) => String(mine).trim().toLowerCase() === String(item).trim().toLowerCase());
+      return { ...draft, items: [...draft.items, ...expected.items.filter((item) => !has(item))] };
+    }
+    case "choiceCollection":
+      return { ...draft, items: [...draft.items, ...expected.items.filter((item) => !draft.items.some((mine) => mine.optionId === item.optionId))] };
+    case "group":
+      return { ...draft, children: overlay(draft.children, expected.children) };
+    case "groupCollection": {
+      const groups = expected.groups.map((group, i) => (draft.groups[i] ? overlay(draft.groups[i], group) : group));
+      return { ...draft, groups: [...groups, ...draft.groups.slice(expected.groups.length)] };
+    }
+    default:
+      return draft;
+  }
+}
+
+export { renderNode, defaultNode, nodeFromText, validateNode, normalizeNode, applyExpected };
