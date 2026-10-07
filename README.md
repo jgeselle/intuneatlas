@@ -53,7 +53,7 @@ clone instead: `npm install && npm run build && node dist/cli.js ui`.
   overlapping assignment.
 - **Below baseline** — a setting is weaker than whichever benchmark you point
   it at (Microsoft security baselines, CIS, or your own house rules as YAML).
-- **Not deployed** — a profile looks healthy in the portal but targets no
+- **Not assigned** — a profile looks healthy in the portal but targets no
   group, so it silently affects nothing.
 - **Documented** — a note explaining a deliberate deviation, attached to the
   setting itself so context survives the person who wrote it.
