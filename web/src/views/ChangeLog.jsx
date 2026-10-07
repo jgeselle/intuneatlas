@@ -22,6 +22,7 @@ function ChangeCard({ change, onUpdateField, onRevert, viewer }) {
             {change.stagedByName && <span className="text-xs text-stone-400">staged by {change.stagedByName}</span>}
           </div>
           <h3 className="mt-2 text-sm font-medium">{change.targetName}</h3>
+          {change.policyName && <div className="mt-0.5 truncate text-xs text-stone-500">{change.policyName}</div>}
         </div>
         {canEdit && (
           <button

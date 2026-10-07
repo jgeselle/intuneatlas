@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check, CaretRight, Copy, Trash, ArrowCounterClockwise } from "@phosphor-icons/react";
+import { Check, CaretRight, Copy, Trash } from "@phosphor-icons/react";
 
 function Chip({ className = "", children }) {
   return (
@@ -108,42 +108,6 @@ function ValueDisplay({ value, compact = false }) {
   );
 }
 
-/**
- * One "policy name -> value" row, used for both a conflict's disagreeing
- * sources and the plain "set by" list. A short, single-line value stays
- * as the original compact inline pill; anything longer or multi-line
- * switches to a stacked layout instead of forcing a pill (meant for
- * "Enabled", not a 1,000-character blob) to hold it.
- */
-function SourceRow({ policyName, value, tone = "default" }) {
-  const isSimple = typeof value === "string" && !value.includes("\n") && value.length <= 50;
-  const alert = tone === "alert";
-
-  if (isSimple) {
-    return (
-      <div className="flex items-center justify-between gap-3">
-        <span className={"truncate text-xs " + (alert ? "text-red-900" : "")}>{policyName}</span>
-        <span
-          className={
-            "shrink-0 rounded border px-1.5 py-0.5 text-xs font-medium " +
-            (alert ? "border-red-200 bg-white text-red-800" : "border-stone-200 bg-stone-50 text-stone-700")
-          }
-        >
-          {value}
-        </span>
-      </div>
-    );
-  }
-  return (
-    <div>
-      <div className={"text-xs font-medium " + (alert ? "text-red-900" : "")}>{policyName}</div>
-      <div className="mt-1">
-        <ValueDisplay value={value} compact />
-      </div>
-    </div>
-  );
-}
-
 /** A note entry in the history feed. */
 function NoteEntry({ note, onDelete, canDelete }) {
   return (
@@ -169,63 +133,19 @@ function NoteEntry({ note, onDelete, canDelete }) {
   );
 }
 
-/** The setting's current staged change, shown as one entry in the same feed as notes. */
-function ChangeEntry({ change, onRevert, canRevert }) {
-  return (
-    <li className="animate-rise-in rounded-md border border-stone-200 bg-stone-50 p-3">
-      <div className="flex items-baseline justify-between gap-2 text-xs">
-        <div className="flex items-center gap-2">
-          <Chip className={change.ready ? "bg-teal-50 text-teal-700 ring-teal-200" : "bg-amber-50 text-amber-800 ring-amber-200"}>
-            {change.ready ? "Ready" : "Needs review"}
-          </Chip>
-          {change.stagedByName && <span className="font-medium text-stone-700">{change.stagedByName}</span>}
-        </div>
-        <span className="flex shrink-0 items-center gap-1.5 text-stone-400">
-          {new Date(change.updatedAt).toLocaleDateString()}
-          {onRevert && canRevert && (
-            <button
-              onClick={() => onRevert(change.id)}
-              aria-label="Revert change"
-              title="Revert change"
-              className="rounded p-0.5 hover:bg-stone-200 hover:text-stone-700 focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500"
-            >
-              <ArrowCounterClockwise className="h-3.5 w-3.5" />
-            </button>
-          )}
-        </span>
-      </div>
-      <div className="mt-1.5">
-        <Diff from={change.from} to={change.to} />
-      </div>
-      {change.reason ? (
-        <p className="mt-1.5 text-xs leading-relaxed text-stone-600">{change.reason}</p>
-      ) : (
-        <p className="mt-1.5 text-xs text-stone-400">No reason given yet — add one from the Change log tab.</p>
-      )}
-    </li>
-  );
-}
-
 /**
- * Notes and the setting's staged change, merged into one reverse-
- * chronological feed — a staged change carries its own reason (which
- * functions like a note explaining the "why"), so treating it as just
- * another timeline entry instead of a separate fixed card keeps the
- * whole history of "what happened and why" in one place, newest first.
- * `change` is optional — compliance/enrollment items have no staged-
- * change concept at all, just notes.
+ * The notes on a setting or policy, newest first. Staged changes used to
+ * be mixed into this feed; they now show on the policy they change (see
+ * PolicyValueCard in SettingDrawer.jsx), so this is notes only.
  */
-function HistorySection({ notes = [], onAdd, onDelete, readOnly = false, viewer, change, onRevertChange, canRevertChange }) {
+function HistorySection({ notes = [], onAdd, onDelete, readOnly = false, viewer }) {
   const [draft, setDraft] = useState("");
   // Whoever wrote a note can delete it themselves; an Admin can delete
   // any — mirrors the same author-or-admin check the server enforces
   // (src/auth/roles.ts's deleteNote capability).
   const canDeleteNote = (note) => viewer?.role === "admin" || (Boolean(note.authorId) && note.authorId === viewer?.id);
 
-  const entries = [
-    ...notes.map((n) => ({ type: "note", ts: n.createdAt, key: "note:" + n.id, note: n })),
-    ...(change ? [{ type: "change", ts: change.updatedAt, key: "change:" + change.id, change }] : []),
-  ].sort((a, b) => new Date(b.ts) - new Date(a.ts));
+  const entries = [...notes].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
 
   function submit() {
     const text = draft.trim();
@@ -237,7 +157,7 @@ function HistorySection({ notes = [], onAdd, onDelete, readOnly = false, viewer,
   return (
     <section>
       <h3 className="font-sans text-xs font-semibold uppercase tracking-wide text-stone-500">
-        History {entries.length ? <span className="tabular-nums text-stone-400">· {entries.length}</span> : null}
+        Notes {entries.length ? <span className="tabular-nums text-stone-400">· {entries.length}</span> : null}
       </h3>
 
       {!readOnly && (
@@ -261,13 +181,9 @@ function HistorySection({ notes = [], onAdd, onDelete, readOnly = false, viewer,
 
       {entries.length > 0 && (
         <ul className="mt-3 space-y-2">
-          {entries.map((e) =>
-            e.type === "note" ? (
-              <NoteEntry key={e.key} note={e.note} onDelete={onDelete} canDelete={canDeleteNote(e.note)} />
-            ) : (
-              <ChangeEntry key={e.key} change={e.change} onRevert={onRevertChange} canRevert={canRevertChange} />
-            ),
-          )}
+          {entries.map((note) => (
+            <NoteEntry key={note.id} note={note} onDelete={onDelete} canDelete={canDeleteNote(note)} />
+          ))}
         </ul>
       )}
     </section>
@@ -298,4 +214,4 @@ function NotAvailableYet({ title, children }) {
   );
 }
 
-export { Chip, Diff, RefPath, HistorySection, Stat, NotAvailableYet, ValueDisplay, SourceRow };
+export { Chip, Diff, RefPath, HistorySection, Stat, NotAvailableYet, ValueDisplay };

@@ -247,19 +247,30 @@ export default function App({ initialReport, session }) {
     }
   }
 
-  // Not just for applying a baseline recommendation — ruleId is "manual"
-  // for a freeform edit with no baseline rule behind it. The server never
-  // required a real rule id; this was always a frontend-only constraint.
-  async function stageChange(entry, { ruleId, from, to, reason }) {
+  // A staged change is to one policy's value of a setting, so two
+  // policies setting the same thing can each be changed — the target key
+  // is the pair. ruleId is "manual" for a freeform edit with no baseline
+  // rule behind it; the server never required a real rule id.
+  async function stageChange(entry, source, { ruleId, from, to, reason }) {
     try {
       const res = await fetch("/api/changes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ targetKey: entry.key, targetName: entry.name, ruleId, from, to, reason }),
+        body: JSON.stringify({
+          targetKey: entry.key + "::policy::" + source.policyId,
+          targetName: entry.name,
+          settingKey: entry.key,
+          policyId: source.policyId,
+          policyName: source.policyName,
+          ruleId,
+          from,
+          to,
+          reason,
+        }),
       });
       const change = await res.json();
       if (!res.ok) throw new Error(change.error || "Couldn't stage the change");
-      setChanges((c) => ({ ...c, [entry.key]: change }));
+      setChanges((c) => ({ ...c, [change.targetKey]: change }));
       flash(reason?.trim() ? "Change staged. Add a reviewer before it's ready." : "Change staged. Add a reason and reviewer before it's ready.");
     } catch (err) {
       flash(err.message);
@@ -522,9 +533,9 @@ export default function App({ initialReport, session }) {
           onAddNote={(text) => addNote(openSetting.key, text)}
           onDeleteNote={(id) => deleteNote(openSetting.key, id)}
           onClose={() => setOpen(null)}
-          change={changes[openSetting.key]}
-          onStage={(to, ruleId, from, reason) => stageChange(openSetting, { ruleId, from, to, reason })}
-          onRevert={(id) => revertEntryChange(id, openSetting.key)}
+          changes={Object.values(changes).filter((c) => c.settingKey === openSetting.key || c.targetKey === openSetting.key)}
+          onStage={(source, change) => stageChange(openSetting, source, change)}
+          onRevert={(change) => revertEntryChange(change.id, change.targetKey)}
           viewer={session}
         />
       )}
