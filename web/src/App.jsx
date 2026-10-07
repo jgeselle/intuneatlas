@@ -343,48 +343,33 @@ export default function App({ initialReport, session }) {
             : "lg:w-60 lg:sticky lg:top-0 lg:h-screen lg:self-start lg:overflow-y-auto")
         }
       >
-        {/* The wordmark doubles as the icon-strip's mark: "ntune" squeezes
-            shut and "tlas" fades, leaving the two capitals as an "IA"
-            monogram, and the left padding nudges over so that ~18px-wide
-            pair lands on the strip's center line (32px), same as the nav
-            icons below. */}
-        <div
-          className={
-            "flex items-center gap-2.5 py-4 pl-[20px] pr-4 transition-[padding] duration-150 ease-out " +
-            (railCollapsed && !railWide ? "lg:pl-[24px]" : "")
-          }
-        >
-          <div className="min-w-0">
-            <div className="flex items-baseline whitespace-nowrap font-heading text-xl font-semibold leading-none tracking-tight text-white">
-              <span className="sr-only">IntuneAtlas</span>
-              <span aria-hidden="true">I</span>
-              {/* overflow-x-clip, not overflow-hidden: clips only sideways,
-                  so the line's tight leading doesn't shave the glyph tops. */}
-              <span
-                aria-hidden="true"
-                className={
-                  "max-w-[3.2em] overflow-x-clip transition-[max-width,opacity] duration-150 ease-out " +
-                  railDim(railCollapsed && !railWide ? "lg:max-w-0" : "")
-                }
-              >
-                ntune
-              </span>
-              {railCollapsed && !railWide ? (
-                <>
-                  <span aria-hidden="true" className="lg:hidden">A</span>
-                  <span aria-hidden="true" className="hidden lg:inline">a</span>
-                </>
-              ) : (
-                <span aria-hidden="true">A</span>
-              )}
-              <span aria-hidden="true" className={"transition-opacity duration-150 " + railDim()}>
-                tlas
-              </span>
-            </div>
-            <div
-              className={"mt-0.5 truncate text-xs leading-tight text-teal-300 transition-opacity duration-150 " + railDim()}
-              title={report.tenant}
+        {/* The icon-strip shows a compass mark where the wordmark sits; the
+            two cross-fade in place as the rail opens. The compass is drawn
+            here rather than taken from Phosphor because its heaviest
+            stroke weight ("bold") wasn't heavy enough. */}
+        <div className="relative flex items-center gap-2.5 py-4 pl-[20px] pr-4">
+          {railCollapsed && (
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="3"
+              strokeLinejoin="round"
+              aria-hidden="true"
+              className={
+                "absolute left-[22px] top-1/2 hidden h-5 w-5 -translate-y-1/2 text-white transition-opacity duration-150 lg:block " +
+                (railWide ? "opacity-0" : "opacity-100")
+              }
             >
+              <circle cx="12" cy="12" r="9.5" />
+              <polygon points="15.6 8.4 13.7 13.7 8.4 15.6 10.3 10.3" fill="currentColor" strokeWidth="1.5" />
+            </svg>
+          )}
+          <div className={"min-w-0 transition-opacity duration-150 " + railDim()}>
+            <div className="whitespace-nowrap font-heading text-xl font-semibold leading-none tracking-tight text-white">
+              IntuneAtlas
+            </div>
+            <div className="mt-0.5 truncate text-xs leading-tight text-teal-300" title={report.tenant}>
               {report.tenantName || report.tenant || "no tenant"}
             </div>
           </div>
