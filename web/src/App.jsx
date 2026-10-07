@@ -251,7 +251,7 @@ export default function App({ initialReport, session }) {
   // policies setting the same thing can each be changed — the target key
   // is the pair. ruleId is "manual" for a freeform edit with no baseline
   // rule behind it; the server never required a real rule id.
-  async function stageChange(entry, source, { ruleId, from, to, reason }) {
+  async function stageChange(entry, source, { ruleId, from, to, toStructured, reason }) {
     try {
       const res = await fetch("/api/changes", {
         method: "POST",
@@ -265,6 +265,7 @@ export default function App({ initialReport, session }) {
           ruleId,
           from,
           to,
+          toStructured,
           reason,
         }),
       });

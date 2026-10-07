@@ -9,7 +9,35 @@ function Chip({ className = "", children }) {
   );
 }
 
+/**
+ * Old value -> new value. Single values sit side by side; a value made of
+ * several lines (a list, a group, a choice with sub-settings) is compared
+ * line by line instead — what was removed, what was added — since two
+ * multi-line blobs next to each other don't show what actually changed.
+ */
 function Diff({ from, to }) {
+  if (String(from).includes("\n") || String(to).includes("\n")) {
+    const before = String(from).split("\n").filter(Boolean);
+    const after = String(to).split("\n").filter(Boolean);
+    const removed = before.filter((line) => !after.includes(line));
+    const added = after.filter((line) => !before.includes(line));
+    const unchanged = after.length - added.length;
+    return (
+      <div className="space-y-1 text-xs">
+        {removed.map((line, i) => (
+          <div key={"r" + i} className="break-words rounded border border-stone-200 bg-stone-50 px-2 py-1 text-stone-500 line-through decoration-stone-300">
+            {line}
+          </div>
+        ))}
+        {added.map((line, i) => (
+          <div key={"a" + i} className="break-words rounded border border-teal-200 bg-teal-50 px-2 py-1 font-medium text-teal-800">
+            {line}
+          </div>
+        ))}
+        {unchanged > 0 && <div className="text-stone-400">{unchanged} unchanged</div>}
+      </div>
+    );
+  }
   return (
     <div className="flex flex-wrap items-center gap-2 text-sm">
       <span className="rounded border border-stone-200 bg-stone-50 px-2 py-1 text-stone-500 line-through decoration-stone-300">{from}</span>
@@ -19,6 +47,7 @@ function Diff({ from, to }) {
   );
 }
 
+/** The setting's reference path with a copy button — part of what identifies the setting, so it sits in the drawer header. */
 function RefPath({ value, label }) {
   const [copied, setCopied] = useState(false);
 
@@ -38,13 +67,13 @@ function RefPath({ value, label }) {
   }
 
   return (
-    <div className="rounded-md border border-stone-200 bg-stone-50 p-3">
-      {label ? <div className="text-xs font-medium uppercase tracking-wide text-stone-500">{label}</div> : null}
-      <div className="mt-1.5 flex items-start gap-2">
-        <code className="min-w-0 flex-1 break-all font-mono text-xs leading-relaxed text-stone-700">{value}</code>
+    <div>
+      {label ? <div className="text-xs uppercase tracking-wide text-stone-400">{label}</div> : null}
+      <div className="mt-0.5 flex items-start gap-1.5">
+        <code className="min-w-0 flex-1 break-all font-mono text-xs leading-relaxed text-stone-600">{value}</code>
         <button
           onClick={copy}
-          className="shrink-0 rounded px-1.5 py-1 text-stone-400 hover:bg-white hover:text-stone-700 focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500"
+          className="-mt-0.5 shrink-0 rounded px-1.5 py-1 text-stone-400 hover:bg-stone-100 hover:text-stone-700 focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500"
           aria-label="Copy path"
           title="Copy path"
         >

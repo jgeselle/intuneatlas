@@ -4,7 +4,7 @@ import { X } from "@phosphor-icons/react";
 // Matches --animate-drawer-out in index.css.
 const CLOSE_MS = 160;
 
-function DrawerShell({ eyebrow, title, chips, onClose, children }) {
+function DrawerShell({ eyebrow, title, chips, detail, onClose, children }) {
   // The parent unmounts the drawer the moment onClose runs, which would
   // cut any exit animation off — so closing is two steps: flip `closing`
   // to play the exit, then tell the parent once it's done.
@@ -57,6 +57,7 @@ function DrawerShell({ eyebrow, title, chips, onClose, children }) {
             </button>
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-2">{chips}</div>
+          {detail ? <div className="mt-3">{detail}</div> : null}
         </div>
         <div className="space-y-5 px-5 py-5">{children}</div>
       </div>
