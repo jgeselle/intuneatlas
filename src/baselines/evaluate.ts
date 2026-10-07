@@ -47,16 +47,21 @@ export function applyBaselines(entries: SettingIndexEntry[], rules: BaselineRule
     }
     if (matching.length === 0) return { ...entry, state: "Not checked" as const, recs: [], checks: [] };
 
-    // The effective value: what the assigned policies set. They agree, or this would be a conflict.
-    const actual = entry.sources.find((source) => source.deployed)?.structured;
+    // What the assigned policies set. Usually one value; several when policies for different
+    // groups differ without conflicting — then the baseline is met only if every one of them meets it.
+    const assigned = entry.sources.filter((source) => source.deployed);
+    const distinct = assigned.filter((source, i) => assigned.findIndex((other) => other.value === source.value) === i);
+    const actuals = distinct.length > 0 ? distinct.map((source) => source.structured) : [undefined];
     const current = entry.values[0] ?? "";
 
     const judged = perPack.map((alternatives) => {
-      const outcomes = alternatives.map((rule) => ({
-        rule,
-        differences: compareValues(hydrateNode(rule.expected, schemas), actual, rule.compare),
-      }));
-      // Held against the alternative it comes closest to.
+      const outcomes = alternatives.map((rule) => {
+        const expected = hydrateNode(rule.expected, schemas);
+        // Held against the value that falls shortest of it.
+        const differences = actuals.map((actual) => compareValues(expected, actual, rule.compare)).reduce((a, b) => (b.length > a.length ? b : a));
+        return { rule, differences };
+      });
+      // Of the values the baseline accepts, the one it comes closest to.
       const best = outcomes.reduce((a, b) => (b.differences.length < a.differences.length ? b : a));
       return { alternatives, ...best };
     });

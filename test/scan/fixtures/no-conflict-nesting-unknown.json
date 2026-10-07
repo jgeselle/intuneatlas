@@ -1,0 +1,59 @@
+{
+  "description": "The same two policies when group nesting couldn't be read (no Group.Read.All): nothing says the groups are related, so no conflict is claimed.",
+  "groups": {
+    "available": false,
+    "names": {},
+    "contains": {}
+  },
+  "policies": [
+    {
+      "id": "parent",
+      "name": "parent",
+      "platform": "windows10",
+      "assignments": [
+        {
+          "kind": "group",
+          "groupId": "grp-windows",
+          "excluded": false
+        }
+      ],
+      "settings": [
+        {
+          "settingDefinitionId": "def-x",
+          "name": "X",
+          "cspPath": "./x",
+          "category": "C",
+          "value": "1"
+        }
+      ]
+    },
+    {
+      "id": "child",
+      "name": "child",
+      "platform": "windows10",
+      "assignments": [
+        {
+          "kind": "group",
+          "groupId": "grp-finance",
+          "excluded": false
+        }
+      ],
+      "settings": [
+        {
+          "settingDefinitionId": "def-x",
+          "name": "X",
+          "cspPath": "./x",
+          "category": "C",
+          "value": "2"
+        }
+      ]
+    }
+  ],
+  "expect": [
+    {
+      "key": "def-x::windows10",
+      "state": "Not checked",
+      "conflict": false
+    }
+  ]
+}

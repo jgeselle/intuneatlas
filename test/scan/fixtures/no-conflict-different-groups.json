@@ -1,0 +1,58 @@
+{
+  "description": "Two policies set the same setting to different values, each assigned to its own group \u2014 rings, departments. Not a conflict: nothing in the assignments says they reach the same group. Both values are listed.",
+  "policies": [
+    {
+      "id": "pilot",
+      "name": "pilot",
+      "platform": "windows10",
+      "assignments": [
+        {
+          "kind": "group",
+          "groupId": "grp-pilot",
+          "excluded": false
+        }
+      ],
+      "settings": [
+        {
+          "settingDefinitionId": "def-x",
+          "name": "X",
+          "cspPath": "./x",
+          "category": "C",
+          "value": "0"
+        }
+      ]
+    },
+    {
+      "id": "prod",
+      "name": "prod",
+      "platform": "windows10",
+      "assignments": [
+        {
+          "kind": "group",
+          "groupId": "grp-prod",
+          "excluded": false
+        }
+      ],
+      "settings": [
+        {
+          "settingDefinitionId": "def-x",
+          "name": "X",
+          "cspPath": "./x",
+          "category": "C",
+          "value": "7"
+        }
+      ]
+    }
+  ],
+  "expect": [
+    {
+      "key": "def-x::windows10",
+      "state": "Not checked",
+      "conflict": false,
+      "values": [
+        "0",
+        "7"
+      ]
+    }
+  ]
+}

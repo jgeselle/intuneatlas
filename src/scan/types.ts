@@ -80,10 +80,33 @@ export interface RawSetting {
   schemas?: Record<string, SettingSchema>;
 }
 
+/**
+ * Who a policy is assigned to, one entry per assignment. `filtered` marks
+ * an assignment narrowed by an Intune assignment filter — noted so it can
+ * be shown, but not evaluated: the filter's rule isn't read.
+ */
 export type AssignmentTarget =
-  | { kind: "allDevices" }
-  | { kind: "allLicensedUsers" }
-  | { kind: "group"; groupId: string; excluded: boolean };
+  | { kind: "allDevices"; filtered?: boolean }
+  | { kind: "allLicensedUsers"; filtered?: boolean }
+  | { kind: "group"; groupId: string; excluded: boolean; filtered?: boolean };
+
+/**
+ * What the scan knows about the Entra groups policies are assigned to:
+ * their names, and which other groups each one contains (all levels
+ * down). Lets a policy assigned to a parent group count for the groups
+ * inside it. `available` is false when the app registration can't read
+ * groups (no Group.Read.All) — everything then works on group ids alone,
+ * without names and without nesting.
+ *
+ * Deliberately not here: which devices or users are in a group. The
+ * question this answers is "what does this group get", not "what does
+ * this device get".
+ */
+export interface GroupDirectory {
+  available: boolean;
+  names: Record<string, string>;
+  contains: Record<string, string[]>;
+}
 
 export interface RawPolicy {
   id: string;
@@ -128,6 +151,8 @@ export interface SettingIndexSource {
   value: string;
   deployed: boolean;
   structured?: SettingValueNode;
+  /** Who the policy is assigned to — absent on scans stored before targets were kept. */
+  targets?: AssignmentTarget[];
 }
 
 /** One place a setting's value falls short of a baseline's — see compareValues in src/baselines/compare.ts. */

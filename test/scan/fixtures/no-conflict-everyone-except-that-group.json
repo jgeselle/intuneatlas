@@ -1,0 +1,57 @@
+{
+  "description": "One policy for all devices *excluding* the kiosks group, another for the kiosks group only, different values. Not a conflict: the exclusion keeps them apart.",
+  "policies": [
+    {
+      "id": "all",
+      "name": "all",
+      "platform": "windows10",
+      "assignments": [
+        {
+          "kind": "allDevices"
+        },
+        {
+          "kind": "group",
+          "groupId": "grp-kiosks",
+          "excluded": true
+        }
+      ],
+      "settings": [
+        {
+          "settingDefinitionId": "def-x",
+          "name": "X",
+          "cspPath": "./x",
+          "category": "C",
+          "value": "1"
+        }
+      ]
+    },
+    {
+      "id": "kiosks",
+      "name": "kiosks",
+      "platform": "windows10",
+      "assignments": [
+        {
+          "kind": "group",
+          "groupId": "grp-kiosks",
+          "excluded": false
+        }
+      ],
+      "settings": [
+        {
+          "settingDefinitionId": "def-x",
+          "name": "X",
+          "cspPath": "./x",
+          "category": "C",
+          "value": "2"
+        }
+      ]
+    }
+  ],
+  "expect": [
+    {
+      "key": "def-x::windows10",
+      "state": "Not checked",
+      "conflict": false
+    }
+  ]
+}

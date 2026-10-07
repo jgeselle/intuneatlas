@@ -12,6 +12,7 @@ interface ScanRow {
   policy_count: number;
   legacy_policy_count: number;
   baseline_definitions_json: string | null;
+  groups_json: string | null;
 }
 
 interface SettingsSnapshotRow {
@@ -45,7 +46,7 @@ export function recordScan(report: ScanReport): void {
   try {
     const scanResult = db
       .prepare(
-        `INSERT INTO scans (scanned_at, flow, tenant, tenant_name, policy_count, legacy_policy_count, baseline_definitions_json) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO scans (scanned_at, flow, tenant, tenant_name, policy_count, legacy_policy_count, baseline_definitions_json, groups_json) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         report.scannedAt,
@@ -55,6 +56,7 @@ export function recordScan(report: ScanReport): void {
         report.policyCount,
         report.legacyPolicyCount,
         report.baselineDefinitions ? JSON.stringify(report.baselineDefinitions) : null,
+        report.groups ? JSON.stringify(report.groups) : null,
       );
     const scanId = scanResult.lastInsertRowid;
 
@@ -154,6 +156,7 @@ export function getLatestScan(tenant?: string): ScanReport | undefined {
     settings,
     compliancePolicies,
     enrollmentConfigurations,
+    ...(scan.groups_json ? { groups: JSON.parse(scan.groups_json) as ScanReport["groups"] } : {}),
     ...(scan.baseline_definitions_json ? { baselineDefinitions: JSON.parse(scan.baseline_definitions_json) as ScanReport["baselineDefinitions"] } : {}),
   };
 }

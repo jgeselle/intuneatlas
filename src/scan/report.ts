@@ -1,6 +1,9 @@
 import { applyBaselines, findUncoveredEntries, type BaselineDefinitions } from "../baselines/evaluate.js";
 import { resolveBaselineDefinitions } from "./settingDefinitions.js";
 import { definitionIdsIn } from "./settingValue.js";
+import { fetchGroupDirectory } from "./groups.js";
+import { groupIdsIn } from "./targets.js";
+import type { GroupDirectory } from "./types.js";
 import { normalizeState } from "./states.js";
 import type { BaselineRule } from "../baselines/types.js";
 import { fetchCompliancePolicies } from "./compliancePolicies.js";
@@ -37,6 +40,8 @@ export interface ScanReport {
    * catalog — not a judgment — which is why a scan may carry them.
    */
   baselineDefinitions?: BaselineDefinitions;
+  /** Names and nesting of the groups policies are assigned to — absent on scans stored before this was read. */
+  groups?: GroupDirectory;
 }
 
 /**
@@ -61,7 +66,10 @@ export async function buildReport(token: string, flow: string, tenant: string, b
   // Legacy profiles fold into the same merge — a Settings Catalog policy and
   // a legacy Device Restrictions profile writing the same real setting need
   // to land in the same bucket to be conflict-checked against each other.
-  const settingIndex = buildSettingIndex([...policies, ...legacyPolicies]);
+  // Group names and nesting, for the groups any of those policies name. Optional: without
+  // Group.Read.All this comes back unavailable and everything works on group ids alone.
+  const groups = await fetchGroupDirectory(token, [...policies, ...legacyPolicies].flatMap((p) => groupIdsIn(p.assignments)));
+  const settingIndex = buildSettingIndex([...policies, ...legacyPolicies], groups);
   const known = new Set(settingIndex.flatMap((e) => Object.keys(e.schemas ?? {})));
   const unknown = baselineDefinitionIds.filter((id) => !known.has(id));
   const baselineDefinitions = unknown.length > 0 ? await resolveBaselineDefinitions(token, unknown) : undefined;
@@ -80,6 +88,7 @@ export async function buildReport(token: string, flow: string, tenant: string, b
     compliancePolicies,
     enrollmentConfigurations,
     ...(baselineDefinitions ? { baselineDefinitions } : {}),
+    groups,
   };
 }
 

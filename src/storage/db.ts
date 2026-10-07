@@ -30,7 +30,8 @@ export function getDb(): DatabaseSync {
       tenant_name TEXT,
       policy_count INTEGER NOT NULL,
       legacy_policy_count INTEGER NOT NULL DEFAULT 0,
-      baseline_definitions_json TEXT
+      baseline_definitions_json TEXT,
+      groups_json TEXT
     );
 
     CREATE TABLE IF NOT EXISTS settings_snapshot (
@@ -151,6 +152,10 @@ function migrate(db: DatabaseSync): void {
   }
   // baseline_definitions_json — definitions looked up for settings a
   // baseline expects but no policy in the tenant configures.
+  // groups_json — names and nesting of the groups policies are assigned to.
+  if (!scanColumns.some((c) => c.name === "groups_json")) {
+    db.exec(`ALTER TABLE scans ADD COLUMN groups_json TEXT`);
+  }
   if (!scanColumns.some((c) => c.name === "baseline_definitions_json")) {
     db.exec(`ALTER TABLE scans ADD COLUMN baseline_definitions_json TEXT`);
   }

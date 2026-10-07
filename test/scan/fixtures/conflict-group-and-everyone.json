@@ -1,0 +1,52 @@
+{
+  "description": "One policy for a single group, one for all users, different values. A conflict: 'everyone' includes that group.",
+  "policies": [
+    {
+      "id": "grp",
+      "name": "grp",
+      "platform": "windows10",
+      "assignments": [
+        {
+          "kind": "group",
+          "groupId": "grp-finance",
+          "excluded": false
+        }
+      ],
+      "settings": [
+        {
+          "settingDefinitionId": "def-x",
+          "name": "X",
+          "cspPath": "./x",
+          "category": "C",
+          "value": "1"
+        }
+      ]
+    },
+    {
+      "id": "all",
+      "name": "all",
+      "platform": "windows10",
+      "assignments": [
+        {
+          "kind": "allLicensedUsers"
+        }
+      ],
+      "settings": [
+        {
+          "settingDefinitionId": "def-x",
+          "name": "X",
+          "cspPath": "./x",
+          "category": "C",
+          "value": "2"
+        }
+      ]
+    }
+  ],
+  "expect": [
+    {
+      "key": "def-x::windows10",
+      "state": "Conflict",
+      "conflict": true
+    }
+  ]
+}

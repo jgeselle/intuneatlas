@@ -1,5 +1,6 @@
 import { isDeployed } from "./assignments.js";
-import type { RawPolicy, SettingIndexEntry, SettingIndexSource, SettingIndexState, SettingSchema } from "./types.js";
+import { canOverlap } from "./targets.js";
+import type { GroupDirectory, RawPolicy, SettingIndexEntry, SettingIndexSource, SettingIndexState, SettingSchema } from "./types.js";
 
 interface IndexBucket {
   name: string;
@@ -37,7 +38,7 @@ interface IndexBucket {
  * live sample, mostly macOS/iOS preference-domain settings, had an
  * empty baseUri). cspPath stays on the index purely for display.
  */
-export function buildSettingIndex(policies: RawPolicy[]): SettingIndexEntry[] {
+export function buildSettingIndex(policies: RawPolicy[], groups?: GroupDirectory): SettingIndexEntry[] {
   const buckets = new Map<string, IndexBucket>();
 
   for (const policy of policies) {
@@ -66,23 +67,14 @@ export function buildSettingIndex(policies: RawPolicy[]): SettingIndexEntry[] {
         value: setting.value,
         deployed,
         ...(setting.structured ? { structured: setting.structured } : {}),
+        targets: policy.assignments,
       });
     }
   }
 
   return Array.from(buckets.entries())
     .map(([key, bucket]) => {
-      const deployedSources = bucket.sources.filter((s) => s.deployed);
-      const deployedValues = Array.from(new Set(deployedSources.map((s) => s.value)));
-      // What reaches devices comes first — values[0] is read as the effective value everywhere —
-      // followed by anything only an unassigned policy holds.
-      const values = Array.from(new Set([...deployedValues, ...bucket.sources.map((s) => s.value)]));
-      // Only policies that are assigned can disagree with each other: an unassigned one reaches nothing.
-      const conflict = deployedValues.length > 1;
-
-      let state: SettingIndexState = "Not checked";
-      if (conflict) state = "Conflict";
-      else if (deployedSources.length === 0) state = "Not assigned";
+      const { values, conflict, state } = summarizeSources(bucket.sources, groups);
 
       return {
         key,
@@ -101,4 +93,37 @@ export function buildSettingIndex(policies: RawPolicy[]): SettingIndexEntry[] {
     .sort(
       (a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name) || a.key.localeCompare(b.key),
     );
+}
+
+/**
+ * What a set of policies setting the same setting adds up to: the
+ * distinct values, whether they conflict, and the state before any
+ * baseline is applied. Used for the whole tenant and again for any
+ * narrower set of policies (the ones reaching one group).
+ *
+ * A conflict takes two assigned policies with different values that can
+ * reach the same group (see canOverlap). The same setting with different
+ * values in policies for different groups is not one — that is how rings
+ * and departments are meant to work. Policies whose targets aren't known
+ * (a scan stored before targets were kept) are treated as able to
+ * overlap, which is what was assumed about every pair before.
+ */
+export function summarizeSources(
+  sources: SettingIndexSource[],
+  groups?: GroupDirectory,
+): { values: string[]; conflict: boolean; state: SettingIndexState } {
+  const deployedSources = sources.filter((s) => s.deployed);
+  const deployedValues = Array.from(new Set(deployedSources.map((s) => s.value)));
+  // What reaches devices comes first — values[0] is read as the effective value everywhere —
+  // followed by anything only an unassigned policy holds.
+  const values = Array.from(new Set([...deployedValues, ...sources.map((s) => s.value)]));
+  // Only policies that are assigned can disagree with each other: an unassigned one reaches nothing.
+  const conflict = deployedSources.some((a, i) =>
+    deployedSources.slice(i + 1).some((b) => a.value !== b.value && (!a.targets || !b.targets || canOverlap(a.targets, b.targets, groups))),
+  );
+
+  let state: SettingIndexState = "Not checked";
+  if (conflict) state = "Conflict";
+  else if (deployedSources.length === 0) state = "Not assigned";
+  return { values, conflict, state };
 }

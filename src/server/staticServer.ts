@@ -105,6 +105,12 @@ export interface StartServerOptions {
    * `--baseline` directory instead, which is then not the app's to manage.
    * Each throws BaselineInputError for anything wrong with the request.
    */
+  /**
+   * The raw report narrowed to the policies that reach one group (see
+   * scopeToGroup). The server then judges it for the viewer like any
+   * report. Throws BaselineInputError for a group the scan doesn't know.
+   */
+  onScopeReport?: (report: unknown, groupId: string) => unknown | Promise<unknown>;
   /** What differs between two baselines, and where the tenant stands on each difference — read-only, any viewer. Throws BaselineInputError for an unknown baseline. */
   onCompareBaselines?: (report: unknown, from: string, to: string) => Promise<unknown>;
   baselines?: {
@@ -218,6 +224,11 @@ export async function startServer(options: StartServerOptions): Promise<{ url: s
           viewer,
           () => currentReport,
         );
+        return;
+      }
+
+      if (req.method === "GET" && req.url?.startsWith("/api/scope?")) {
+        await handleScope(req, res, options.onScopeReport, options.onEvaluateForViewer, viewer, () => currentReport);
         return;
       }
 
@@ -461,6 +472,51 @@ async function handleSetBaselineSelection(
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify(report ? baselineVerdicts(report) : null));
   } catch (err) {
+    sendApiError(res, err);
+  }
+}
+
+/**
+ * The settings as one group gets them: the same shape the page was
+ * loaded with, for the browser to show in place of the tenant-wide list.
+ * Same right as the report itself.
+ */
+async function handleScope(
+  req: IncomingMessage,
+  res: ServerResponse,
+  onScopeReport: StartServerOptions["onScopeReport"],
+  onEvaluateForViewer: StartServerOptions["onEvaluateForViewer"],
+  viewer: ViewerIdentity,
+  getReport: () => unknown,
+): Promise<void> {
+  if (!onScopeReport) {
+    res.writeHead(501, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Viewing by group isn't available from this session." }));
+    return;
+  }
+  if (!can(viewer.role, "view")) {
+    res.writeHead(403, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Your role doesn't include viewing the report." }));
+    return;
+  }
+  const group = new URL(req.url ?? "", "http://localhost").searchParams.get("group") ?? "";
+  if (!group) {
+    res.writeHead(400, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Choose a group." }));
+    return;
+  }
+  try {
+    const raw = getReport();
+    const scoped = raw ? await onScopeReport(raw, group) : null;
+    const judged = (scoped && onEvaluateForViewer ? await onEvaluateForViewer(scoped, viewer) : scoped) as { settings?: unknown; conflictCount?: unknown; belowBaselineCount?: unknown } | null;
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ group, settings: judged?.settings ?? [], conflictCount: judged?.conflictCount ?? 0, belowBaselineCount: judged?.belowBaselineCount ?? 0 }));
+  } catch (err) {
+    if (err instanceof BaselineInputError) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: err.message }));
+      return;
+    }
     sendApiError(res, err);
   }
 }

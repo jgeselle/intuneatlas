@@ -3,6 +3,8 @@ import type { AssignmentTarget } from "./types.js";
 interface GraphAssignmentTarget {
   "@odata.type": string;
   groupId?: string;
+  deviceAndAppManagementAssignmentFilterId?: string | null;
+  deviceAndAppManagementAssignmentFilterType?: string | null;
 }
 
 interface GraphAssignment {
@@ -16,16 +18,19 @@ export function mapAssignmentTargets(assignments: GraphAssignment[] = []): Assig
   return assignments
     .filter(({ target }) => target["@odata.type"] !== SCOPE_TAG_TARGET)
     .map(({ target }) => {
+      // Graph reports "no filter" as a null id or as type "none", depending on the resource.
+      const filtered =
+        Boolean(target.deviceAndAppManagementAssignmentFilterId) && target.deviceAndAppManagementAssignmentFilterType !== "none" ? { filtered: true } : {};
       switch (target["@odata.type"]) {
         case "#microsoft.graph.allDevicesAssignmentTarget":
-          return { kind: "allDevices" };
+          return { kind: "allDevices", ...filtered };
         case "#microsoft.graph.allLicensedUsersAssignmentTarget":
-          return { kind: "allLicensedUsers" };
+          return { kind: "allLicensedUsers", ...filtered };
         case "#microsoft.graph.exclusionGroupAssignmentTarget":
-          return { kind: "group", groupId: target.groupId ?? "", excluded: true };
+          return { kind: "group", groupId: target.groupId ?? "", excluded: true, ...filtered };
         case "#microsoft.graph.groupAssignmentTarget":
         default:
-          return { kind: "group", groupId: target.groupId ?? "", excluded: false };
+          return { kind: "group", groupId: target.groupId ?? "", excluded: false, ...filtered };
       }
     });
 }

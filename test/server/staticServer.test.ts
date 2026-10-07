@@ -313,3 +313,50 @@ test("/api/baselines/compare: needs two different baselines; an unknown one is a
     assert.equal((await get("from=a%2F1&to=b%2F2")).status, 501);
   });
 });
+
+// ------------------------------------------------------------------------
+// /api/scope — the report as one group gets it.
+// ------------------------------------------------------------------------
+
+test("/api/scope: narrows the report to a group, judges it for the viewer, and needs the right to view", async () => {
+  const start = async (port: number, role: Role, withScope = true) => {
+    const identity: ViewerIdentity = { id: "oid", name: "Someone", email: "s@x.com", role };
+    const { server } = await startServer({
+      report: { settings: [{ key: "a" }, { key: "b" }] },
+      host: "127.0.0.1",
+      startPort: port,
+      session: mockSession({ getSession: async () => identity }),
+      ...(withScope ? { onScopeReport: (report, groupId) => ({ ...(report as object), settings: [{ key: "a", scopedTo: groupId }], conflictCount: 0 }) } : {}),
+      onEvaluateForViewer: async (r) => ({ ...(r as object), belowBaselineCount: 1, judged: true }),
+    });
+    return server;
+  };
+  const get = async (port: number, query: string) => {
+    const res = await fetch(`http://127.0.0.1:${port}/api/scope?${query}`);
+    return { status: res.status, body: (await res.json()) as Record<string, unknown> };
+  };
+
+  let server = await start(18794, "viewer");
+  try {
+    const res = await get(18794, "group=grp-pilot");
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.body, { group: "grp-pilot", settings: [{ key: "a", scopedTo: "grp-pilot" }], conflictCount: 0, belowBaselineCount: 1 });
+    assert.equal((await get(18794, "group=")).status, 400);
+  } finally {
+    server.close();
+  }
+
+  server = await start(18795, null);
+  try {
+    assert.equal((await get(18795, "group=grp-pilot")).status, 403);
+  } finally {
+    server.close();
+  }
+
+  server = await start(18796, "admin", false);
+  try {
+    assert.equal((await get(18796, "group=grp-pilot")).status, 501);
+  } finally {
+    server.close();
+  }
+});

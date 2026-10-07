@@ -3,7 +3,7 @@ import { join } from "node:path";
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { buildSettingIndex } from "../../src/scan/index.js";
-import type { RawPolicy } from "../../src/scan/types.js";
+import type { GroupDirectory, RawPolicy } from "../../src/scan/types.js";
 
 /**
  * The merge/conflict engine is this project's entire value proposition — an
@@ -15,6 +15,8 @@ import type { RawPolicy } from "../../src/scan/types.js";
  */
 interface Fixture {
   description: string;
+  /** What the scan knew about group nesting, where a case depends on it. */
+  groups?: GroupDirectory;
   policies: RawPolicy[];
   expect: Array<Partial<ReturnType<typeof buildSettingIndex>[number]>>;
 }
@@ -25,7 +27,7 @@ for (const file of readdirSync(FIXTURES_DIR).filter((f) => f.endsWith(".json")).
   const fixture = JSON.parse(readFileSync(join(FIXTURES_DIR, file), "utf8")) as Fixture;
 
   test(`buildSettingIndex: ${file} — ${fixture.description}`, () => {
-    const result = buildSettingIndex(fixture.policies);
+    const result = buildSettingIndex(fixture.policies, fixture.groups);
     assert.equal(result.length, fixture.expect.length, `expected ${fixture.expect.length} settings-index entries, got ${result.length}`);
 
     for (const expected of fixture.expect) {
@@ -108,6 +110,7 @@ test("buildSettingIndex: carries each setting's definition schema and each sourc
   assert.equal(a.definitionId, "def-a");
   assert.deepEqual(a.schemas, { "def-a": schema, "def-a_child": childSchema });
   assert.deepEqual(a.sources[0].structured, { kind: "choice", definitionId: "def-a", name: "A", optionId: "def-a_0", label: "Off" });
+  assert.deepEqual(a.sources[0].targets, [{ kind: "allDevices" }], "each source keeps who its policy is assigned to");
   assert.equal("structured" in a.sources[1], false);
 
   const legacy = index.find((e) => e.key === "legacy-x::windows10")!;

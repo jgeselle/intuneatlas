@@ -6,6 +6,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { baselineDirs, loadBaselines, userBaselinesDir } from "../baselines/loader.js";
 import { compareBaselines } from "../baselines/compareBaselines.js";
+import { scopeToGroup } from "../scan/scope.js";
 import { addPack, BaselineInputError, removePack, renamePack } from "../baselines/manage.js";
 import { listBaselinePacks, type BaselinePack } from "../baselines/packs.js";
 import { applyBaselinesToReport, baselineDefinitionIds, buildReport, type ScanReport } from "../scan/report.js";
@@ -72,6 +73,7 @@ export async function runUi(options: UiOptions): Promise<void> {
     session,
     onScanRequest: async (graphToken) => enrichReport(await runViewerTriggeredScan(tenantId, graphToken, baselinePath)),
     onEvaluateForViewer: (report, viewer) => evaluateForViewer(report as RawEnrichedReport, viewer, baselinePath),
+    onScopeReport: (report, groupId) => scopeToGroup(report as RawEnrichedReport, groupId),
     onCompareBaselines: async (report, from, to) => {
       const rules = await loadBaselines(baselineDirs(baselinePath));
       for (const pack of [from, to]) {
