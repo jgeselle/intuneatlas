@@ -1,14 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { Sliders, WarningCircle, Warning, Prohibit, Question, MagnifyingGlass, ChatCircle, ArrowsLeftRight } from "@phosphor-icons/react";
-import { Chip, Stat } from "../components/bits.jsx";
+import { Chip, ScopePrefix, Stat } from "../components/bits.jsx";
 import { CompareBar, ChangeFilter, CompareList } from "./BaselineCompare.jsx";
-import { Dropdown } from "../components/Dropdown.jsx";
 import { STATE_STYLE } from "../lib/styles.js";
 import { platformLabel } from "../lib/format.js";
-
-/** The "no group chosen" entry of the scope chooser — a value no group id can be. */
-const ALL_POLICIES = "::all";
 
 const HEADER_ROW_HEIGHT = 33; // category label, ~= mb-2 + line height
 const SETTING_ROW_HEIGHT = 61; // one list row at its common (non-wrapping) height
@@ -22,9 +18,8 @@ function SettingsView({
   setPlatform,
   onOpen,
   baselinePacks = [],
-  groupOptions = [],
   scopeGroup = null,
-  setScopeGroup,
+  scopeLabel,
   compareSelection = { from: null, to: null },
   setCompareSelection,
   reportStamp,
@@ -53,7 +48,14 @@ function SettingsView({
     }
     let stale = false;
     setComparison({ loading: true });
-    fetch("/api/baselines/compare?from=" + encodeURIComponent(compareSelection.from) + "&to=" + encodeURIComponent(compareSelection.to))
+    fetch(
+      "/api/baselines/compare?from=" +
+        encodeURIComponent(compareSelection.from) +
+        "&to=" +
+        encodeURIComponent(compareSelection.to) +
+        // With a group chosen, where the tenant stands is judged as that group gets it.
+        (scopeGroup ? "&group=" + encodeURIComponent(scopeGroup) : ""),
+    )
       .then(async (res) => {
         const body = await res.json();
         if (stale) return;
@@ -63,7 +65,7 @@ function SettingsView({
     return () => {
       stale = true;
     };
-  }, [comparing, compareSelection.from, compareSelection.to, reportStamp, packsStamp]);
+  }, [comparing, compareSelection.from, compareSelection.to, reportStamp, packsStamp, scopeGroup]);
 
   const needle = query.toLowerCase();
   const changes = (comparison?.changes ?? []).filter(
@@ -127,8 +129,10 @@ function SettingsView({
         <header>
           <h1 className="text-xl font-semibold">Settings</h1>
           <p className="mt-1 text-sm text-stone-500">
-            Every configuration setting in the tenant, merged across policies. Where two policies set the same thing differently, it
-            shows up here as a conflict.
+            <ScopePrefix label={scopeLabel} />
+            {scopeLabel
+              ? "Every setting the policies reaching this group configure, merged across them."
+              : "Every configuration setting in the tenant, merged across policies. Where two policies set the same thing differently, it shows up here as a conflict."}
           </p>
         </header>
 
@@ -151,17 +155,6 @@ function SettingsView({
               className="w-full rounded-md border border-stone-300 bg-white py-2 pl-9 pr-3 text-sm placeholder-stone-400 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
             />
           </div>
-          {setScopeGroup && groupOptions.length > 0 && (
-            <div className="w-60 shrink-0">
-              <Dropdown
-                value={scopeGroup ?? ALL_POLICIES}
-                options={[{ value: ALL_POLICIES, label: "All policies" }, ...groupOptions]}
-                onChange={(value) => setScopeGroup(value === ALL_POLICIES ? null : value)}
-                ariaLabel="Show settings for"
-                size="lg"
-              />
-            </div>
-          )}
           {canCompare && (
             <button
               onClick={() => (compareOpen ? closeCompare() : setCompareOpen(true))}

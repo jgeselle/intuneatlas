@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { CheckCircle } from "@phosphor-icons/react";
-import { Differences, SeverityChip } from "../components/bits.jsx";
+import { Differences, ScopePrefix, SeverityChip } from "../components/bits.jsx";
 import { SEVERITY_STYLE, severityRank } from "../lib/styles.js";
 import { platformLabel } from "../lib/format.js";
 
@@ -19,7 +19,7 @@ function differencesFor(entry, rec) {
   return check?.differences ?? [{ path: [], expected: rec.recommended, actual: rec.current }];
 }
 
-function Recommendations({ settingIndex, onOpen }) {
+function Recommendations({ settingIndex, onOpen, scopeLabel }) {
   const [severityFilter, setSeverityFilter] = useState("All");
   const [sourceFilter, setSourceFilter] = useState("All");
 
@@ -37,6 +37,7 @@ function Recommendations({ settingIndex, onOpen }) {
       <header>
         <h1 className="text-xl font-semibold">Recommendations</h1>
         <p className="mt-1 text-sm text-stone-500">
+          <ScopePrefix label={scopeLabel} />
           Settings that differ from a baseline, ranked by what they expose. A setting can show up more than once here if
           several baselines have an opinion on it. Write-back doesn't exist yet, so these are for review — nothing here
           changes the tenant.

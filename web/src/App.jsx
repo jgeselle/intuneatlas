@@ -21,8 +21,11 @@ import { SimplePolicyList } from "./views/SimplePolicyList.jsx";
 import { Recommendations } from "./views/Recommendations.jsx";
 import { ChangeLog } from "./views/ChangeLog.jsx";
 import { Baselines } from "./views/Baselines.jsx";
+import { Dropdown } from "./components/Dropdown.jsx";
 
 const RAIL_COLLAPSE_KEY = "intuneatlas.rail-collapsed";
+/** The "no group chosen" entry of the group chooser — a value no group id can be. */
+const ALL_POLICIES = "::all";
 
 /**
  * The report with a fresh set of baseline verdicts folded in (see
@@ -31,20 +34,20 @@ const RAIL_COLLAPSE_KEY = "intuneatlas.rail-collapsed";
  * the synthetic "Missing" entries are replaced wholesale.
  */
 /**
- * The groups the Settings page can be narrowed to: every group a policy is
- * assigned to, plus the groups nested inside those. Labelled by name when
+ * The groups the app can be narrowed to: every group a policy of any kind
+ * is assigned to, plus the groups nested inside those. Labelled by name when
  * the scan could read names (it needs Group.Read.All for that), by id
  * otherwise.
  */
-function groupChoices(settings, groups) {
+function groupChoices(report, groups) {
   const ids = new Set();
-  for (const entry of settings) {
-    for (const source of entry.sources ?? []) {
-      for (const target of source.targets ?? []) {
-        if (target.kind === "group" && target.groupId) ids.add(target.groupId);
-      }
+  const note = (targets) => {
+    for (const target of targets ?? []) {
+      if (target.kind === "group" && target.groupId) ids.add(target.groupId);
     }
-  }
+  };
+  for (const entry of report.settings ?? []) for (const source of entry.sources ?? []) note(source.targets);
+  for (const policy of [...(report.compliancePolicies ?? []), ...(report.enrollmentConfigurations ?? [])]) note(policy.targets);
   for (const id of [...ids]) for (const child of groups?.contains?.[id] ?? []) ids.add(child);
   return [...ids]
     .map((id) => ({ value: id, label: groups?.names?.[id] ?? id }))
@@ -73,10 +76,11 @@ export default function App({ initialReport, session }) {
   const [platform, setPlatform] = useState("All");
   // Which two baselines the Settings page is comparing, if any — kept here so it survives switching pages.
   const [compareSelection, setCompareSelection] = useState({ from: null, to: null });
-  // The Settings page can be narrowed to what one group gets: `scopeGroup`
-  // is the chosen group's id, `scoped` the settings as that group gets
-  // them (worked out by the server — conflicts and baseline verdicts are
-  // different per group, not just a filter over the tenant-wide list).
+  // Everything can be narrowed to what one group gets, chosen once in the
+  // sidebar: `scopeGroup` is that group's id, `scoped` the settings and
+  // policies as the group gets them (worked out by the server — conflicts
+  // and baseline verdicts differ per group, it isn't a filter over the
+  // tenant-wide list). Every page reads from it while a group is chosen.
   const [scopeGroup, setScopeGroup] = useState(null);
   const [scoped, setScoped] = useState(null);
   const [notes, setNotes] = useState(initialReport?.notes ?? {});
@@ -226,7 +230,7 @@ export default function App({ initialReport, session }) {
     return <ConnectScreen onConnected={setReport} session={session} />;
   }
 
-  const settingIndex = report.settings ?? [];
+  const wholeTenant = report.settings ?? [];
   // Fetched again whenever anything it depends on changes: the group, a new scan, or which baselines are judged against.
   const scopeStamp = [scopeGroup, report.scannedAt, JSON.stringify(report.activeBaselinePacks ?? null), (report.baselinePacks ?? []).map((p) => p.path + ":" + p.ruleCount).join("|")].join("#");
   useEffect(() => {
@@ -240,7 +244,12 @@ export default function App({ initialReport, session }) {
         const body = await res.json();
         if (stale) return;
         if (!res.ok) throw new Error(body.error || "Couldn't load that group's settings");
-        setScoped({ group: scopeGroup, settings: body.settings });
+        setScoped({
+          group: scopeGroup,
+          settings: body.settings,
+          compliancePolicies: body.compliancePolicies ?? [],
+          enrollmentConfigurations: body.enrollmentConfigurations ?? [],
+        });
       })
       .catch((err) => {
         if (stale) return;
@@ -251,13 +260,14 @@ export default function App({ initialReport, session }) {
       stale = true;
     };
   }, [scopeStamp]);
-  // What the Settings page lists, and what a setting opened from it shows: the group's view while one is chosen and loaded.
-  const scopedHere = view === "configuration" && scopeGroup && scoped?.group === scopeGroup;
-  const listedSettings = scopedHere ? scoped.settings : settingIndex;
+  // What every page shows: the chosen group's view once it has loaded, the whole tenant otherwise.
+  const inScope = Boolean(scopeGroup) && scoped?.group === scopeGroup;
+  const settingIndex = inScope ? scoped.settings : wholeTenant;
   // Every group a policy names (or that sits inside one that is named), by name where the scan could read names.
-  const groupOptions = useMemo(() => groupChoices(settingIndex, report.groups), [settingIndex, report.groups]);
-  const compliancePolicies = report.compliancePolicies ?? [];
-  const enrollmentConfigurations = report.enrollmentConfigurations ?? [];
+  const groupOptions = useMemo(() => groupChoices(report, report.groups), [report.settings, report.compliancePolicies, report.enrollmentConfigurations, report.groups]);
+  const scopeLabel = inScope ? (groupOptions.find((g) => g.value === scopeGroup)?.label ?? scopeGroup) : undefined;
+  const compliancePolicies = (inScope ? scoped.compliancePolicies : report.compliancePolicies) ?? [];
+  const enrollmentConfigurations = (inScope ? scoped.enrollmentConfigurations : report.enrollmentConfigurations) ?? [];
   const syncedAgo = report.scannedAt ? Math.max(0, Math.round((Date.now() - new Date(report.scannedAt).getTime()) / 60000)) : 0;
 
   const flash = (msg) => {
@@ -443,7 +453,7 @@ export default function App({ initialReport, session }) {
     { id: "baselines", label: "Baselines", icon: Stack, count: (report.baselinePacks ?? []).length },
   ];
 
-  const openSetting = open?.type === "setting" ? listedSettings.find((e) => e.key === open.key) : null;
+  const openSetting = open?.type === "setting" ? settingIndex.find((e) => e.key === open.key) : null;
   const openCompliance = open?.type === "compliance" ? compliancePolicies.find((p) => p.id === open.id) : null;
   const openEnrollment = open?.type === "enrollment" ? enrollmentConfigurations.find((p) => p.id === open.id) : null;
 
@@ -524,6 +534,20 @@ export default function App({ initialReport, session }) {
           </button>
         </div>
 
+        {/* Which group everything is shown for — chosen here, once, for every page. Faded out (but
+            still taking its space, so the nav below doesn't jump) while the rail is an icon strip. */}
+        {groupOptions.length > 0 && (
+          <div className={"px-3 pb-3 transition-opacity duration-150 " + railDim(railCollapsed && !railWide ? "lg:pointer-events-none" : "")}>
+            <Dropdown
+              tone="dark"
+              value={scopeGroup ?? ALL_POLICIES}
+              options={[{ value: ALL_POLICIES, label: "All policies" }, ...groupOptions]}
+              onChange={(value) => setScopeGroup(value === ALL_POLICIES ? null : value)}
+              ariaLabel="Show everything for"
+            />
+          </div>
+        )}
+
         <nav className="flex gap-1 overflow-x-auto px-3 pb-3 lg:flex-col lg:overflow-visible lg:pb-4">
           {nav.map((n) => {
             const Icon = n.icon;
@@ -596,15 +620,15 @@ export default function App({ initialReport, session }) {
               changes={changes}
               onGo={setView}
               onOpen={(key) => setOpen({ type: "setting", key })}
+              scopeLabel={scopeLabel}
             />
           )}
 
           {view === "configuration" && (
             <SettingsView
-              entries={listedSettings}
-              groupOptions={groupOptions}
-              scopeGroup={scopeGroup}
-              setScopeGroup={setScopeGroup}
+              entries={settingIndex}
+              scopeGroup={inScope ? scopeGroup : null}
+              scopeLabel={scopeLabel}
               notes={notes}
               query={query}
               setQuery={setQuery}
@@ -622,6 +646,7 @@ export default function App({ initialReport, session }) {
             <SimplePolicyList
               kindLabel="Compliance"
               items={compliancePolicies}
+              scopeLabel={scopeLabel}
               query={query}
               setQuery={setQuery}
               onOpen={(id) => setOpen({ type: "compliance", id })}
@@ -632,6 +657,7 @@ export default function App({ initialReport, session }) {
             <SimplePolicyList
               kindLabel="Enrollment"
               items={enrollmentConfigurations}
+              scopeLabel={scopeLabel}
               query={query}
               setQuery={setQuery}
               onOpen={(id) => setOpen({ type: "enrollment", id })}
@@ -639,7 +665,7 @@ export default function App({ initialReport, session }) {
           )}
 
           {view === "recommendations" && (
-            <Recommendations settingIndex={settingIndex} onOpen={(key) => setOpen({ type: "setting", key })} />
+            <Recommendations settingIndex={settingIndex} onOpen={(key) => setOpen({ type: "setting", key })} scopeLabel={scopeLabel} />
           )}
 
           {view === "baselines" && (
@@ -648,6 +674,7 @@ export default function App({ initialReport, session }) {
               activePacks={report.activeBaselinePacks ?? null}
               settingIndex={settingIndex}
               folder={report.baselineFolder}
+              scopeLabel={scopeLabel}
               viewer={session}
               onUpdateSelection={updateBaselineSelection}
               // No folder means the server reads baselines from somewhere that isn't the app's to manage.

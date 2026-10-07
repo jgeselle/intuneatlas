@@ -17,7 +17,9 @@ import { CaretDown, Check } from "@phosphor-icons/react";
  * letter jumps to the next option starting with it; Enter or Space picks;
  * Escape or Tab closes.
  */
-function Dropdown({ value, options, onChange, placeholder = "Select…", ariaLabel, muted = false, size = "md" }) {
+function Dropdown({ value, options, onChange, placeholder = "Select…", ariaLabel, muted = false, tone = "light" }) {
+  // "dark": the button sits on the sidebar's dark green; the list it opens is the same white one either way.
+  const dark = tone === "dark";
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
   const [above, setAbove] = useState(false);
@@ -110,16 +112,16 @@ function Dropdown({ value, options, onChange, placeholder = "Select…", ariaLab
         onClick={() => (open ? setOpen(false) : openList())}
         onKeyDown={onKeyDown}
         className={
-          "flex w-full items-center gap-2 rounded-md border bg-white pl-2.5 pr-2 text-left text-sm focus:outline-none focus:ring-1 focus:ring-teal-600 " +
-          // "lg" matches the height of the page-level search box it sits next to.
-          (size === "lg" ? "py-2 pl-3 " : "py-1.5 ") +
-          (open ? "border-teal-600 ring-1 ring-teal-600" : "border-stone-300 focus:border-teal-600")
+          "flex w-full items-center gap-2 rounded-md py-1.5 pl-2.5 pr-2 text-left focus:outline-none " +
+          (dark
+            ? "text-xs text-teal-100 ring-1 ring-inset hover:bg-teal-800 focus-visible:ring-teal-300 " + (open ? "bg-teal-800 ring-teal-300" : "ring-teal-700")
+            : "border bg-white text-sm focus:ring-1 focus:ring-teal-600 " + (open ? "border-teal-600 ring-1 ring-teal-600" : "border-stone-300 focus:border-teal-600"))
         }
       >
-        <span className={"min-w-0 flex-1 truncate " + (selected && !muted ? "" : "text-stone-500")} title={selected?.label}>
+        <span className={"min-w-0 flex-1 truncate " + (dark || (selected && !muted) ? "" : "text-stone-500")} title={selected?.label}>
           {selected ? selected.label : placeholder}
         </span>
-        <CaretDown className={"h-3.5 w-3.5 shrink-0 text-stone-500 transition-transform duration-150 " + (open ? "rotate-180" : "")} />
+        <CaretDown className={"h-3.5 w-3.5 shrink-0 transition-transform duration-150 " + (dark ? "text-teal-300 " : "text-stone-500 ") + (open ? "rotate-180" : "")} />
       </button>
 
       {open && (

@@ -66,6 +66,22 @@ function Diff({ from, to }) {
   );
 }
 
+/**
+ * Names the group a page is currently showing, at the start of its
+ * subtitle — nothing when the page shows the whole tenant. The group is
+ * chosen once, in the sidebar, and every page follows it; this is what
+ * keeps a group's numbers from being read as the tenant's.
+ */
+function ScopePrefix({ label }) {
+  if (!label) return null;
+  return (
+    <>
+      <span className="font-medium text-stone-700">{label}</span>
+      {" · "}
+    </>
+  );
+}
+
 /** A baseline's severity for a setting — nothing at all when the baseline doesn't rate it (a plain exported policy doesn't). */
 function SeverityChip({ severity, className = "" }) {
   const style = SEVERITY_STYLE[severity];
@@ -305,4 +321,4 @@ function NotAvailableYet({ title, children }) {
   );
 }
 
-export { Chip, SeverityChip, Diff, Differences, RefPath, HistorySection, Stat, NotAvailableYet, ValueDisplay };
+export { Chip, ScopePrefix, SeverityChip, Diff, Differences, RefPath, HistorySection, Stat, NotAvailableYet, ValueDisplay };

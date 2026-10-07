@@ -1,9 +1,9 @@
 import { Sliders, ShieldCheck, DeviceMobile, Warning, CheckCircle, Check, Clock } from "@phosphor-icons/react";
-import { SeverityChip, Stat, NotAvailableYet } from "../components/bits.jsx";
+import { ScopePrefix, SeverityChip, Stat, NotAvailableYet } from "../components/bits.jsx";
 import { severityRank } from "../lib/styles.js";
 import { platformLabel } from "../lib/format.js";
 
-function Overview({ settingIndex, compliancePolicies, enrollmentConfigurations, changes, onGo, onOpen }) {
+function Overview({ settingIndex, compliancePolicies, enrollmentConfigurations, changes, onGo, onOpen, scopeLabel }) {
   const conflicts = settingIndex.filter((e) => e.conflict).length;
   const unassigned = settingIndex.filter((e) => e.state === "Not assigned").length;
   // "Missing" entries are synthetic — a baseline rule with no matching
@@ -24,7 +24,10 @@ function Overview({ settingIndex, compliancePolicies, enrollmentConfigurations, 
     <div className="space-y-6">
       <header>
         <h1 className="text-xl font-semibold">Overview</h1>
-        <p className="mt-1 text-sm text-stone-500">Where the tenant stands, and what to fix first.</p>
+        <p className="mt-1 text-sm text-stone-500">
+          <ScopePrefix label={scopeLabel} />
+          {scopeLabel ? "Where this group stands, and what to fix first." : "Where the tenant stands, and what to fix first."}
+        </p>
       </header>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

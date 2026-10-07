@@ -244,7 +244,7 @@ function PackCard({ pack, active, counts, canManage, onToggle, onRename, onRemov
  * for this viewer, how the tenant stands against it, and — for an Admin,
  * for baselines in the user's own folder — adding, renaming and removing.
  */
-function Baselines({ packs, activePacks, settingIndex, folder, viewer, onUpdateSelection, onAdd, onRename, onRemove }) {
+function Baselines({ packs, activePacks, settingIndex, folder, viewer, onUpdateSelection, onAdd, onRename, onRemove, scopeLabel }) {
   const canManage = viewer?.role === "admin" && Boolean(onAdd);
   const isActive = (pack) => activePacks === null || activePacks.includes(pack.path);
   // A baseline added since the last sync can expect settings the scan never looked up — they show by their raw id until it does.
@@ -259,9 +259,16 @@ function Baselines({ packs, activePacks, settingIndex, folder, viewer, onUpdateS
     <div className="space-y-5">
       <header>
         <h1 className="text-xl font-semibold">Baselines</h1>
-        {folder && (
+        {(folder || scopeLabel) && (
           <p className="mt-1 text-sm text-stone-500">
-            Stored in <code className="font-mono text-xs text-stone-600">{folder}</code>
+            {/* The counts on each baseline below are for the chosen group. */}
+            {scopeLabel && <span className="font-medium text-stone-700">{scopeLabel}</span>}
+            {scopeLabel && folder ? " · " : ""}
+            {folder && (
+              <>
+                Stored in <code className="font-mono text-xs text-stone-600">{folder}</code>
+              </>
+            )}
           </p>
         )}
       </header>

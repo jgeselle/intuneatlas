@@ -1,8 +1,8 @@
 import { MagnifyingGlass } from "@phosphor-icons/react";
-import { Chip } from "../components/bits.jsx";
+import { Chip, ScopePrefix } from "../components/bits.jsx";
 import { platformLabel } from "../lib/format.js";
 
-function SimplePolicyList({ kindLabel, items, query, setQuery, onOpen }) {
+function SimplePolicyList({ kindLabel, items, query, setQuery, onOpen, scopeLabel }) {
   const shown = items.filter((i) => i.name.toLowerCase().includes(query.toLowerCase()));
   const hasPriority = items.some((i) => i.priority !== undefined);
   const deployedCount = items.filter((i) => i.deployed).length;
@@ -12,6 +12,7 @@ function SimplePolicyList({ kindLabel, items, query, setQuery, onOpen }) {
       <header>
         <h1 className="text-xl font-semibold">{kindLabel}</h1>
         <p className="mt-1 text-sm text-stone-500">
+          <ScopePrefix label={scopeLabel} />
           {items.length} {kindLabel.toLowerCase()} found · {deployedCount} assigned.
         </p>
       </header>
