@@ -351,11 +351,11 @@ export default function App({ initialReport, session }) {
         <div
           className={
             "flex items-center gap-2.5 py-4 pl-[20px] pr-4 transition-[padding] duration-150 ease-out " +
-            (railCollapsed && !railWide ? "lg:pl-[23px]" : "")
+            (railCollapsed && !railWide ? "lg:pl-[24px]" : "")
           }
         >
           <div className="min-w-0">
-            <div className="flex items-baseline whitespace-nowrap font-display text-2xl leading-none tracking-wider text-white">
+            <div className="flex items-baseline whitespace-nowrap font-heading text-xl font-semibold leading-none tracking-tight text-white">
               <span className="sr-only">IntuneAtlas</span>
               <span aria-hidden="true">I</span>
               {/* overflow-x-clip, not overflow-hidden: clips only sideways,
@@ -363,13 +363,20 @@ export default function App({ initialReport, session }) {
               <span
                 aria-hidden="true"
                 className={
-                  "max-w-[2.5em] overflow-x-clip transition-[max-width,opacity] duration-150 ease-out " +
+                  "max-w-[3.2em] overflow-x-clip transition-[max-width,opacity] duration-150 ease-out " +
                   railDim(railCollapsed && !railWide ? "lg:max-w-0" : "")
                 }
               >
                 ntune
               </span>
-              <span aria-hidden="true">A</span>
+              {railCollapsed && !railWide ? (
+                <>
+                  <span aria-hidden="true" className="lg:hidden">A</span>
+                  <span aria-hidden="true" className="hidden lg:inline">a</span>
+                </>
+              ) : (
+                <span aria-hidden="true">A</span>
+              )}
               <span aria-hidden="true" className={"transition-opacity duration-150 " + railDim()}>
                 tlas
               </span>
@@ -463,7 +470,10 @@ export default function App({ initialReport, session }) {
       </aside>
 
       <main className="min-w-0 flex-1">
-        <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:py-8">
+        {/* Keyed on the view so switching pages re-runs the fade. Opacity
+            only — a transform here would skew the virtualized settings
+            list's position measurements while it plays. */}
+        <div key={view} className="mx-auto max-w-6xl animate-fade-in px-4 py-6 sm:px-6 lg:py-8">
           {view === "overview" && (
             <Overview
               settingIndex={settingIndex}
@@ -558,7 +568,7 @@ export default function App({ initialReport, session }) {
 
       {toast && (
         <div className="pointer-events-none fixed bottom-4 left-1/2 z-50 -translate-x-1/2">
-          <div className="rounded-md bg-stone-900 px-4 py-2 text-sm text-white shadow-lg">{toast}</div>
+          <div className="animate-toast rounded-md bg-stone-900 px-4 py-2 text-sm text-white shadow-lg">{toast}</div>
         </div>
       )}
     </div>

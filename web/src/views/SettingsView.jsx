@@ -157,7 +157,7 @@ function SettingsView({
                 }}
               >
                 {item.type === "header" ? (
-                  <h2 className="pb-2 pt-5 text-xs font-semibold uppercase tracking-wide text-stone-500">{item.category}</h2>
+                  <h2 className="pb-2 pt-5 font-sans text-xs font-semibold uppercase tracking-wide text-stone-500">{item.category}</h2>
                 ) : (
                   <div className="pb-2">
                     <button

@@ -12,7 +12,7 @@ function ChangeCard({ change, onUpdateField, onRevert, viewer }) {
   const canEdit = viewer.role === "admin" || (viewer.role === "contributor" && change.stagedBy === viewer.id);
 
   return (
-    <li className="rounded-lg border border-stone-200 bg-white p-4">
+    <li className="animate-rise-in rounded-lg border border-stone-200 bg-white p-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="flex items-center gap-2">

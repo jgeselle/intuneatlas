@@ -23,8 +23,8 @@ function ConnectScreen({ onConnected, session }) {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-stone-50 px-4">
-      <div className="w-full max-w-sm rounded-lg border border-stone-200 bg-white p-6">
-        <div className="font-display text-2xl leading-none tracking-wider text-teal-800">IntuneAtlas</div>
+      <div className="w-full max-w-sm animate-rise-in rounded-lg border border-stone-200 bg-white p-6">
+        <div className="font-heading text-xl font-semibold leading-none tracking-tight text-teal-800">IntuneAtlas</div>
         <h1 className="mt-4 text-lg font-semibold">No scan yet</h1>
         <p className="mt-1 text-sm text-stone-500">
           {session ? `Signed in as ${session.name}. ` : ""}
@@ -36,7 +36,7 @@ function ConnectScreen({ onConnected, session }) {
             <button
               type="submit"
               disabled={scanning}
-              className="w-full rounded-md bg-teal-800 px-3.5 py-2 text-sm font-medium text-white hover:bg-teal-700 focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500 disabled:bg-stone-200 disabled:text-stone-400"
+              className="w-full rounded-md bg-teal-800 px-3.5 py-2 text-sm font-medium text-white hover:bg-teal-700 active:scale-[0.98] focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500 disabled:bg-stone-200 disabled:text-stone-400"
             >
               {scanning ? "Scanning…" : "Scan now"}
             </button>

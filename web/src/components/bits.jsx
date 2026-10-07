@@ -147,7 +147,7 @@ function SourceRow({ policyName, value, tone = "default" }) {
 /** A note entry in the history feed. */
 function NoteEntry({ note, onDelete, canDelete }) {
   return (
-    <li className="rounded-md border border-stone-200 bg-stone-50 p-3">
+    <li className="animate-rise-in rounded-md border border-stone-200 bg-stone-50 p-3">
       <div className="flex items-baseline justify-between gap-2 text-xs">
         <span className="font-medium text-stone-700">{note.author}</span>
         <span className="flex shrink-0 items-center gap-1.5 text-stone-400">
@@ -172,7 +172,7 @@ function NoteEntry({ note, onDelete, canDelete }) {
 /** The setting's current staged change, shown as one entry in the same feed as notes. */
 function ChangeEntry({ change, onRevert, canRevert }) {
   return (
-    <li className="rounded-md border border-stone-200 bg-stone-50 p-3">
+    <li className="animate-rise-in rounded-md border border-stone-200 bg-stone-50 p-3">
       <div className="flex items-baseline justify-between gap-2 text-xs">
         <div className="flex items-center gap-2">
           <Chip className={change.ready ? "bg-teal-50 text-teal-700 ring-teal-200" : "bg-amber-50 text-amber-800 ring-amber-200"}>
@@ -236,7 +236,7 @@ function HistorySection({ notes = [], onAdd, onDelete, readOnly = false, viewer,
 
   return (
     <section>
-      <h3 className="text-xs font-semibold uppercase tracking-wide text-stone-500">
+      <h3 className="font-sans text-xs font-semibold uppercase tracking-wide text-stone-500">
         History {entries.length ? <span className="tabular-nums text-stone-400">· {entries.length}</span> : null}
       </h3>
 

@@ -2,7 +2,7 @@ import { ArrowsClockwise } from "@phosphor-icons/react";
 import { sinceLabel } from "../lib/format.js";
 
 function SyncControl({ syncing, syncedAgo, onSync, compact = false, statusVisible = true, canSync = true }) {
-  const dot = syncing ? "bg-teal-300" : syncedAgo >= 60 ? "bg-amber-400" : "bg-teal-400";
+  const dot = syncing ? "animate-pulse bg-teal-300" : syncedAgo >= 60 ? "bg-amber-400" : "bg-teal-400";
   const disabled = syncing || !canSync;
   const deniedTitle = "Only the Admin role can trigger a tenant scan.";
 

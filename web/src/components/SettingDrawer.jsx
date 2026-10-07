@@ -110,7 +110,7 @@ function EditValueSection({ current, recs, onStage }) {
       <button
         onClick={() => onStage(value, matchedRuleId, current, reason)}
         disabled={!value.trim() || value === current}
-        className="mt-3 rounded-md bg-teal-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-teal-700 focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500 disabled:bg-stone-200 disabled:text-stone-400"
+        className="mt-3 rounded-md bg-teal-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-teal-700 active:scale-[0.97] focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500 disabled:bg-stone-200 disabled:text-stone-400"
       >
         Stage this change
       </button>
@@ -147,7 +147,7 @@ function SettingDrawer({ entry, notes, onAddNote, onDeleteNote, onClose, change,
       }
     >
       <section>
-        <h3 className="text-xs font-semibold uppercase tracking-wide text-stone-500">Effective value</h3>
+        <h3 className="font-sans text-xs font-semibold uppercase tracking-wide text-stone-500">Effective value</h3>
         {entry.state === "Not covered" ? (
           <p className="mt-2 rounded-md border border-dashed border-stone-300 bg-stone-50 p-3 text-xs leading-relaxed text-stone-500">
             No policy in this tenant configures this setting.
@@ -215,7 +215,7 @@ function SettingDrawer({ entry, notes, onAddNote, onDeleteNote, onClose, change,
 
       {entry.sources.length > 0 && (
         <section>
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-stone-500">Set by</h3>
+          <h3 className="font-sans text-xs font-semibold uppercase tracking-wide text-stone-500">Set by</h3>
           <ul className="mt-2 space-y-2">
             {entry.sources.map((s, n) => (
               <li key={n} className="rounded-md border border-stone-200 p-3">
