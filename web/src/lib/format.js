@@ -25,7 +25,15 @@ function sinceLabel(mins) {
  */
 function platformLabel(raw) {
   if (!raw) return "Unknown";
-  const spaced = raw.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/([A-Za-z])(\d)/g, "$1 $2");
+  // Graph can report several platforms on one policy as a comma list.
+  if (raw.includes(",")) return raw.split(",").map((part) => platformLabel(part.trim())).join(", ");
+  // Graph spells these "iOS" / "macOS" — lowercase them first, or the
+  // camelCase split below breaks them into "I OS" / "Mac OS".
+  const spaced = raw
+    .replace(/^iOS/, "ios")
+    .replace(/^macOS/, "macos")
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/([A-Za-z])(\d)/g, "$1 $2");
   return spaced
     .split(" ")
     .map((w) => {
