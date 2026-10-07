@@ -95,7 +95,8 @@ export async function runUi(options: UiOptions): Promise<void> {
       // "Reviewed by" always names the real signed-in viewer, never
       // client-supplied text — otherwise anyone could type any name into
       // the box and claim someone else reviewed a change.
-      if (body.reviewedBy !== undefined) return updateReviewer(id, viewer.name);
+      // An empty value takes the review back; anything else records the signed-in viewer, whatever was sent.
+      if (body.reviewedBy !== undefined) return updateReviewer(id, body.reviewedBy === "" ? "" : viewer.name);
       if (body.reason !== undefined) return updateReason(id, body.reason);
       if (body.policyName !== undefined) return updateNewPolicyName(id, body.policyName);
       throw new Error("reason, reviewedBy or policyName is required");

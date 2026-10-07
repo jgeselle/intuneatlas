@@ -49,6 +49,7 @@ export interface StageChangeRequestBody {
 
 export interface UpdateChangeRequestBody {
   reason?: string;
+  /** Any non-empty value marks the change reviewed by the signed-in viewer (the name sent is never trusted); "" takes the review back. */
   reviewedBy?: string;
   /** Renames the policy a change staged to a *new* policy is to be created in. */
   policyName?: string;

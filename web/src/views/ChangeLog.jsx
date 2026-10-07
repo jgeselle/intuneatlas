@@ -4,7 +4,6 @@ import { Chip, Diff } from "../components/bits.jsx";
 
 function ChangeCard({ change, onUpdateField, onRevert, viewer, inGroup = false, onOpen }) {
   const [reason, setReason] = useState(change.reason);
-  const reviewedByMe = change.reviewedBy === viewer.name;
   // Contributors can only touch changes they staged themselves; Admins can
   // touch any — mirrors the server-side editChange/revertChange check.
   // Compared by id (Entra object ID), not display name — names aren't
@@ -68,22 +67,35 @@ function ChangeCard({ change, onUpdateField, onRevert, viewer, inGroup = false, 
         </label>
         <div>
           <span className="text-xs font-medium text-stone-500">Reviewed by</span>
-          <button
-            type="button"
-            onClick={() => onUpdateField(change.id, "reviewedBy", viewer.name)}
-            disabled={reviewedByMe || !canEdit}
-            className={
-              "mt-1 flex w-full items-center justify-center gap-1.5 rounded-md p-2 text-xs font-medium focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500 " +
-              (reviewedByMe
-                ? "cursor-default bg-teal-50 text-teal-700 ring-1 ring-inset ring-teal-200"
-                : canEdit
-                  ? "bg-stone-100 text-stone-700 hover:bg-stone-200"
-                  : "bg-stone-50 text-stone-300")
-            }
-          >
-            <Check className="h-3.5 w-3.5" />
-            {reviewedByMe ? `Reviewed by ${viewer.name}` : `Mark reviewed by ${viewer.name}`}
-          </button>
+          {change.reviewedBy ? (
+            // Reviewed — by whoever it was, not only by the person looking. "Undo" takes the review back.
+            <div className="mt-1 flex items-center gap-2 rounded-md bg-teal-50 p-2 text-xs font-medium text-teal-700 ring-1 ring-inset ring-teal-200">
+              <Check className="h-3.5 w-3.5 shrink-0" />
+              <span className="min-w-0 flex-1 truncate">Reviewed by {change.reviewedBy}</span>
+              {canEdit && (
+                <button
+                  type="button"
+                  onClick={() => onUpdateField(change.id, "reviewedBy", "")}
+                  className="shrink-0 font-medium text-stone-600 hover:underline focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500"
+                >
+                  Undo
+                </button>
+              )}
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => onUpdateField(change.id, "reviewedBy", viewer.name)}
+              disabled={!canEdit}
+              className={
+                "mt-1 flex w-full items-center justify-center gap-1.5 rounded-md p-2 text-xs font-medium focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500 " +
+                (canEdit ? "bg-stone-100 text-stone-700 hover:bg-stone-200" : "bg-stone-50 text-stone-300")
+              }
+            >
+              <Check className="h-3.5 w-3.5" />
+              Mark reviewed by {viewer.name}
+            </button>
+          )}
         </div>
       </div>
     </li>
