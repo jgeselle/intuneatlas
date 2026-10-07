@@ -1,11 +1,13 @@
 import { isDeployed } from "./assignments.js";
-import type { RawPolicy, SettingIndexEntry, SettingIndexSource, SettingIndexState } from "./types.js";
+import type { RawPolicy, SettingIndexEntry, SettingIndexSource, SettingIndexState, SettingSchema } from "./types.js";
 
 interface IndexBucket {
   name: string;
   cspPath: string;
   category: string;
   platform: string;
+  definitionId?: string;
+  schemas?: Record<string, SettingSchema>;
   sources: SettingIndexSource[];
 }
 
@@ -49,14 +51,21 @@ export function buildSettingIndex(policies: RawPolicy[]): SettingIndexEntry[] {
           cspPath: setting.cspPath,
           category: setting.category,
           platform: policy.platform,
+          // The schema belongs to the definition, not to any one policy —
+          // but which sub-settings it covers depends on what each policy's
+          // value actually touches, so later policies add to it below.
+          ...(setting.schemas ? { definitionId: setting.settingDefinitionId, schemas: { ...setting.schemas } } : {}),
           sources: [],
         });
       }
-      buckets.get(key)!.sources.push({
+      const bucket = buckets.get(key)!;
+      if (setting.schemas && bucket.schemas) Object.assign(bucket.schemas, setting.schemas);
+      bucket.sources.push({
         policyId: policy.id,
         policyName: policy.name,
         value: setting.value,
         deployed,
+        ...(setting.structured ? { structured: setting.structured } : {}),
       });
     }
   }
@@ -81,6 +90,7 @@ export function buildSettingIndex(policies: RawPolicy[]): SettingIndexEntry[] {
         sources: bucket.sources,
         conflict,
         state,
+        ...(bucket.schemas ? { definitionId: bucket.definitionId, schemas: bucket.schemas } : {}),
         recs: [],
       };
     })

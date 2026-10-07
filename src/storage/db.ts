@@ -44,7 +44,8 @@ export function getDb(): DatabaseSync {
       conflict INTEGER NOT NULL,
       values_json TEXT NOT NULL,
       sources_json TEXT NOT NULL,
-      recs_json TEXT
+      recs_json TEXT,
+      definition_json TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_settings_snapshot_scan ON settings_snapshot(scan_id);
 
@@ -129,6 +130,13 @@ function migrate(db: DatabaseSync): void {
   // wants to take on for a column that just goes unused going forward.
   if (!settingsColumns.some((c) => c.name === "recs_json")) {
     db.exec(`ALTER TABLE settings_snapshot ADD COLUMN recs_json TEXT`);
+  }
+
+  // definition_json — the setting's definition id and schemas (options,
+  // ranges, sub-settings). Null on every row scanned before schemas were
+  // kept; those settings simply stay free-text until the next scan.
+  if (!settingsColumns.some((c) => c.name === "definition_json")) {
+    db.exec(`ALTER TABLE settings_snapshot ADD COLUMN definition_json TEXT`);
   }
 
   const scanColumns = db.prepare(`PRAGMA table_info(scans)`).all() as Array<{ name: string }>;

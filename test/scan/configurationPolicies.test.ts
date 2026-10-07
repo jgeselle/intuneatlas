@@ -245,3 +245,155 @@ test("fetchConfigurationPolicies — a category with an empty displayName falls 
   const policies = await fetchConfigurationPolicies("token");
   assert.equal(policies[0].settings[0].category, "Administrative Templates");
 });
+
+/**
+ * The structured side of a scan: the value kept as a tree (not just the
+ * rendered text), and each definition's schema — options, which option
+ * reveals which sub-setting, integer ranges. Definition shapes here follow
+ * Microsoft's documented beta resource types
+ * (deviceManagementConfigurationChoiceSettingDefinition,
+ * ...SimpleSettingDefinition with an IntegerSettingValueDefinition,
+ * ...SimpleSettingCollectionDefinition); not yet confirmed against a live
+ * tenant the way the fixtures above were.
+ */
+test("fetchConfigurationPolicies — structured values and definition schemas", async (t) => {
+  const originalFetch = global.fetch;
+  t.after(() => {
+    global.fetch = originalFetch;
+  });
+
+  const CHOICE_ID = "schema_test_startup_auth";
+  const CHILD_ID = `${CHOICE_ID}_min_pin_length`;
+  const LIST_ID = "schema_test_excluded_paths";
+  const CATEGORY_ID = "cat-schema";
+  const definitions: Record<string, unknown> = {
+    [CHOICE_ID]: {
+      "@odata.type": "#microsoft.graph.deviceManagementConfigurationChoiceSettingDefinition",
+      id: CHOICE_ID,
+      displayName: "Require additional authentication at startup",
+      description: "Controls whether a PIN is needed.",
+      baseUri: "./Device/Vendor/MSFT/BitLocker/",
+      offsetUri: "SystemDrivesRequireStartupAuthentication",
+      categoryId: CATEGORY_ID,
+      defaultOptionId: `${CHOICE_ID}_0`,
+      options: [
+        { itemId: `${CHOICE_ID}_0`, displayName: "Disabled", description: null, dependedOnBy: [] },
+        { itemId: `${CHOICE_ID}_1`, displayName: "Enabled", description: "Turns it on", dependedOnBy: [{ dependedOnBy: CHILD_ID, required: true }] },
+      ],
+    },
+    [CHILD_ID]: {
+      "@odata.type": "#microsoft.graph.deviceManagementConfigurationSimpleSettingDefinition",
+      id: CHILD_ID,
+      displayName: "Minimum PIN length",
+      baseUri: "./Device/Vendor/MSFT/BitLocker/",
+      offsetUri: "SystemDrivesMinimumPINLength",
+      categoryId: CATEGORY_ID,
+      valueDefinition: {
+        "@odata.type": "#microsoft.graph.deviceManagementConfigurationIntegerSettingValueDefinition",
+        minimumValue: 4,
+        maximumValue: 20,
+      },
+    },
+    [LIST_ID]: {
+      "@odata.type": "#microsoft.graph.deviceManagementConfigurationSimpleSettingCollectionDefinition",
+      id: LIST_ID,
+      displayName: "Excluded paths",
+      baseUri: "./Device/Vendor/MSFT/Defender/",
+      offsetUri: "ExcludedPaths",
+      categoryId: CATEGORY_ID,
+      maximumCount: 600,
+      minimumCount: 0,
+      valueDefinition: {
+        "@odata.type": "#microsoft.graph.deviceManagementConfigurationStringSettingValueDefinition",
+        format: "none",
+        maximumLength: 260,
+        minimumLength: null,
+        isSecret: false,
+      },
+    },
+  };
+
+  global.fetch = (async (url: string | URL) => {
+    const u = String(url);
+    if (u.includes("/deviceManagement/configurationPolicies?")) {
+      return jsonResponse({ value: [{ id: "policy-schema", name: "Schema policy", platforms: "windows10", assignments: [] }] });
+    }
+    if (u.includes("/deviceManagement/configurationPolicies/policy-schema/settings")) {
+      return jsonResponse({
+        value: [
+          {
+            settingInstance: {
+              "@odata.type": "#microsoft.graph.deviceManagementConfigurationChoiceSettingInstance",
+              settingDefinitionId: CHOICE_ID,
+              choiceSettingValue: {
+                value: `${CHOICE_ID}_1`,
+                children: [
+                  {
+                    "@odata.type": "#microsoft.graph.deviceManagementConfigurationSimpleSettingInstance",
+                    settingDefinitionId: CHILD_ID,
+                    simpleSettingValue: { value: 6 },
+                  },
+                ],
+              },
+            },
+          },
+          {
+            settingInstance: {
+              "@odata.type": "#microsoft.graph.deviceManagementConfigurationSimpleSettingCollectionInstance",
+              settingDefinitionId: LIST_ID,
+              simpleSettingCollectionValue: [{ value: "C:\\Temp" }, { value: "D:\\Build" }],
+            },
+          },
+        ],
+      });
+    }
+    const definitionId = Object.keys(definitions).find((id) => u.endsWith(`/deviceManagement/configurationSettings/${id}`));
+    if (definitionId) return jsonResponse(definitions[definitionId]);
+    if (u.endsWith(`/deviceManagement/configurationCategories/${CATEGORY_ID}`)) {
+      return jsonResponse({ id: CATEGORY_ID, displayName: "Schema tests" });
+    }
+    throw new Error(`unexpected fetch: ${u}`);
+  }) as typeof fetch;
+
+  const [choice, list] = (await fetchConfigurationPolicies("token"))[0].settings;
+
+  // The text every existing reader uses is unchanged, and now derived from the tree.
+  assert.equal(choice.value, "Enabled\nMinimum PIN length: 6");
+  assert.deepEqual(choice.structured, {
+    kind: "choice",
+    definitionId: CHOICE_ID,
+    name: "Require additional authentication at startup",
+    optionId: `${CHOICE_ID}_1`,
+    label: "Enabled",
+    children: [{ kind: "simple", definitionId: CHILD_ID, name: "Minimum PIN length", value: 6 }],
+  });
+  assert.deepEqual(choice.schemas, {
+    [CHOICE_ID]: {
+      definitionId: CHOICE_ID,
+      name: "Require additional authentication at startup",
+      kind: "choice",
+      description: "Controls whether a PIN is needed.",
+      options: [
+        { id: `${CHOICE_ID}_0`, label: "Disabled" },
+        { id: `${CHOICE_ID}_1`, label: "Enabled", description: "Turns it on", childIds: [CHILD_ID] },
+      ],
+      defaultOptionId: `${CHOICE_ID}_0`,
+    },
+    [CHILD_ID]: { definitionId: CHILD_ID, name: "Minimum PIN length", kind: "simple", valueType: "integer", min: 4, max: 20 },
+  });
+
+  assert.equal(list.value, "C:\\Temp\nD:\\Build");
+  assert.deepEqual(list.structured, { kind: "simpleCollection", definitionId: LIST_ID, name: "Excluded paths", items: ["C:\\Temp", "D:\\Build"] });
+  assert.deepEqual(list.schemas, {
+    [LIST_ID]: {
+      definitionId: LIST_ID,
+      name: "Excluded paths",
+      kind: "simpleCollection",
+      valueType: "string",
+      maxLength: 260,
+      format: "none",
+      minCount: 0,
+      maxCount: 600,
+    },
+  });
+});

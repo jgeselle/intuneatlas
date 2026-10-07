@@ -78,3 +78,39 @@ test("buildSettingIndex: a single deployed source is never a conflict, regardles
   assert.equal(entry.conflict, false);
   assert.equal(entry.state, "Not checked");
 });
+
+test("buildSettingIndex: carries each setting's definition schema and each source's structured value into the index", () => {
+  const schema = { definitionId: "def-a", name: "A", kind: "choice" as const, options: [{ id: "def-a_0", label: "Off" }, { id: "def-a_1", label: "On" }] };
+  const childSchema = { definitionId: "def-a_child", name: "Child", kind: "simple" as const, valueType: "integer" as const, min: 1, max: 9 };
+  const setting = { settingDefinitionId: "def-a", name: "A", cspPath: "./a", category: "C" };
+  const policies: RawPolicy[] = [
+    {
+      id: "p1",
+      name: "One",
+      platform: "windows10",
+      assignments: [{ kind: "allDevices" }],
+      settings: [{ ...setting, value: "Off", structured: { kind: "choice", definitionId: "def-a", name: "A", optionId: "def-a_0", label: "Off" }, schemas: { "def-a": schema } }],
+    },
+    {
+      id: "p2",
+      name: "Two",
+      platform: "windows10",
+      assignments: [],
+      // Only this policy's value reaches the dependent child, so only it knows that child's schema.
+      settings: [{ ...setting, value: "On\nChild: 3", schemas: { "def-a": schema, "def-a_child": childSchema } }],
+    },
+    // A legacy profile: no definition, so no schema and no structured value.
+    { id: "p3", name: "Legacy", platform: "windows10", assignments: [], settings: [{ settingDefinitionId: "legacy-x", name: "X", cspPath: "./x", category: "C", value: "1" }] },
+  ];
+
+  const index = buildSettingIndex(policies);
+  const a = index.find((e) => e.key === "def-a::windows10")!;
+  assert.equal(a.definitionId, "def-a");
+  assert.deepEqual(a.schemas, { "def-a": schema, "def-a_child": childSchema });
+  assert.deepEqual(a.sources[0].structured, { kind: "choice", definitionId: "def-a", name: "A", optionId: "def-a_0", label: "Off" });
+  assert.equal("structured" in a.sources[1], false);
+
+  const legacy = index.find((e) => e.key === "legacy-x::windows10")!;
+  assert.equal("schemas" in legacy, false);
+  assert.equal("definitionId" in legacy, false);
+});
