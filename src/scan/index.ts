@@ -72,9 +72,13 @@ export function buildSettingIndex(policies: RawPolicy[]): SettingIndexEntry[] {
 
   return Array.from(buckets.entries())
     .map(([key, bucket]) => {
-      const values = Array.from(new Set(bucket.sources.map((s) => s.value)));
       const deployedSources = bucket.sources.filter((s) => s.deployed);
-      const conflict = values.length > 1 && deployedSources.length > 1;
+      const deployedValues = Array.from(new Set(deployedSources.map((s) => s.value)));
+      // What reaches devices comes first — values[0] is read as the effective value everywhere —
+      // followed by anything only an unassigned policy holds.
+      const values = Array.from(new Set([...deployedValues, ...bucket.sources.map((s) => s.value)]));
+      // Only policies that are assigned can disagree with each other: an unassigned one reaches nothing.
+      const conflict = deployedValues.length > 1;
 
       let state: SettingIndexState = "Not checked";
       if (conflict) state = "Conflict";
