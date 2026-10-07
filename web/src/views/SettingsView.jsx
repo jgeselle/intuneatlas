@@ -23,7 +23,7 @@ function SettingsView({
 }) {
   const [state, setState] = useState("All");
   const platforms = ["All", ...Array.from(new Set(entries.map((e) => e.platform)))];
-  const states = ["All", "Below baseline", "Conflict", "Not deployed", "Not covered"];
+  const states = ["All", "Below baseline", "Conflict", "Missing", "Not assigned", "Meets baseline", "Not checked"];
 
   const shown = entries.filter(
     (e) =>
@@ -36,10 +36,10 @@ function SettingsView({
 
   const categories = Array.from(new Set(shown.map((e) => e.category)));
   const count = (s) => entries.filter((e) => e.state === s).length;
-  // "Not covered" entries are synthetic — a baseline rule with no matching
+  // "Missing" entries are synthetic — a baseline rule with no matching
   // setting anywhere in the tenant, not something actually configured —
   // so they're excluded from what "Managed" claims to count.
-  const managedCount = entries.length - count("Not covered");
+  const managedCount = entries.length - count("Missing");
 
   // Flattened so category headers and their rows live in one virtualized
   // list — the alternative (virtualizing per-category) can't share a
@@ -84,8 +84,8 @@ function SettingsView({
           <Stat label="Managed" value={managedCount} icon={Sliders} />
           <Stat label="Below baseline" value={count("Below baseline")} tone={count("Below baseline") ? "amber" : "neutral"} icon={WarningCircle} />
           <Stat label="Conflicting" value={count("Conflict")} tone={count("Conflict") ? "alert" : "neutral"} icon={Warning} />
-          <Stat label="Not deployed" value={count("Not deployed")} icon={Prohibit} />
-          <Stat label="Not covered" value={count("Not covered")} tone={count("Not covered") ? "amber" : "neutral"} icon={Question} />
+          <Stat label="Not assigned" value={count("Not assigned")} icon={Prohibit} />
+          <Stat label="Missing" value={count("Missing")} tone={count("Missing") ? "amber" : "neutral"} icon={Question} />
         </div>
 
         <div className="flex flex-col gap-3">

@@ -1,5 +1,5 @@
 {
-  "description": "An entry whose value already satisfies a string-expectation rule stays Baseline, no recommendation attached.",
+  "description": "An entry whose value already satisfies a string-expectation rule becomes Meets baseline, no recommendation attached.",
   "entries": [
     {
       "key": "Require BitLocker::windows10",
@@ -10,7 +10,7 @@
       "values": ["1"],
       "sources": [],
       "conflict": false,
-      "state": "Baseline"
+      "state": "Not checked"
     }
   ],
   "rules": [
@@ -28,7 +28,7 @@
   "expect": [
     {
       "key": "Require BitLocker::windows10",
-      "state": "Baseline"
+      "state": "Meets baseline"
     }
   ]
 }

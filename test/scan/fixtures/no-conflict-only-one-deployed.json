@@ -23,7 +23,7 @@
   "expect": [
     {
       "key": "def-screensaver::windows10",
-      "state": "Baseline",
+      "state": "Not checked",
       "conflict": false,
       "values": ["300", "900"]
     }

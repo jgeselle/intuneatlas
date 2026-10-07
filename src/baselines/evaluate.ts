@@ -5,23 +5,30 @@ import type { SettingIndexEntry } from "../scan/types.js";
 /**
  * Matches rules to settings-index entries by CSP path (+ loose platform
  * prefix match, since real Graph platforms like "windows10" never match the
- * baseline schema's simplified "windows" exactly), attaches a recommendation
- * for every matching rule that fails (not just the first one — a setting can
- * have no baseline opinion, one, or several from different sources that may
- * even disagree with each other), and promotes state to "Below baseline"
- * when at least one applies.
+ * baseline schema's simplified "windows" exactly) and gives each one its
+ * baseline verdict:
  *
- * Precedence unchanged from buildSettingIndex's original design:
- * Conflict > Not deployed > Below baseline > Baseline. A conflicting or
- * undeployed setting doesn't get a baseline verdict — there's no single
+ * - no rule matches            -> "Not checked"
+ * - rules match, all pass      -> "Meets baseline"
+ * - rules match, any fails     -> "Below baseline", with a recommendation
+ *   for every failing rule (not just the first one — a setting can have
+ *   several, from different sources that may even disagree with each other)
+ *
+ * Precedence: Conflict > Not assigned > the verdict above. A conflicting
+ * or unassigned setting doesn't get a baseline verdict — there's no single
  * "current value" to judge yet, or it isn't reaching any device.
+ *
+ * The verdict is always recomputed from scratch (state and recs both),
+ * never carried over from whatever the entry came in with — so judging an
+ * already-judged report against a different set of rules can't leave a
+ * stale "Below baseline" or stale recommendations behind.
  */
 export function applyBaselines(entries: SettingIndexEntry[], rules: BaselineRule[]): SettingIndexEntry[] {
   return entries.map((entry) => {
-    if (entry.state === "Conflict" || entry.state === "Not deployed") return entry;
+    if (entry.state === "Conflict" || entry.state === "Not assigned") return entry;
 
     const matching = rules.filter((r) => r.path === entry.cspPath && platformMatches(r.platform, entry.platform));
-    if (matching.length === 0) return entry;
+    if (matching.length === 0) return { ...entry, state: "Not checked" as const, recs: [] };
 
     const current = entry.values[0] ?? "";
     const recs = matching
@@ -34,7 +41,7 @@ export function applyBaselines(entries: SettingIndexEntry[], rules: BaselineRule
         why: rule.rationale,
         source: rule.source,
       }));
-    if (recs.length === 0) return entry;
+    if (recs.length === 0) return { ...entry, state: "Meets baseline" as const, recs: [] };
 
     return { ...entry, state: "Below baseline" as const, recs };
   });
@@ -49,11 +56,12 @@ function platformMatches(rulePlatform: string, entryPlatform: string): boolean {
  * evaluated by applyBaselines at all — it just silently never matches
  * anything, and there's no signal that the tenant doesn't configure this
  * setting *anywhere*, not even badly. That's a stronger gap than "Not
- * deployed" (which still has a real policy, just not assigned to a
+ * assigned" (which still has a real policy, just not assigned to a
  * group) — nothing in the tenant even attempts this setting. Synthesizes
  * one placeholder entry per uncovered (path, platform) — real settings-
  * index entries in every other state still count as "covered" (Conflict,
- * Not deployed, Below baseline, Baseline all mean some policy sets it);
+ * Not assigned, Below baseline, Meets baseline, Not checked all mean some
+ * policy sets it);
  * only a path with zero matching entries in any state is a true gap.
  */
 export function findUncoveredEntries(entries: SettingIndexEntry[], rules: BaselineRule[]): SettingIndexEntry[] {
@@ -71,12 +79,12 @@ export function findUncoveredEntries(entries: SettingIndexEntry[], rules: Baseli
     key: `uncovered::${groupKey}`,
     name: groupRules[0].name,
     cspPath: groupRules[0].path,
-    category: "Not covered by any policy",
+    category: "Missing from the tenant",
     platform: groupRules[0].platform,
     values: [],
     sources: [],
     conflict: false,
-    state: "Not covered" as const,
+    state: "Missing" as const,
     recs: groupRules.map((rule) => ({
       ruleId: rule.id,
       current: "Not configured",

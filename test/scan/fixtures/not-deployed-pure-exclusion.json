@@ -1,5 +1,5 @@
 {
-  "description": "A policy whose only assignment is an exclusion targets no one on its own — an exclusion-only assignment set counts as Not deployed, not deployed-with-caveats.",
+  "description": "A policy whose only assignment is an exclusion targets no one on its own — an exclusion-only assignment set counts as Not assigned, not deployed-with-caveats.",
   "policies": [
     {
       "id": "policy-exclusion-only",
@@ -14,7 +14,7 @@
   "expect": [
     {
       "key": "def-lock::windows10",
-      "state": "Not deployed",
+      "state": "Not assigned",
       "conflict": false
     }
   ]

@@ -1,5 +1,5 @@
 {
-  "description": "A policy with no assignments at all targets no one — the setting shows up in the index but as Not deployed.",
+  "description": "A policy with no assignments at all targets no one — the setting shows up in the index but as Not assigned.",
   "policies": [
     {
       "id": "policy-unassigned",
@@ -14,7 +14,7 @@
   "expect": [
     {
       "key": "def-usb::windows10",
-      "state": "Not deployed",
+      "state": "Not assigned",
       "conflict": false,
       "values": ["1"]
     }

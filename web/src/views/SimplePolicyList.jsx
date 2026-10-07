@@ -54,7 +54,7 @@ function SimplePolicyList({ kindLabel, items, query, setQuery, onOpen }) {
                 )}
                 <td className="px-4 py-3">
                   <Chip className={i.deployed ? "bg-teal-50 text-teal-700 ring-teal-200" : "bg-stone-100 text-stone-500 ring-stone-200"}>
-                    {i.deployed ? "Deployed" : "Not deployed"}
+                    {i.deployed ? "Deployed" : "Not assigned"}
                   </Chip>
                 </td>
               </tr>

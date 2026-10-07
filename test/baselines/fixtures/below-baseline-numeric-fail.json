@@ -1,5 +1,5 @@
 {
-  "description": "A Baseline-state entry whose value fails a numeric rule gets promoted to Below baseline with a recommendation attached.",
+  "description": "A Not checked entry whose value fails a numeric rule gets promoted to Below baseline with a recommendation attached.",
   "entries": [
     {
       "key": "Screen Lock Timeout::windows10",
@@ -10,7 +10,7 @@
       "values": ["1200"],
       "sources": [],
       "conflict": false,
-      "state": "Baseline"
+      "state": "Not checked"
     }
   ],
   "rules": [

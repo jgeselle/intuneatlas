@@ -29,7 +29,7 @@ const tamperEntry: SettingIndexEntry = {
   values: ["Disabled"],
   sources: [{ policyId: "p1", policyName: "Policy 1", value: "Disabled", deployed: true }],
   conflict: false,
-  state: "Baseline",
+  state: "Not checked",
   recs: [],
 };
 
@@ -74,9 +74,9 @@ test("applyBaselinesToReport: judges a raw report, leaving raw tenant facts unto
   assert.equal(tamper.recs.length, 1);
   assert.equal(result.belowBaselineCount, 1);
 
-  // BitLocker rule matches nothing in the tenant -> a synthetic "Not covered" entry.
-  const uncovered = result.settings.find((e) => e.state === "Not covered");
-  assert.ok(uncovered, "expected a synthetic Not covered entry for the unmatched BitLocker rule");
+  // BitLocker rule matches nothing in the tenant -> a synthetic "Missing" entry.
+  const uncovered = result.settings.find((e) => e.state === "Missing");
+  assert.ok(uncovered, "expected a synthetic Missing entry for the unmatched BitLocker rule");
   assert.equal(uncovered!.recs[0].ruleId, "bitlocker.recovery-key");
 
   assert.equal(result.settings.length, 2);
@@ -87,7 +87,7 @@ test("applyBaselinesToReport: raw entries pass straight through when no rule mat
   const result = applyBaselinesToReport(raw, []);
 
   assert.equal(result.settings.length, 1);
-  assert.equal(result.settings[0].state, "Baseline");
+  assert.equal(result.settings[0].state, "Not checked");
   assert.equal(result.belowBaselineCount, 0);
 });
 
@@ -99,12 +99,12 @@ test("applyBaselinesToReport: re-running on an already-evaluated report doesn't 
 
   const twiceEvaluated = applyBaselinesToReport(onceEvaluated, [tamperRule, bitlockerRule]);
 
-  const uncovered = twiceEvaluated.settings.find((e) => e.state === "Not covered");
+  const uncovered = twiceEvaluated.settings.find((e) => e.state === "Missing");
   assert.ok(uncovered, "the coverage gap should still be reported, not silently dropped");
-  // The bug this guards against: feeding a synthetic "Not covered" entry
+  // The bug this guards against: feeding a synthetic "Missing" entry
   // (values: []) back into applyBaselines scores it against an empty
   // string and misclassifies it as "Below baseline" instead.
-  assert.equal(uncovered!.state, "Not covered");
+  assert.equal(uncovered!.state, "Missing");
   assert.equal(twiceEvaluated.settings.filter((e) => e.state === "Below baseline").length, 1);
   assert.equal(twiceEvaluated.settings.length, 2);
 });
@@ -118,14 +118,28 @@ test("applyBaselinesToReport: activePacks narrows which loaded rules actually ge
   assert.equal(both.belowBaselineCount, 1);
 
   // Only the CIS pack active: tamper's own (Microsoft) rule no longer applies at all,
-  // so it passes straight through as "Baseline" -- only the BitLocker gap shows.
+  // so it has no verdict ("Not checked") -- only the BitLocker gap shows.
   const cisOnly = applyBaselinesToReport(raw, [tamperRule, bitlockerRule], ["cis/windows-11-benchmark-l1"]);
   assert.equal(cisOnly.belowBaselineCount, 0);
-  assert.equal(cisOnly.settings.find((e) => e.key === "tamper::windows10")!.state, "Baseline");
-  assert.equal(cisOnly.settings.filter((e) => e.state === "Not covered").length, 1);
+  assert.equal(cisOnly.settings.find((e) => e.key === "tamper::windows10")!.state, "Not checked");
+  assert.equal(cisOnly.settings.filter((e) => e.state === "Missing").length, 1);
 
   // Neither pack active: no judgment at all, no gaps.
   const none = applyBaselinesToReport(raw, [tamperRule, bitlockerRule], []);
   assert.equal(none.settings.length, 1);
-  assert.equal(none.settings[0].state, "Baseline");
+  assert.equal(none.settings[0].state, "Not checked");
+});
+
+test("applyBaselinesToReport: a report carrying the pre-rework state names is mapped forward before judging", () => {
+  const legacy = makeRawReport([
+    { ...tamperEntry, values: ["Enabled"], state: "Baseline" as never },
+    { ...tamperEntry, key: "other::windows10", cspPath: "./Other", state: "Not deployed" as never },
+    { ...tamperEntry, key: "uncovered::x", cspPath: "./Gone", values: [], state: "Not covered" as never },
+  ]);
+  const result = applyBaselinesToReport(legacy, [tamperRule]);
+
+  assert.equal(result.settings.find((e) => e.key === "tamper::windows10")!.state, "Meets baseline");
+  assert.equal(result.settings.find((e) => e.key === "other::windows10")!.state, "Not assigned");
+  // The old synthetic entry is dropped rather than re-judged as a real setting.
+  assert.equal(result.settings.some((e) => e.key === "uncovered::x"), false);
 });

@@ -1,4 +1,5 @@
 import { applyBaselines, findUncoveredEntries } from "../baselines/evaluate.js";
+import { normalizeState } from "./states.js";
 import type { BaselineRule } from "../baselines/types.js";
 import { fetchCompliancePolicies } from "./compliancePolicies.js";
 import { fetchConfigurationPolicies } from "./configurationPolicies.js";
@@ -80,7 +81,8 @@ export async function buildReport(token: string, flow: string, tenant: string): 
  *
  * Safe to call on an already-evaluated report too (e.g. `--report` can
  * point at whatever a previous `scan --out` wrote, which is evaluated
- * output, not raw) — strips any synthetic "Not covered" entries from a
+ * output, not raw, and possibly from a version with the older state
+ * names) — maps legacy names forward and strips any synthetic "Missing" entries from a
  * prior run first. Those have no real value to re-derive anything from
  * (values: []), so feeding one back into applyBaselines would score it
  * against an empty string and misclassify it as "Below baseline" instead
@@ -95,9 +97,11 @@ export async function buildReport(token: string, flow: string, tenant: string): 
  */
 export function applyBaselinesToReport(report: ScanReport, baselineRules: BaselineRule[], activePacks?: string[]): ScanReport {
   const activeRules = activePacks ? baselineRules.filter((r) => activePacks.includes(r.pack)) : baselineRules;
-  const rawSettings = report.settings.filter((e) => e.state !== "Not covered");
+  const rawSettings = report.settings
+    .map((e) => ({ ...e, state: normalizeState(e.state) }))
+    .filter((e) => e.state !== "Missing");
   const evaluated = applyBaselines(rawSettings, activeRules);
-  // Synthetic "Not covered" entries for baseline rules with no matching
+  // Synthetic "Missing" entries for baseline rules with no matching
   // setting anywhere in the tenant — appended for display only, after
   // belowBaselineCount is computed from the real scanned entries, so that
   // count stays truthful to what was actually found in the tenant rather

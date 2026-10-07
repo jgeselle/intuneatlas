@@ -1,5 +1,5 @@
 {
-  "description": "A Not deployed entry never gets a baseline verdict either — it isn't reaching any device, so grading its value would be meaningless.",
+  "description": "A Not assigned entry never gets a baseline verdict either — it isn't reaching any device, so grading its value would be meaningless.",
   "entries": [
     {
       "key": "Require BitLocker::windows10",
@@ -10,7 +10,7 @@
       "values": ["0"],
       "sources": [],
       "conflict": false,
-      "state": "Not deployed"
+      "state": "Not assigned"
     }
   ],
   "rules": [
@@ -28,7 +28,7 @@
   "expect": [
     {
       "key": "Require BitLocker::windows10",
-      "state": "Not deployed"
+      "state": "Not assigned"
     }
   ]
 }

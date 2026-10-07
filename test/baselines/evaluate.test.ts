@@ -43,7 +43,7 @@ test("applyBaselines: every matching rule attaches its own recommendation — a 
       values: ["0"],
       sources: [],
       conflict: false,
-      state: "Baseline",
+      state: "Not checked",
       recs: [],
     },
   ];
@@ -69,7 +69,7 @@ test("applyBaselines: a rule that's already satisfied doesn't produce a recommen
       values: ["1"],
       sources: [],
       conflict: false,
-      state: "Baseline",
+      state: "Not checked",
       recs: [],
     },
   ];
@@ -93,7 +93,7 @@ test("applyBaselines: no rule at all for the path — entry passes through uncha
       values: ["anything"],
       sources: [],
       conflict: false,
-      state: "Baseline",
+      state: "Not checked",
       recs: [],
     },
   ];
@@ -114,11 +114,11 @@ test("findUncoveredEntries: a rule whose path matches nothing in the tenant prod
   assert.deepEqual(result.values, []);
   assert.deepEqual(result.sources, []);
   assert.equal(result.conflict, false);
-  assert.equal(result.state, "Not covered");
+  assert.equal(result.state, "Missing");
   assert.deepEqual(result.recs.map((r) => r.ruleId), ["gap-rule"]);
 });
 
-test("findUncoveredEntries: a real entry at that path — in ANY state — counts as covered, not just Baseline/Below baseline", () => {
+test("findUncoveredEntries: a real entry at that path — in ANY state — counts as covered, not just Meets baseline/Below baseline", () => {
   const makeEntry = (state: SettingIndexEntry["state"]): SettingIndexEntry => ({
     key: "k::windows10",
     name: "Some setting",
@@ -135,7 +135,7 @@ test("findUncoveredEntries: a real entry at that path — in ANY state — count
     { id: "r", name: "R", platform: "windows", path: "./x", expect: "1", severity: "low", rationale: "why", source: "A", pack: "test" },
   ];
 
-  for (const state of ["Conflict", "Not deployed", "Below baseline", "Baseline"] as const) {
+  for (const state of ["Conflict", "Not assigned", "Below baseline", "Meets baseline", "Not checked"] as const) {
     assert.deepEqual(findUncoveredEntries([makeEntry(state)], rules), [], `state "${state}" should count as covered`);
   }
 });
@@ -163,7 +163,7 @@ test("findUncoveredEntries: an entry on a different platform doesn't cover a rul
       values: ["1"],
       sources: [],
       conflict: false,
-      state: "Baseline",
+      state: "Not checked",
       recs: [],
     },
   ];
@@ -178,4 +178,34 @@ test("findUncoveredEntries: an entry on a different platform doesn't cover a rul
 
 test("findUncoveredEntries: no rules at all — nothing to report", () => {
   assert.deepEqual(findUncoveredEntries([], []), []);
+});
+
+test("applyBaselines: the verdict is recomputed from scratch — re-judging against different rules leaves no stale state or recommendations", () => {
+  const entry: SettingIndexEntry = {
+    key: "x::windows10",
+    name: "X",
+    cspPath: "./x",
+    category: "C",
+    platform: "windows10",
+    values: ["0"],
+    sources: [],
+    conflict: false,
+    state: "Not checked",
+    recs: [],
+  };
+  const rule: BaselineRule = { id: "r", name: "R", platform: "windows", path: "./x", expect: "1", severity: "high", rationale: "why", source: "S", pack: "test" };
+
+  const [failing] = applyBaselines([entry], [rule]);
+  assert.equal(failing.state, "Below baseline");
+  assert.equal(failing.recs.length, 1);
+
+  // Same (already-judged) entry, but the rule is no longer active.
+  const [unjudged] = applyBaselines([failing], []);
+  assert.equal(unjudged.state, "Not checked");
+  assert.deepEqual(unjudged.recs, []);
+
+  // And with the rule back but the value now satisfying it.
+  const [passing] = applyBaselines([{ ...failing, values: ["1"] }], [rule]);
+  assert.equal(passing.state, "Meets baseline");
+  assert.deepEqual(passing.recs, []);
 });

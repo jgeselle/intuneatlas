@@ -128,7 +128,7 @@ function SettingDrawer({ entry, notes, onAddNote, onDeleteNote, onClose, change,
   // replacing several discrete things at once, which needs its own UI
   // this doesn't have yet. Simple/choice settings only, for now.
   const isSimpleValue = !entry.values.some((v) => v.includes("\n"));
-  // Only synthetic "Not covered" entries ever have no values at all — a
+  // Only synthetic "Missing" entries ever have no values at all — a
   // real scanned setting always has at least one. "Not configured" reads
   // sensibly wherever this ends up displayed (e.g. a staged change's
   // Diff), instead of an empty string.
@@ -148,7 +148,7 @@ function SettingDrawer({ entry, notes, onAddNote, onDeleteNote, onClose, change,
     >
       <section>
         <h3 className="font-sans text-xs font-semibold uppercase tracking-wide text-stone-500">Effective value</h3>
-        {entry.state === "Not covered" ? (
+        {entry.state === "Missing" ? (
           <p className="mt-2 rounded-md border border-dashed border-stone-300 bg-stone-50 p-3 text-xs leading-relaxed text-stone-500">
             No policy in this tenant configures this setting.
           </p>
@@ -184,7 +184,7 @@ function SettingDrawer({ entry, notes, onAddNote, onDeleteNote, onClose, change,
                 <ValueDisplay value={entry.values[0] ?? ""} />
               </div>
             )}
-            {entry.state === "Not deployed" && (
+            {entry.state === "Not assigned" && (
               <p className="mt-1 text-xs text-stone-500">
                 Configured but not reaching any device, because the policy holding it has no group assigned.
               </p>
@@ -221,7 +221,7 @@ function SettingDrawer({ entry, notes, onAddNote, onDeleteNote, onClose, change,
               <li key={n} className="rounded-md border border-stone-200 p-3">
                 <SourceRow policyName={s.policyName} value={s.value} />
                 <div className="mt-2 text-xs text-stone-500">
-                  {s.deployed ? "Deployed" : <span className="text-stone-400">Not deployed to any group</span>}
+                  {s.deployed ? "Deployed" : <span className="text-stone-400">Not assigned to any group</span>}
                 </div>
               </li>
             ))}

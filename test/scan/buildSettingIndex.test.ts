@@ -76,5 +76,5 @@ test("buildSettingIndex: a single deployed source is never a conflict, regardles
   ];
   const [entry] = buildSettingIndex(policies);
   assert.equal(entry.conflict, false);
-  assert.equal(entry.state, "Baseline");
+  assert.equal(entry.state, "Not checked");
 });

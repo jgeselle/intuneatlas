@@ -10,7 +10,7 @@
       "values": ["0"],
       "sources": [],
       "conflict": false,
-      "state": "Baseline"
+      "state": "Not checked"
     }
   ],
   "rules": [
@@ -28,7 +28,7 @@
   "expect": [
     {
       "key": "Require Passcode::windows10",
-      "state": "Baseline"
+      "state": "Not checked"
     }
   ]
 }

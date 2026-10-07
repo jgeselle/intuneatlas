@@ -21,7 +21,7 @@
     }
   ],
   "expect": [
-    { "key": "def-win-lock::windows10", "state": "Baseline", "conflict": false, "values": ["1"] },
-    { "key": "def-ios-lock::ios", "state": "Baseline", "conflict": false, "values": ["0"] }
+    { "key": "def-win-lock::windows10", "state": "Not checked", "conflict": false, "values": ["1"] },
+    { "key": "def-ios-lock::ios", "state": "Not checked", "conflict": false, "values": ["0"] }
   ]
 }

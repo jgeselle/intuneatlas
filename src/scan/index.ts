@@ -67,9 +67,9 @@ export function buildSettingIndex(policies: RawPolicy[]): SettingIndexEntry[] {
       const deployedSources = bucket.sources.filter((s) => s.deployed);
       const conflict = values.length > 1 && deployedSources.length > 1;
 
-      let state: SettingIndexState = "Baseline";
+      let state: SettingIndexState = "Not checked";
       if (conflict) state = "Conflict";
-      else if (deployedSources.length === 0) state = "Not deployed";
+      else if (deployedSources.length === 0) state = "Not assigned";
 
       return {
         key,

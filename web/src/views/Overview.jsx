@@ -5,11 +5,11 @@ import { platformLabel } from "../lib/format.js";
 
 function Overview({ settingIndex, compliancePolicies, enrollmentConfigurations, changes, onGo, onOpen }) {
   const conflicts = settingIndex.filter((e) => e.conflict).length;
-  const undeployed = settingIndex.filter((e) => e.state === "Not deployed").length;
-  // "Not covered" entries are synthetic — a baseline rule with no matching
+  const unassigned = settingIndex.filter((e) => e.state === "Not assigned").length;
+  // "Missing" entries are synthetic — a baseline rule with no matching
   // setting anywhere in the tenant, not something actually configured —
   // so they're excluded from what "Settings managed" claims to count.
-  const managedCount = settingIndex.filter((e) => e.state !== "Not covered").length;
+  const managedCount = settingIndex.filter((e) => e.state !== "Missing").length;
   // One row per (setting, recommendation) — a setting can have several,
   // from different sources, so this can list the same setting more than
   // once if more than one baseline flags it.
@@ -31,7 +31,7 @@ function Overview({ settingIndex, compliancePolicies, enrollmentConfigurations, 
         <Stat
           label="Settings managed"
           value={managedCount}
-          sub={conflicts + " conflicting, " + undeployed + " not deployed"}
+          sub={conflicts + " conflicting, " + unassigned + " not assigned"}
           tone={conflicts ? "amber" : "neutral"}
           icon={Sliders}
         />

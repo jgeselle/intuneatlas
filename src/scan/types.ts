@@ -35,7 +35,19 @@ export interface RawSimplePolicy {
   priority?: number;
 }
 
-export type SettingIndexState = "Conflict" | "Not deployed" | "Below baseline" | "Baseline" | "Not covered";
+/**
+ * Exactly one per setting:
+ * - "Conflict": deployed policies set different values.
+ * - "Not assigned": a policy sets it, but none of them targets any group.
+ * - "Below baseline": an active baseline rule covers it and its value fails.
+ * - "Meets baseline": at least one active rule covers it and all of them pass.
+ * - "Not checked": no active rule has an opinion on it (also what every
+ *   non-conflicting, assigned setting is straight out of a scan, before
+ *   any baseline has been applied).
+ * - "Missing": synthetic — a baseline rule requires a setting that no
+ *   policy in the tenant configures at all.
+ */
+export type SettingIndexState = "Conflict" | "Not assigned" | "Below baseline" | "Meets baseline" | "Not checked" | "Missing";
 
 export interface SettingIndexSource {
   policyId: string;

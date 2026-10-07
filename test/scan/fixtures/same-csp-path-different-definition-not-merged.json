@@ -24,14 +24,14 @@
     {
       "key": "app_privacy_permissiondefaults_generickey_camera::ios",
       "name": "Camera",
-      "state": "Baseline",
+      "state": "Not checked",
       "conflict": false,
       "values": ["Allow"]
     },
     {
       "key": "safari_privacy_permissiondefaults_generickey_camera::ios",
       "name": "Camera",
-      "state": "Baseline",
+      "state": "Not checked",
       "conflict": false,
       "values": ["Deny"]
     }

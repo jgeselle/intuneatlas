@@ -12,7 +12,7 @@ function SimplePolicyDrawer({ item, kindLabel, notes, onAddNote, onDeleteNote, o
       chips={
         <>
           <Chip className={item.deployed ? "bg-teal-50 text-teal-700 ring-teal-200" : "bg-stone-100 text-stone-500 ring-stone-200"}>
-            {item.deployed ? "Deployed" : "Not deployed"}
+            {item.deployed ? "Deployed" : "Not assigned"}
           </Chip>
           <Chip className="bg-stone-100 text-stone-600 ring-stone-200">{platformLabel(item.platform)}</Chip>
           {item.priority !== undefined && (

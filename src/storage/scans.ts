@@ -1,6 +1,7 @@
 import { getDb } from "./db.js";
 import type { ScanReport } from "../scan/report.js";
 import type { RawSimplePolicy } from "../scan/types.js";
+import { normalizeState } from "../scan/states.js";
 
 interface ScanRow {
   id: number;
@@ -105,7 +106,8 @@ export function getLatestScan(tenant?: string): ScanReport | undefined {
     cspPath: r.csp_path,
     category: r.category,
     platform: r.platform,
-    state: r.state as ScanReport["settings"][number]["state"],
+    // Scans stored by an older version carry the pre-rework state names.
+    state: normalizeState(r.state),
     conflict: Boolean(r.conflict),
     values: JSON.parse(r.values_json),
     sources: JSON.parse(r.sources_json),

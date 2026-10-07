@@ -17,7 +17,7 @@
   "expect": [
     {
       "key": "def-wifi::windows10",
-      "state": "Baseline",
+      "state": "Not checked",
       "conflict": false,
       "values": ["0"]
     }
