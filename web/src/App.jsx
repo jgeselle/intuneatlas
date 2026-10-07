@@ -298,17 +298,23 @@ export default function App({ initialReport, session }) {
   // policies setting the same thing can each be changed — the target key
   // is the pair. ruleId is "manual" for a freeform edit with no baseline
   // rule behind it; the server never required a real rule id.
-  async function stageChange(entry, source, { ruleId, from, to, toStructured, reason }) {
+  //
+  // `source` is the existing policy whose value is being changed — or null
+  // to stage the setting into a policy that doesn't exist yet, created
+  // under `newPolicyName`. A setting has at most one such staging, so
+  // renaming the new policy later never changes the key.
+  async function stageChange(entry, source, { ruleId, from, to, toStructured, reason, newPolicyName }) {
     try {
       const res = await fetch("/api/changes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          targetKey: entry.key + "::policy::" + source.policyId,
+          targetKey: source ? entry.key + "::policy::" + source.policyId : entry.key + "::new",
           targetName: entry.name,
           settingKey: entry.key,
-          policyId: source.policyId,
-          policyName: source.policyName,
+          policyId: source ? source.policyId : "",
+          policyName: source ? source.policyName : newPolicyName,
+          targetKind: source ? "existing" : "new",
           ruleId,
           from,
           to,
@@ -600,6 +606,7 @@ export default function App({ initialReport, session }) {
           onClose={() => setOpen(null)}
           changes={Object.values(changes).filter((c) => c.settingKey === openSetting.key || c.targetKey === openSetting.key)}
           onStage={(source, change) => stageChange(openSetting, source, change)}
+          onStageNew={(change) => stageChange(openSetting, null, change)}
           onRevert={(change) => revertEntryChange(change.id, change.targetKey)}
           viewer={session}
         />

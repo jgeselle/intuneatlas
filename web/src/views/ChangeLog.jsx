@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { ArrowCounterClockwise, Check, Clock, PaperPlaneTilt } from "@phosphor-icons/react";
+import { ArrowCounterClockwise, Check, Clock, PaperPlaneTilt, PencilSimple } from "@phosphor-icons/react";
 import { Chip, Diff } from "../components/bits.jsx";
 
-function ChangeCard({ change, onUpdateField, onRevert, viewer }) {
+function ChangeCard({ change, onUpdateField, onRevert, viewer, inGroup = false }) {
   const [reason, setReason] = useState(change.reason);
   const reviewedByMe = change.reviewedBy === viewer.name;
   // Contributors can only touch changes they staged themselves; Admins can
@@ -22,7 +22,8 @@ function ChangeCard({ change, onUpdateField, onRevert, viewer }) {
             {change.stagedByName && <span className="text-xs text-stone-400">staged by {change.stagedByName}</span>}
           </div>
           <h3 className="mt-2 text-sm font-medium">{change.targetName}</h3>
-          {change.policyName && <div className="mt-0.5 truncate text-xs text-stone-500">{change.policyName}</div>}
+          {/* Inside a new policy's group the name is the group's heading already. */}
+          {change.policyName && !inGroup && <div className="mt-0.5 truncate text-xs text-stone-500">{change.policyName}</div>}
         </div>
         {canEdit && (
           <button
@@ -76,9 +77,94 @@ function ChangeCard({ change, onUpdateField, onRevert, viewer }) {
   );
 }
 
+/**
+ * Every setting staged into the same not-yet-existing policy, under that
+ * policy's name — together they are the policy to be created. Renaming it
+ * renames it for all of them.
+ */
+function NewPolicyGroup({ name, changes, onUpdateField, onRevert, viewer }) {
+  const [renaming, setRenaming] = useState(false);
+  const [draft, setDraft] = useState(name);
+  // Same rule as a single change: your own, unless you're an Admin — and a rename touches every change in the group.
+  const canRename = changes.every((c) => viewer.role === "admin" || (viewer.role === "contributor" && c.stagedBy === viewer.id));
+
+  async function save(e) {
+    e.preventDefault();
+    const next = draft.trim();
+    if (next && next !== name) {
+      for (const change of changes) await onUpdateField(change.id, "policyName", next);
+    }
+    setRenaming(false);
+  }
+
+  return (
+    <section>
+      <div className="flex flex-wrap items-center gap-2">
+        <Chip className="bg-teal-50 text-teal-700 ring-teal-200">New policy</Chip>
+        {renaming ? (
+          <form onSubmit={save} className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
+            <input
+              autoFocus
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              className="min-w-0 flex-1 rounded-md border border-stone-300 bg-white px-2.5 py-1.5 text-sm focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600"
+            />
+            <button
+              type="submit"
+              disabled={!draft.trim()}
+              className="rounded-md bg-teal-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-teal-700 focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500 disabled:bg-stone-200 disabled:text-stone-400"
+            >
+              Save
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setDraft(name);
+                setRenaming(false);
+              }}
+              className="rounded-md px-2.5 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-100 focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500"
+            >
+              Cancel
+            </button>
+          </form>
+        ) : (
+          <>
+            <h2 className="min-w-0 font-heading text-sm font-semibold">{name}</h2>
+            <span className="text-xs tabular-nums text-stone-400">
+              {changes.length} {changes.length === 1 ? "setting" : "settings"}
+            </span>
+            {canRename && (
+              <button
+                onClick={() => setRenaming(true)}
+                className="ml-auto inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-stone-600 ring-1 ring-inset ring-stone-300 hover:bg-stone-50 focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500"
+              >
+                <PencilSimple className="h-3.5 w-3.5" />
+                Rename
+              </button>
+            )}
+          </>
+        )}
+      </div>
+      <ul className="mt-3 space-y-3">
+        {changes.map((c) => (
+          <ChangeCard key={c.id} change={c} onUpdateField={onUpdateField} onRevert={onRevert} viewer={viewer} inGroup />
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 function ChangeLog({ changes, onUpdateField, onRevert, viewer }) {
   const list = Object.values(changes).sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
   const ready = list.filter((c) => c.ready).length;
+  const toExisting = list.filter((c) => c.targetKind !== "new");
+  // Settings staged into policies that don't exist yet, grouped into those policies by name.
+  const newPolicies = [];
+  for (const change of list.filter((c) => c.targetKind === "new")) {
+    const group = newPolicies.find(([name]) => name === change.policyName);
+    if (group) group[1].push(change);
+    else newPolicies.push([change.policyName, [change]]);
+  }
 
   return (
     <div className="space-y-5">
@@ -110,11 +196,21 @@ function ChangeLog({ changes, onUpdateField, onRevert, viewer }) {
           </p>
         </div>
       ) : (
-        <ul className="space-y-3">
-          {list.map((c) => (
-            <ChangeCard key={c.id} change={c} onUpdateField={onUpdateField} onRevert={onRevert} viewer={viewer} />
+        <div className="space-y-6">
+          {newPolicies.map(([name, changes]) => (
+            <NewPolicyGroup key={name} name={name} changes={changes} onUpdateField={onUpdateField} onRevert={onRevert} viewer={viewer} />
           ))}
-        </ul>
+          {toExisting.length > 0 && (
+            <section>
+              {newPolicies.length > 0 && <h2 className="font-heading text-sm font-semibold">Changes to existing policies</h2>}
+              <ul className={"space-y-3 " + (newPolicies.length > 0 ? "mt-3" : "")}>
+                {toExisting.map((c) => (
+                  <ChangeCard key={c.id} change={c} onUpdateField={onUpdateField} onRevert={onRevert} viewer={viewer} />
+                ))}
+              </ul>
+            </section>
+          )}
+        </div>
       )}
     </div>
   );

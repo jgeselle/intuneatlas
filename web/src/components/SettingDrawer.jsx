@@ -20,8 +20,12 @@ const SECTION_HEADING = "font-sans text-xs font-semibold uppercase tracking-wide
  */
 const COMPARE_SUFFIX = { exact: "", atMost: " or less", atLeast: " or more" };
 
-function BaselineCheckCard({ check, canUse, isSelected, onUse }) {
+function BaselineCheckCard({ check, canUse, isSelected, onUse, onStageNew }) {
   const failed = check.passed === false;
+  // Staging this baseline's value into a policy that doesn't exist yet: named, by default, what the baseline itself calls the policy that holds the setting.
+  const [naming, setNaming] = useState(false);
+  const [policyName, setPolicyName] = useState(check.policyName ?? "");
+  const [reason, setReason] = useState("");
   const Icon = check.passed === true ? CheckCircle : failed ? WarningCircle : MinusCircle;
   const iconTone = check.passed === true ? "text-teal-600" : failed ? "text-amber-500" : "text-stone-400";
 
@@ -65,15 +69,69 @@ function BaselineCheckCard({ check, canUse, isSelected, onUse }) {
       {check.why && <p className="mt-2 text-xs leading-relaxed text-stone-600">{check.why}</p>}
       {check.reference && <p className="mt-1 text-xs text-stone-400">{check.reference}</p>}
 
-      {failed && canUse && (
-        <button
-          type="button"
-          onClick={onUse}
-          disabled={isSelected}
-          className="mt-2 text-xs font-medium text-teal-700 hover:underline focus:outline-none disabled:cursor-default disabled:text-teal-800 disabled:no-underline"
+      {failed && (canUse || onStageNew) && !naming && (
+        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+          {canUse && (
+            <button
+              type="button"
+              onClick={onUse}
+              disabled={isSelected}
+              className="text-xs font-medium text-teal-700 hover:underline focus:outline-none disabled:cursor-default disabled:text-teal-800 disabled:no-underline"
+            >
+              {isSelected ? "Filled in above" : "Use this value"}
+            </button>
+          )}
+          {onStageNew && (
+            <button type="button" onClick={() => setNaming(true)} className="text-xs font-medium text-teal-700 hover:underline focus:outline-none">
+              Stage to new policy
+            </button>
+          )}
+        </div>
+      )}
+
+      {naming && (
+        <form
+          className="mt-2.5 animate-fade-in"
+          onSubmit={(e) => {
+            e.preventDefault();
+            onStageNew(policyName.trim(), reason);
+            setNaming(false);
+          }}
         >
-          {isSelected ? "Filled in above" : "Use this value"}
-        </button>
+          <label className="block">
+            <span className="text-xs font-medium text-stone-500">New policy name</span>
+            <input
+              autoFocus
+              type="text"
+              value={policyName}
+              onChange={(e) => setPolicyName(e.target.value)}
+              className="mt-1 w-full rounded-md border border-stone-300 bg-white px-2.5 py-1.5 text-sm focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600"
+            />
+          </label>
+          <input
+            type="text"
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="Reason (optional)"
+            className="mt-2 w-full rounded-md border border-stone-300 bg-white px-2.5 py-1.5 text-xs placeholder-stone-400 focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600"
+          />
+          <div className="mt-2 flex items-center gap-2">
+            <button
+              type="submit"
+              disabled={!policyName.trim()}
+              className="rounded-md bg-teal-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-teal-700 active:scale-[0.97] focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500 disabled:bg-stone-200 disabled:text-stone-400"
+            >
+              Stage change
+            </button>
+            <button
+              type="button"
+              onClick={() => setNaming(false)}
+              className="rounded-md px-2.5 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-100 focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500"
+            >
+              Cancel
+            </button>
+          </div>
+        </form>
       )}
     </li>
   );
@@ -186,6 +244,39 @@ function PolicyValueCard({ source, schemas, inConflict, canStage, change, canRev
   );
 }
 
+/**
+ * The setting as staged into a policy that doesn't exist yet. Sits with
+ * the real policies — it is where the value will come from once the
+ * policy is created — but dashed, since nothing in the tenant sets it yet.
+ */
+function NewPolicyCard({ change, canRevert, onRevert }) {
+  return (
+    <li className="animate-rise-in rounded-md border border-dashed border-teal-300 bg-teal-50 p-3">
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="min-w-0 truncate text-xs font-medium text-stone-700" title={change.policyName}>
+          {change.policyName}
+        </span>
+        <span className="shrink-0 text-xs text-teal-700">New policy</span>
+      </div>
+      <div className="mt-2 text-sm font-medium">
+        <ValueDisplay value={change.to} compact={change.to.includes("\n")} />
+      </div>
+      <div className="mt-2 flex items-center gap-2 text-xs text-stone-500">
+        <Chip className={change.ready ? "bg-teal-50 text-teal-700 ring-teal-200" : "bg-amber-50 text-amber-800 ring-amber-200"}>
+          {change.ready ? "Staged · ready" : "Staged · needs review"}
+        </Chip>
+        {change.stagedByName && <span className="truncate">{change.stagedByName}</span>}
+        {canRevert && (
+          <button type="button" onClick={() => onRevert(change)} className="ml-auto shrink-0 font-medium text-stone-600 hover:underline focus:outline-none">
+            Revert
+          </button>
+        )}
+      </div>
+      {change.reason && <p className="mt-1.5 text-xs leading-relaxed text-stone-600">{change.reason}</p>}
+    </li>
+  );
+}
+
 /** The node a policy card starts editing from: the scanned structure, or the plain text as one field. */
 function initialDraft(source) {
   return source.structured ?? nodeFromText(source.value);
@@ -198,7 +289,7 @@ function initialDraft(source) {
  * them differs. The state itself is the chip in the header — nothing
  * here restates it in a sentence.
  */
-function SettingDrawer({ entry, notes, onAddNote, onDeleteNote, onClose, changes, onStage, onRevert, viewer }) {
+function SettingDrawer({ entry, notes, onAddNote, onDeleteNote, onClose, changes, onStage, onStageNew, onRevert, viewer }) {
   const recs = entry.recs;
   const checks = entry.checks ?? [];
   const schemas = entry.schemas;
@@ -212,8 +303,11 @@ function SettingDrawer({ entry, notes, onAddNote, onDeleteNote, onClose, changes
 
   // A change staged before changes were per-policy targets the setting as
   // a whole; it's shown on the first policy.
+  const existingChanges = changes.filter((c) => c.targetKind !== "new");
   const changeFor = (source, n) =>
-    changes.find((c) => c.policyId === source.policyId) ?? (n === 0 ? changes.find((c) => !c.policyId) : undefined);
+    existingChanges.find((c) => c.policyId === source.policyId) ?? (n === 0 ? existingChanges.find((c) => !c.policyId) : undefined);
+  // At most one: the setting staged into a policy that doesn't exist yet.
+  const newPolicyChange = changes.find((c) => c.targetKind === "new");
 
   // The policy cards a baseline's value can be filled into: the ones that
   // reach devices, can be edited, and have nothing staged.
@@ -238,7 +332,7 @@ function SettingDrawer({ entry, notes, onAddNote, onDeleteNote, onClose, changes
         <h3 className={SECTION_HEADING}>
           Policies {entry.sources.length ? <span className="tabular-nums text-stone-400">· {entry.sources.length}</span> : null}
         </h3>
-        {entry.sources.length === 0 ? (
+        {entry.sources.length === 0 && !newPolicyChange ? (
           <p className="mt-2 rounded-md border border-dashed border-stone-300 bg-stone-50 p-3 text-xs leading-relaxed text-stone-500">
             No policy in this tenant configures this setting.
           </p>
@@ -274,6 +368,7 @@ function SettingDrawer({ entry, notes, onAddNote, onDeleteNote, onClose, changes
                 />
               );
             })}
+            {newPolicyChange && <NewPolicyCard change={newPolicyChange} canRevert={canRevert(newPolicyChange)} onRevert={onRevert} />}
           </ul>
         )}
       </section>
@@ -300,6 +395,20 @@ function SettingDrawer({ entry, notes, onAddNote, onDeleteNote, onClose, changes
                   canUse={fills.length > 0}
                   isSelected={fills.length > 0 && fills.every(({ n, next }) => renderNode(drafts[n]) === renderNode(next))}
                   onUse={() => setDrafts((d) => d.map((v, i) => fills.find(({ n }) => n === i)?.next ?? v))}
+                  // One new-policy staging per setting; while there is one, it's reverted before another can be made.
+                  onStageNew={
+                    canStage && onStageNew && !newPolicyChange
+                      ? (newPolicyName, reason) =>
+                          onStageNew({
+                            newPolicyName,
+                            to: check.expected,
+                            toStructured: check.expectedNode,
+                            from: entry.values[0] ?? "Not configured",
+                            reason,
+                            ruleId: check.ruleId,
+                          })
+                      : undefined
+                  }
                 />
               );
             })}

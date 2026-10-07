@@ -10,6 +10,45 @@ function Chip({ className = "", children }) {
   );
 }
 
+/** How many changed lines a multi-line comparison shows before folding the rest away. */
+const LINE_DIFF_LIMIT = 10;
+
+function LineDiff({ from, to }) {
+  const [expanded, setExpanded] = useState(false);
+  const before = String(from).split("\n").filter(Boolean);
+  const after = String(to).split("\n").filter(Boolean);
+  const removed = before.filter((line) => !after.includes(line)).map((line) => ({ line, kind: "removed" }));
+  const added = after.filter((line) => !before.includes(line)).map((line) => ({ line, kind: "added" }));
+  const unchanged = after.length - added.length;
+  // A whole firewall rule set staged at once is hundreds of lines — shown in full only on request.
+  const all = [...removed, ...added];
+  const shown = expanded ? all : all.slice(0, LINE_DIFF_LIMIT);
+
+  return (
+    <div className="space-y-1 text-xs">
+      {shown.map(({ line, kind }, i) => (
+        <div
+          key={i}
+          className={
+            "break-words rounded border px-2 py-1 " +
+            (kind === "removed" ? "border-stone-200 bg-stone-50 text-stone-500 line-through decoration-stone-300" : "border-teal-200 bg-teal-50 font-medium text-teal-800")
+          }
+        >
+          {line}
+        </div>
+      ))}
+      <div className="flex flex-wrap gap-x-3 text-stone-400">
+        {all.length > LINE_DIFF_LIMIT && (
+          <button type="button" onClick={() => setExpanded((e) => !e)} className="font-medium text-teal-700 hover:underline focus:outline-none">
+            {expanded ? "Show fewer" : "Show all " + all.length + " lines"}
+          </button>
+        )}
+        {unchanged > 0 && <span>{unchanged} unchanged</span>}
+      </div>
+    </div>
+  );
+}
+
 /**
  * Old value -> new value. Single values sit side by side; a value made of
  * several lines (a list, a group, a choice with sub-settings) is compared
@@ -17,28 +56,7 @@ function Chip({ className = "", children }) {
  * multi-line blobs next to each other don't show what actually changed.
  */
 function Diff({ from, to }) {
-  if (String(from).includes("\n") || String(to).includes("\n")) {
-    const before = String(from).split("\n").filter(Boolean);
-    const after = String(to).split("\n").filter(Boolean);
-    const removed = before.filter((line) => !after.includes(line));
-    const added = after.filter((line) => !before.includes(line));
-    const unchanged = after.length - added.length;
-    return (
-      <div className="space-y-1 text-xs">
-        {removed.map((line, i) => (
-          <div key={"r" + i} className="break-words rounded border border-stone-200 bg-stone-50 px-2 py-1 text-stone-500 line-through decoration-stone-300">
-            {line}
-          </div>
-        ))}
-        {added.map((line, i) => (
-          <div key={"a" + i} className="break-words rounded border border-teal-200 bg-teal-50 px-2 py-1 font-medium text-teal-800">
-            {line}
-          </div>
-        ))}
-        {unchanged > 0 && <div className="text-stone-400">{unchanged} unchanged</div>}
-      </div>
-    );
-  }
+  if (String(from).includes("\n") || String(to).includes("\n")) return <LineDiff from={from} to={to} />;
   return (
     <div className="flex flex-wrap items-center gap-2 text-sm">
       <span className="rounded border border-stone-200 bg-stone-50 px-2 py-1 text-stone-500 line-through decoration-stone-300">{from}</span>
