@@ -1,7 +1,7 @@
 import { GRAPH_BETA_BASE } from "../config.js";
 import { graphGetAll } from "../graph.js";
 import { mapAssignmentTargets } from "./assignments.js";
-import { resolveDeclaredSchemas, resolveSettingDefinition, type ResolvedDefinition } from "./settingDefinitions.js";
+import { resolveDeclaredSchemas, resolveSettingDefinitionOrStandIn, type ResolvedDefinition } from "./settingDefinitions.js";
 import { renderNode, type GraphSettingInstance } from "./settingValue.js";
 import type { RawPolicy, RawSetting, SettingSchema, SettingValueNode } from "./types.js";
 
@@ -46,7 +46,7 @@ async function fetchPolicySettings(token: string, policyId: string): Promise<Raw
 
   return Promise.all(
     graphSettings.map(async ({ settingInstance }) => {
-      const definition = await resolveSettingDefinition(token, settingInstance.settingDefinitionId);
+      const definition = await resolveSettingDefinitionOrStandIn(token, settingInstance.settingDefinitionId);
       const schemas: Record<string, SettingSchema> = {};
       const structured = await buildNode(token, settingInstance, definition, schemas);
       await resolveDeclaredSchemas(token, schemas);
@@ -94,7 +94,7 @@ async function buildNode(
   const option = (itemId: string) => ({ optionId: itemId, label: definition.options?.get(itemId) ?? itemId });
   const children = (instances: GraphSettingInstance[]) =>
     Promise.all(
-      instances.map(async (child) => buildNode(token, child, await resolveSettingDefinition(token, child.settingDefinitionId), schemas)),
+      instances.map(async (child) => buildNode(token, child, await resolveSettingDefinitionOrStandIn(token, child.settingDefinitionId), schemas)),
     );
   const done = (node: SettingValueNode): SettingValueNode => {
     // A definition that didn't declare its own shape takes it from the value it actually holds.

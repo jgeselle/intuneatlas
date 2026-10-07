@@ -415,3 +415,110 @@ test("fetchConfigurationPolicies — structured values and definition schemas", 
     },
   });
 });
+
+/**
+ * Found on a real tenant: a macOS preference-domain definition id that
+ * embeds an app's file name — spaces and parentheses included. As a URL
+ * path segment Graph answered "400 Bad Request - Error in query syntax"
+ * however it was encoded, which failed the whole scan; confirmed live
+ * that it does answer OData key syntax, configurationSettings('<id>').
+ * And where Graph has nothing usable for an id, the scan must carry on.
+ */
+test("fetchConfigurationPolicies — definition ids with spaces and parentheses are asked for by key, and an unresolvable one doesn't fail the scan", async (t) => {
+  const originalFetch = global.fetch;
+  t.after(() => {
+    global.fetch = originalFetch;
+  });
+
+  const ODD_ID = "com.apple.managedclient.preferences_applications_microsoft teams (work or school).app";
+  const ODD_CHILD = `${ODD_ID}_it's "quoted"*!`;
+  const BAD_ROOT = "encoding_test_root graph (rejects)";
+  const BAD_DECLARED = "encoding_test_declared (rejected)";
+  const CATEGORY_ID = "cat-encoding";
+  const requested: string[] = [];
+
+  global.fetch = (async (url: string | URL) => {
+    const u = String(url);
+    if (u.includes("/deviceManagement/configurationPolicies?")) {
+      return jsonResponse({ value: [{ id: "policy-enc", name: "Odd ids", platforms: "macOS", assignments: [] }] });
+    }
+    if (u.includes("/deviceManagement/configurationPolicies/policy-enc/settings")) {
+      return jsonResponse({
+        value: [
+          {
+            settingInstance: {
+              settingDefinitionId: ODD_ID,
+              choiceSettingValue: { value: `${ODD_ID}_1`, children: [{ settingDefinitionId: ODD_CHILD, simpleSettingValue: { value: "x" } }] },
+            },
+          },
+          { settingInstance: { settingDefinitionId: BAD_ROOT, simpleSettingValue: { value: 5 } } },
+        ],
+      });
+    }
+    if (u.includes("/deviceManagement/configurationSettings")) {
+      const rest = u.slice(u.indexOf("/configurationSettings") + "/configurationSettings".length);
+      requested.push(rest);
+      // Only the quoted-key form reaches a definition here, as on the real service; an odd id as a path segment is a 400.
+      const key = rest.match(/^\('(.*)'\)$/);
+      const id = key ? decodeURIComponent(key[1]).replace(/''/g, "'") : rest.slice(1);
+      if (!key && !/^\/[A-Za-z0-9._~{}-]+$/.test(rest)) {
+        return new Response(JSON.stringify({ error: { code: "BadRequest", message: "Bad Request - Error in query syntax." } }), { status: 400, statusText: "Bad Request" });
+      }
+      if (id === ODD_ID) {
+        return jsonResponse({
+          id: ODD_ID,
+          displayName: "Microsoft Teams (work or school)",
+          baseUri: "",
+          offsetUri: "",
+          categoryId: CATEGORY_ID,
+          options: [{ itemId: `${ODD_ID}_1`, displayName: "Allowed", dependedOnBy: [{ dependedOnBy: ODD_CHILD }, { dependedOnBy: BAD_DECLARED }] }],
+        });
+      }
+      if (id === ODD_CHILD) return jsonResponse({ id: ODD_CHILD, displayName: "Odd child", baseUri: "", offsetUri: "", categoryId: CATEGORY_ID });
+      // What Graph does with an id it can't parse or doesn't have.
+      return new Response(JSON.stringify({ error: { code: "BadRequest", message: "Bad Request - Error in query syntax." } }), { status: 400, statusText: "Bad Request" });
+    }
+    if (u.endsWith(`/deviceManagement/configurationCategories/${CATEGORY_ID}`)) return jsonResponse({ id: CATEGORY_ID, displayName: "Preferences" });
+    throw new Error(`unexpected fetch: ${u}`);
+  }) as typeof fetch;
+
+  const [odd, bad] = (await fetchConfigurationPolicies("token"))[0].settings;
+
+  // Inside the quoted key nothing but unreserved characters and percent-escapes may be left for Graph to interpret.
+  for (const rest of requested) {
+    assert.match(rest, /^\('[A-Za-z0-9._~%-]+'\)$/, `"${rest}" isn't a cleanly encoded key`);
+  }
+  assert.ok(requested.includes("('com.apple.managedclient.preferences_applications_microsoft%20teams%20%28work%20or%20school%29.app')"));
+  // A single quote in an id is doubled (OData's escape) before encoding.
+  assert.ok(requested.some((rest) => rest.includes("it%27%27s")));
+
+  assert.equal(odd.name, "Microsoft Teams (work or school)");
+  assert.equal(odd.value, "Allowed\nOdd child: x");
+  assert.deepEqual(Object.keys(odd.schemas!).sort(), [ODD_ID, ODD_CHILD].sort(), "the declared sub-setting Graph rejects is simply not offered");
+
+  // A setting the policy really sets but Graph can't describe still appears — by its id, with its value.
+  assert.equal(bad.name, BAD_ROOT);
+  assert.equal(bad.value, "5");
+  assert.equal(bad.category, "Unknown");
+  assert.deepEqual(bad.structured, { kind: "simple", definitionId: BAD_ROOT, name: BAD_ROOT, value: 5 });
+});
+
+test("fetchConfigurationPolicies — a definition lookup failing for any other reason (throttled out, unauthorized) still fails the scan", async (t) => {
+  const originalFetch = global.fetch;
+  t.after(() => {
+    global.fetch = originalFetch;
+  });
+
+  global.fetch = (async (url: string | URL) => {
+    const u = String(url);
+    if (u.includes("/deviceManagement/configurationPolicies?")) {
+      return jsonResponse({ value: [{ id: "policy-403", name: "P", platforms: "windows10", assignments: [] }] });
+    }
+    if (u.includes("/deviceManagement/configurationPolicies/policy-403/settings")) {
+      return jsonResponse({ value: [{ settingInstance: { settingDefinitionId: "encoding_test_forbidden", simpleSettingValue: { value: 1 } } }] });
+    }
+    return new Response(JSON.stringify({ error: { code: "Forbidden" } }), { status: 403, statusText: "Forbidden" });
+  }) as typeof fetch;
+
+  await assert.rejects(fetchConfigurationPolicies("token"), /failed: 403/);
+});

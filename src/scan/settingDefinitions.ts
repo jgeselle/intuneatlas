@@ -109,7 +109,7 @@ export async function resolveSettingDefinition(
 
   const definition = await graphGet<SettingDefinitionResponse>(
     token,
-    `/deviceManagement/configurationSettings/${settingDefinitionId}`,
+    definitionPath(settingDefinitionId),
     GRAPH_BETA_BASE,
   );
 
@@ -125,6 +125,54 @@ export async function resolveSettingDefinition(
 
   cache.set(settingDefinitionId, resolved);
   return resolved;
+}
+
+/**
+ * The Graph path for one setting definition. Most ids are plain
+ * `lower_case_words` and go in as a path segment, the way they always
+ * have. Not all, though: macOS preference-domain ids embed an app's file
+ * name — spaces, parentheses and all (seen live:
+ * "..._applications_microsoft teams (work or school).app"). As a path
+ * segment those get "400 Bad Request - Error in query syntax" however
+ * they're percent-encoded (confirmed live); what Graph accepts is OData
+ * key syntax, `configurationSettings('<id>')`, with the id
+ * percent-encoded and any single quote in it doubled.
+ */
+export function definitionPath(id: string): string {
+  const base = "/deviceManagement/configurationSettings";
+  if (/^[A-Za-z0-9._~{}-]+$/.test(id)) return `${base}/${id}`;
+  // encodeURIComponent leaves ( ) ' ! * alone; inside a quoted key they must not be left for Graph to interpret.
+  const encoded = encodeURIComponent(id.replace(/'/g, "''")).replace(/[()'!*]/g, (c) => "%" + c.charCodeAt(0).toString(16).toUpperCase());
+  return `${base}('${encoded}')`;
+}
+
+/**
+ * Whether a failed definition lookup means "Graph has nothing usable for
+ * this id" (it answered 400 or 404) rather than something being wrong
+ * with the scan itself (throttling, auth, an outage).
+ */
+function isUnresolvable(err: unknown): boolean {
+  return err instanceof Error && /failed: (400|404)\b/.test(err.message);
+}
+
+/**
+ * For a setting a policy actually sets: its definition, or — when Graph
+ * has nothing usable for the id — a stand-in that names it by the id
+ * itself. One setting showing up by its raw id is a blemish; the whole
+ * scan failing over it loses everything else in the tenant too.
+ */
+export async function resolveSettingDefinitionOrStandIn(token: string, settingDefinitionId: string): Promise<ResolvedDefinition> {
+  try {
+    return await resolveSettingDefinition(token, settingDefinitionId);
+  } catch (err) {
+    if (!isUnresolvable(err)) throw err;
+    return {
+      name: settingDefinitionId,
+      cspPath: "",
+      category: "Unknown",
+      schema: { definitionId: settingDefinitionId, name: settingDefinitionId, kind: "unknown" },
+    };
+  }
 }
 
 /**
@@ -205,12 +253,13 @@ function toSchema(definition: SettingDefinitionResponse): SettingSchema {
  * or not any policy's value configures them. Without this an editor could
  * show what is set but never offer what could be added.
  *
- * A declared id Graph has no definition for is skipped: confirmed live
+ * A declared id Graph has nothing usable for is skipped: confirmed live
  * that definitions do name children that 404 (66 of 701 declared ids in
- * one tenant, e.g. most of DMClient's "Provider ID" group). The setting
- * just can't offer that one sub-setting. Any other failure still fails
- * the scan — silently dropping definitions over a throttling or auth
- * error would look exactly the same and be wrong.
+ * one tenant, e.g. most of DMClient's "Provider ID" group), and that an
+ * id can make Graph answer 400 outright. The setting just can't offer
+ * that one sub-setting. Any other failure still fails the scan —
+ * silently dropping definitions over a throttling or auth error would
+ * look exactly the same and be wrong.
  */
 export async function resolveDeclaredSchemas(token: string, schemas: Record<string, SettingSchema>): Promise<void> {
   let pending = declaredIds(Object.values(schemas)).filter((id) => !(id in schemas));
@@ -220,7 +269,7 @@ export async function resolveDeclaredSchemas(token: string, schemas: Record<stri
         try {
           return (await resolveSettingDefinition(token, id)).schema;
         } catch (err) {
-          if (err instanceof Error && /failed: 404\b/.test(err.message)) return undefined;
+          if (isUnresolvable(err)) return undefined;
           throw err;
         }
       }),
@@ -261,7 +310,7 @@ export async function resolveBaselineDefinitions(
         schemas[id] = definition.schema;
         info[id] = { cspPath: definition.cspPath, category: definition.category };
       } catch (err) {
-        if (!(err instanceof Error && /failed: 404\b/.test(err.message))) throw err;
+        if (!isUnresolvable(err)) throw err;
       }
     }),
   );
