@@ -82,7 +82,7 @@ test("applyBaselines: a rule that's already satisfied doesn't produce a recommen
   assert.deepEqual(result.recs.map((r) => r.ruleId), ["still-failing"]);
 });
 
-test("applyBaselines: no rule at all for the path — entry passes through unchanged", () => {
+test("applyBaselines: no rule at all for the path — entry stays Not checked, with an empty checks list", () => {
   const entries: SettingIndexEntry[] = [
     {
       key: "Unrelated Setting::windows10",
@@ -98,7 +98,7 @@ test("applyBaselines: no rule at all for the path — entry passes through uncha
     },
   ];
   const result = applyBaselines(entries, []);
-  assert.deepEqual(result, entries);
+  assert.deepEqual(result, [{ ...entries[0], checks: [] }]);
 });
 
 test("findUncoveredEntries: a rule whose path matches nothing in the tenant produces one synthetic entry", () => {
@@ -208,4 +208,40 @@ test("applyBaselines: the verdict is recomputed from scratch — re-judging agai
   const [passing] = applyBaselines([{ ...failing, values: ["1"] }], [rule]);
   assert.equal(passing.state, "Meets baseline");
   assert.deepEqual(passing.recs, []);
+});
+
+test("applyBaselines: checks lists every covering rule, pass or fail — and without a verdict for conflicting/unassigned settings", () => {
+  const base: SettingIndexEntry = {
+    key: "x::windows10",
+    name: "X",
+    cspPath: "./x",
+    category: "C",
+    platform: "windows10",
+    values: ["1"],
+    sources: [],
+    conflict: false,
+    state: "Not checked",
+    recs: [],
+  };
+  const passes: BaselineRule = { id: "p", name: "P", platform: "windows", path: "./x", expect: "1", severity: "high", rationale: "why p", source: "Source P", pack: "a/p" };
+  const fails: BaselineRule = { id: "f", name: "F", platform: "windows", path: "./x", expect: { max: 0 }, severity: "low", rationale: "why f", source: "Source F", pack: "b/f" };
+
+  const [judged] = applyBaselines([base], [passes, fails]);
+  assert.equal(judged.state, "Below baseline");
+  assert.deepEqual(
+    judged.checks!.map((c) => [c.ruleId, c.source, c.pack, c.expected, c.passed]),
+    [
+      ["p", "Source P", "a/p", "1", true],
+      ["f", "Source F", "b/f", "0 or less", false],
+    ],
+  );
+
+  const [uncovered] = applyBaselines([{ ...base, cspPath: "./other" }], [passes]);
+  assert.deepEqual(uncovered.checks, []);
+
+  for (const state of ["Conflict", "Not assigned"] as const) {
+    const [unjudged] = applyBaselines([{ ...base, state }], [passes]);
+    assert.equal(unjudged.state, state);
+    assert.deepEqual(unjudged.checks!.map((c) => [c.ruleId, c.passed]), [["p", null]]);
+  }
 });

@@ -1,6 +1,6 @@
 import { describeExpectation, satisfiesExpectation } from "./compare.js";
 import type { BaselineRule } from "./types.js";
-import type { SettingIndexEntry } from "../scan/types.js";
+import type { BaselineCheck, SettingIndexEntry } from "../scan/types.js";
 
 /**
  * Matches rules to settings-index entries by CSP path (+ loose platform
@@ -25,12 +25,18 @@ import type { SettingIndexEntry } from "../scan/types.js";
  */
 export function applyBaselines(entries: SettingIndexEntry[], rules: BaselineRule[]): SettingIndexEntry[] {
   return entries.map((entry) => {
-    if (entry.state === "Conflict" || entry.state === "Not assigned") return entry;
-
     const matching = rules.filter((r) => r.path === entry.cspPath && platformMatches(r.platform, entry.platform));
-    if (matching.length === 0) return { ...entry, state: "Not checked" as const, recs: [] };
+
+    // No verdict for these two, but which baselines have an expectation
+    // for the setting is still worth carrying along.
+    if (entry.state === "Conflict" || entry.state === "Not assigned") {
+      return { ...entry, checks: matching.map((rule) => toCheck(rule, null)) };
+    }
+
+    if (matching.length === 0) return { ...entry, state: "Not checked" as const, recs: [], checks: [] };
 
     const current = entry.values[0] ?? "";
+    const checks = matching.map((rule) => toCheck(rule, satisfiesExpectation(current, rule.expect)));
     const recs = matching
       .filter((rule) => !satisfiesExpectation(current, rule.expect))
       .map((rule) => ({
@@ -41,10 +47,22 @@ export function applyBaselines(entries: SettingIndexEntry[], rules: BaselineRule
         why: rule.rationale,
         source: rule.source,
       }));
-    if (recs.length === 0) return { ...entry, state: "Meets baseline" as const, recs: [] };
+    if (recs.length === 0) return { ...entry, state: "Meets baseline" as const, recs: [], checks };
 
-    return { ...entry, state: "Below baseline" as const, recs };
+    return { ...entry, state: "Below baseline" as const, recs, checks };
   });
+}
+
+function toCheck(rule: BaselineRule, passed: boolean | null): BaselineCheck {
+  return {
+    ruleId: rule.id,
+    source: rule.source,
+    pack: rule.pack,
+    expected: describeExpectation(rule.expect),
+    severity: rule.severity,
+    why: rule.rationale,
+    passed,
+  };
 }
 
 function platformMatches(rulePlatform: string, entryPlatform: string): boolean {
@@ -93,5 +111,6 @@ export function findUncoveredEntries(entries: SettingIndexEntry[], rules: Baseli
       why: rule.rationale,
       source: rule.source,
     })),
+    checks: groupRules.map((rule) => toCheck(rule, false)),
   }));
 }

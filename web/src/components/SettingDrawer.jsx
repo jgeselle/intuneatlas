@@ -1,40 +1,121 @@
 import { useState } from "react";
-import { Warning, WarningCircle, CheckCircle, PencilSimple } from "@phosphor-icons/react";
+import { Warning, WarningCircle, CheckCircle, MinusCircle, Info, PencilSimple } from "@phosphor-icons/react";
 import { DrawerShell } from "./DrawerShell.jsx";
 import { Chip, Diff, RefPath, HistorySection, ValueDisplay, SourceRow } from "./bits.jsx";
 import { STATE_STYLE, SEVERITY_STYLE } from "../lib/styles.js";
 import { platformLabel, refLabel } from "../lib/format.js";
 
+const SECTION_HEADING = "font-sans text-xs font-semibold uppercase tracking-wide text-stone-500";
+
+/** "A", "A and B", or "3 baselines" — for naming who has an opinion in one sentence. */
+function sourceNames(checks) {
+  const names = Array.from(new Set(checks.map((c) => c.source)));
+  if (names.length === 1) return names[0];
+  if (names.length === 2) return names[0] + " and " + names[1];
+  return names.length + " baselines";
+}
+
+/** A value short enough to quote inside a sentence; long or multi-line ones are referred to instead. */
+function quotable(value) {
+  return typeof value === "string" && value.length > 0 && value.length <= 40 && !value.includes("\n");
+}
+
 /**
- * One baseline's opinion on this setting — several of these can coexist,
- * possibly disagreeing (a different source recommending a different
- * value shows up as its own card, right below this one). The recommended
- * value gets the same Diff treatment as a staged change elsewhere in the
- * app (current struck through -> recommended in teal), instead of being
- * buried in the action button's own text, so what's actually being
- * recommended reads clearly at a glance.
+ * The one thing the panel has to answer before anything else: what state
+ * is this setting in, and why. Everything below it is supporting detail.
  */
-function RecommendationCard({ rec, current, isSelected, onUse }) {
+function summarize(entry, checks, current) {
+  const failing = checks.filter((c) => c.passed === false);
+  const setTo = quotable(current) ? "Set to “" + current + "”" : "Its current value is set";
+  const expects = (list) =>
+    list.length === 1 && quotable(list[0].expected)
+      ? list[0].source + " expects “" + list[0].expected + "”."
+      : sourceNames(list) + (new Set(list.map((c) => c.source)).size === 1 ? " expects" : " expect") + " a different value.";
+
+  switch (entry.state) {
+    case "Conflict":
+      return {
+        tone: "alert",
+        Icon: Warning,
+        text:
+          entry.sources.filter((src) => src.deployed).length +
+          " assigned policies set this to different values. Devices apply whichever processes last, so the result is not predictable.",
+      };
+    case "Not assigned":
+      return {
+        tone: "neutral",
+        Icon: MinusCircle,
+        text: "Configured, but not reaching any device: no policy that sets it is assigned to a group.",
+      };
+    case "Below baseline":
+      return { tone: "warn", Icon: WarningCircle, text: setTo + ", but " + expects(failing) };
+    case "Meets baseline":
+      return { tone: "good", Icon: CheckCircle, text: setTo + ", which satisfies " + sourceNames(checks) + "." };
+    case "Missing":
+      return { tone: "missing", Icon: WarningCircle, text: "No policy in this tenant configures this setting. " + expects(failing) };
+    default:
+      return {
+        tone: "neutral",
+        Icon: Info,
+        text: "No active baseline has a rule for this setting, so its value hasn’t been judged.",
+      };
+  }
+}
+
+const SUMMARY_TONE = {
+  alert: { box: "border-red-200 bg-red-50 text-red-800", icon: "text-red-600" },
+  warn: { box: "border-amber-200 bg-amber-50 text-amber-900", icon: "text-amber-600" },
+  good: { box: "border-teal-200 bg-teal-50 text-teal-800", icon: "text-teal-600" },
+  missing: { box: "border-purple-200 bg-purple-50 text-purple-800", icon: "text-purple-600" },
+  neutral: { box: "border-stone-200 bg-stone-50 text-stone-600", icon: "text-stone-400" },
+};
+
+/**
+ * One baseline's rule for this setting: who expects what, whether the
+ * current value satisfies it, and why the rule exists. Shown for every
+ * covering rule — passing ones too — since "which baseline says what" is
+ * exactly what's otherwise invisible on a setting that isn't failing.
+ * Several can coexist, and can disagree with each other.
+ */
+function BaselineCheckCard({ check, current, canUse, isSelected, onUse }) {
+  const failed = check.passed === false;
+  const Icon = check.passed === true ? CheckCircle : failed ? WarningCircle : MinusCircle;
+  const iconTone = check.passed === true ? "text-teal-600" : failed ? "text-amber-500" : "text-stone-400";
+
   return (
-    <div className={"rounded-md border border-stone-200 p-2.5 " + (isSelected ? "bg-teal-50" : "")}>
-      <div className="flex items-center gap-2">
-        <WarningCircle className="h-4 w-4 shrink-0 text-amber-500" />
-        <span className="text-xs font-medium text-stone-500">{rec.source}</span>
-        <Chip className={"ml-auto " + SEVERITY_STYLE[rec.severity].chip}>{SEVERITY_STYLE[rec.severity].label}</Chip>
+    <li className="rounded-md border border-stone-200 p-3">
+      <div className="flex items-start gap-2">
+        <Icon className={"mt-0.5 h-4 w-4 shrink-0 " + iconTone} />
+        <span className="min-w-0 flex-1 text-sm font-medium leading-snug text-stone-800">{check.source}</span>
+        <Chip className={"shrink-0 " + SEVERITY_STYLE[check.severity].chip}>{SEVERITY_STYLE[check.severity].label}</Chip>
       </div>
-      <div className="mt-2">
-        <Diff from={current} to={rec.recommended} />
+
+      <div className="mt-2.5">
+        {failed ? (
+          <Diff from={current} to={check.expected} />
+        ) : (
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <span className="text-xs text-stone-500">Expects</span>
+            <span className="rounded border border-stone-200 bg-stone-50 px-2 py-1 font-medium text-stone-700">{check.expected}</span>
+            {check.passed === true && <span className="text-xs text-teal-700">Satisfied</span>}
+            {check.passed === null && <span className="text-xs text-stone-400">Not judged in this state</span>}
+          </div>
+        )}
       </div>
-      <p className="mt-1.5 text-xs leading-relaxed text-stone-600">{rec.why}</p>
-      <button
-        type="button"
-        onClick={onUse}
-        disabled={isSelected}
-        className="mt-1.5 text-xs font-medium text-teal-700 hover:underline focus:outline-none disabled:cursor-default disabled:text-teal-800 disabled:no-underline"
-      >
-        {isSelected ? "Using this value" : "Use this value"}
-      </button>
-    </div>
+
+      <p className="mt-2 text-xs leading-relaxed text-stone-600">{check.why}</p>
+
+      {failed && canUse && (
+        <button
+          type="button"
+          onClick={onUse}
+          disabled={isSelected}
+          className="mt-2 text-xs font-medium text-teal-700 hover:underline focus:outline-none disabled:cursor-default disabled:text-teal-800 disabled:no-underline"
+        >
+          {isSelected ? "Using this value below" : "Use this value"}
+        </button>
+      )}
+    </li>
   );
 }
 
@@ -42,17 +123,14 @@ function RecommendationCard({ rec, current, isSelected, onUse }) {
  * Stage any new value, not just a baseline's recommended one — the
  * server never required a real rule id behind a staged change (only
  * that one be present at all), so this was always a frontend-only
- * restriction. A setting can have zero, one, or several recommendations
- * — different baselines (Microsoft's, a CIS benchmark, a house rules
- * pack, ...) can each have their own opinion, and even disagree with
- * each other — so this shows all of them and lets you pick, or type
- * something else entirely. Which rule (if any) the staged change
- * traces back to is derived from whether the current field value
- * matches one of them, not tracked separately — free-typing over a
- * picked recommendation correctly falls back to "manual".
+ * restriction. The value itself lives in the drawer (not here) so a
+ * baseline card's "Use this value" can fill it in. Which rule (if any)
+ * the staged change traces back to is derived from whether the current
+ * field value matches a failing rule's expectation, not tracked
+ * separately — free-typing over a picked one correctly falls back to
+ * "manual".
  */
-function EditValueSection({ current, recs, onStage }) {
-  const [value, setValue] = useState(recs[0]?.recommended ?? current);
+function ChangeValueSection({ current, value, setValue, recs, onStage }) {
   const [reason, setReason] = useState("");
   // A single-line input works fine for "Enabled"/"Not allowed." but not
   // for a long single string value (confirmed live: a 2,300-character
@@ -62,64 +140,59 @@ function EditValueSection({ current, recs, onStage }) {
   const matchedRuleId = recs.find((r) => r.recommended === value)?.ruleId ?? "manual";
 
   return (
-    <section className="rounded-md border border-stone-200 p-3">
-      {recs.length > 0 && (
-        <div className="space-y-2">
-          {recs.map((rec) => (
-            <RecommendationCard
-              key={rec.ruleId}
-              rec={rec}
-              current={current}
-              isSelected={value === rec.recommended}
-              onUse={() => setValue(rec.recommended)}
+    <section>
+      <h3 className={SECTION_HEADING}>Change it</h3>
+      <div className="mt-2 rounded-md border border-stone-200 p-3">
+        <label className="block">
+          <span className="text-xs font-medium text-stone-500">New value</span>
+          {isLong ? (
+            <textarea
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              rows={4}
+              className="mt-1 w-full resize-y rounded-md border border-stone-300 bg-white p-2.5 font-mono text-xs focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600"
             />
-          ))}
-        </div>
-      )}
+          ) : (
+            <input
+              type="text"
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              className="mt-1 w-full rounded-md border border-stone-300 bg-white px-2.5 py-1.5 text-sm focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600"
+            />
+          )}
+        </label>
 
-      <label className={"block " + (recs.length > 0 ? "mt-3" : "")}>
-        <span className="text-xs font-medium text-stone-500">{recs.length > 0 ? "Value to stage" : "New value"}</span>
-        {isLong ? (
+        <label className="mt-3 block">
+          <span className="text-xs font-medium text-stone-500">Reason (optional)</span>
           <textarea
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            rows={4}
-            className="mt-1 w-full resize-y rounded-md border border-stone-300 bg-white p-2.5 font-mono text-xs focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600"
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            rows={2}
+            placeholder="Why?"
+            className="mt-1 w-full resize-none rounded-md border border-stone-300 bg-white p-2 text-xs placeholder-stone-400 focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600"
           />
-        ) : (
-          <input
-            type="text"
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            className="mt-1 w-full rounded-md border border-stone-300 bg-white px-2.5 py-1.5 text-sm focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600"
-          />
-        )}
-      </label>
+        </label>
 
-      <label className="mt-3 block">
-        <span className="text-xs font-medium text-stone-500">Reason (optional)</span>
-        <textarea
-          value={reason}
-          onChange={(e) => setReason(e.target.value)}
-          rows={2}
-          placeholder="Why?"
-          className="mt-1 w-full resize-none rounded-md border border-stone-300 bg-white p-2 text-xs placeholder-stone-400 focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600"
-        />
-      </label>
-
-      <button
-        onClick={() => onStage(value, matchedRuleId, current, reason)}
-        disabled={!value.trim() || value === current}
-        className="mt-3 rounded-md bg-teal-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-teal-700 active:scale-[0.97] focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500 disabled:bg-stone-200 disabled:text-stone-400"
-      >
-        Stage this change
-      </button>
+        <button
+          onClick={() => onStage(value, matchedRuleId, current, reason)}
+          disabled={!value.trim() || value === current}
+          className="mt-3 rounded-md bg-teal-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-teal-700 active:scale-[0.97] focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500 disabled:bg-stone-200 disabled:text-stone-400"
+        >
+          Stage this change
+        </button>
+      </div>
     </section>
   );
 }
 
+/**
+ * Reads top to bottom as: what state is this in and why (summary) ->
+ * what is it set to and by which policies -> what do the baselines
+ * expect -> change it -> reference path and history.
+ */
 function SettingDrawer({ entry, notes, onAddNote, onDeleteNote, onClose, change, onStage, onRevert, viewer }) {
   const recs = entry.recs;
+  const checks = entry.checks ?? [];
   const canNote = viewer?.role === "contributor" || viewer?.role === "admin";
   const canStage = viewer?.role === "contributor" || viewer?.role === "admin";
   const canRevertThis = viewer?.role === "admin" || (viewer?.role === "contributor" && change?.stagedBy === viewer?.id);
@@ -133,6 +206,10 @@ function SettingDrawer({ entry, notes, onAddNote, onDeleteNote, onClose, change,
   // sensibly wherever this ends up displayed (e.g. a staged change's
   // Diff), instead of an empty string.
   const current = entry.values[0] ?? "Not configured";
+  const canEdit = !change && isSimpleValue && canStage;
+  const [draft, setDraft] = useState(recs[0]?.recommended ?? current);
+  const summary = summarize(entry, checks, entry.values[0]);
+  const summaryTone = SUMMARY_TONE[summary.tone];
 
   return (
     <DrawerShell
@@ -146,93 +223,94 @@ function SettingDrawer({ entry, notes, onAddNote, onDeleteNote, onClose, change,
         </>
       }
     >
+      <p className={"flex items-start gap-2 rounded-md border p-3 text-sm leading-relaxed " + summaryTone.box}>
+        <summary.Icon className={"mt-0.5 h-4 w-4 shrink-0 " + summaryTone.icon} />
+        <span>{summary.text}</span>
+      </p>
+
       <section>
-        <h3 className="font-sans text-xs font-semibold uppercase tracking-wide text-stone-500">Effective value</h3>
+        <h3 className={SECTION_HEADING}>Current value</h3>
         {entry.state === "Missing" ? (
-          <p className="mt-2 rounded-md border border-dashed border-stone-300 bg-stone-50 p-3 text-xs leading-relaxed text-stone-500">
-            No policy in this tenant configures this setting.
-          </p>
-        ) : entry.conflict ? (
-          <div className="mt-2 rounded-md border border-red-200 bg-red-50 p-3">
-            <div className="flex gap-2">
-              <Warning className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
-              <p className="text-xs leading-relaxed text-red-800">
-                Two policies set this differently on overlapping groups. Devices apply whichever processes last, so the result is not
-                predictable.
-              </p>
-            </div>
-            <ul className="mt-3 space-y-2">
-              {entry.sources.map((s, n) => (
-                <li key={n} className="text-xs">
-                  <SourceRow policyName={s.policyName} value={s.value} tone="alert" />
-                </li>
-              ))}
-            </ul>
-          </div>
+          <p className="mt-2 rounded-md border border-dashed border-stone-300 bg-stone-50 p-3 text-sm text-stone-500">Not configured</p>
         ) : (
-          <div className="mt-2 rounded-md border border-stone-200 p-3">
-            {entry.values.length > 1 ? (
-              <ul className="space-y-2">
-                {entry.values.map((v, n) => (
-                  <li key={n} className="text-sm font-medium">
-                    <ValueDisplay value={v} />
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <div className="text-sm font-medium">
+          <>
+            {!entry.conflict && (
+              <div className="mt-2 rounded-md border border-stone-200 p-3 text-sm font-medium">
                 <ValueDisplay value={entry.values[0] ?? ""} />
               </div>
             )}
-            {entry.state === "Not assigned" && (
-              <p className="mt-1 text-xs text-stone-500">
-                Configured but not reaching any device, because the policy holding it has no group assigned.
-              </p>
-            )}
-          </div>
+            <div className="mt-3 text-xs font-medium text-stone-500">
+              Set by {entry.sources.length === 1 ? "1 policy" : entry.sources.length + " policies"}
+            </div>
+            <ul className="mt-1.5 space-y-1.5">
+              {entry.sources.map((s, n) => (
+                <li
+                  key={n}
+                  className={"rounded-md border p-2.5 " + (entry.conflict && s.deployed ? "border-red-200 bg-red-50" : "border-stone-200")}
+                >
+                  {/* With a single source its value is the one shown above — repeating it adds nothing. */}
+                  {entry.sources.length === 1 ? (
+                    <div className="truncate text-xs">{s.policyName}</div>
+                  ) : (
+                    <SourceRow policyName={s.policyName} value={s.value} tone={entry.conflict && s.deployed ? "alert" : "default"} />
+                  )}
+                  <div className={"mt-1 text-xs " + (s.deployed ? "text-stone-500" : "text-stone-400")}>
+                    {s.deployed ? "Assigned" : "Not assigned to any group"}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </>
         )}
       </section>
 
-      {entry.cspPath && <RefPath value={entry.cspPath} label={refLabel(entry.platform)} />}
+      <section>
+        <h3 className={SECTION_HEADING}>
+          Baselines {checks.length ? <span className="tabular-nums text-stone-400">· {checks.length}</span> : null}
+        </h3>
+        {checks.length === 0 ? (
+          <p className="mt-2 rounded-md border border-dashed border-stone-300 bg-stone-50 p-3 text-xs leading-relaxed text-stone-500">
+            No active baseline has a rule for this setting.
+          </p>
+        ) : (
+          <ul className="mt-2 space-y-2">
+            {checks.map((check) => (
+              <BaselineCheckCard
+                key={check.ruleId}
+                check={check}
+                current={current}
+                canUse={canEdit}
+                isSelected={draft === check.expected}
+                onUse={() => setDraft(check.expected)}
+              />
+            ))}
+          </ul>
+        )}
+      </section>
 
-      {!change && isSimpleValue && canStage && <EditValueSection current={current} recs={recs} onStage={onStage} />}
+      {canEdit && <ChangeValueSection current={current} value={draft} setValue={setDraft} recs={recs} onStage={onStage} />}
+
+      {change && (
+        <p className="flex items-start gap-2 rounded-md border border-stone-200 bg-stone-50 p-3 text-xs leading-relaxed text-stone-600">
+          <PencilSimple className="mt-0.5 h-4 w-4 shrink-0 text-stone-400" />A change to this setting is already staged — see History below.
+        </p>
+      )}
 
       {!change && isSimpleValue && !canStage && (
         <p className="flex items-start gap-2 rounded-md border border-stone-200 bg-stone-50 p-3 text-xs leading-relaxed text-stone-600">
           <PencilSimple className="mt-0.5 h-4 w-4 shrink-0 text-stone-400" />
-          {recs.length > 0 ? "Differs from the baseline. Ask a Contributor or Admin to change it." : "Ask a Contributor or Admin to change this."}
+          Ask a Contributor or Admin to change this.
         </p>
       )}
 
       {!change && !isSimpleValue && (
         <p className="flex items-start gap-2 rounded-md border border-stone-200 bg-stone-50 p-3 text-xs leading-relaxed text-stone-600">
-          <CheckCircle className="mt-0.5 h-4 w-4 shrink-0 text-stone-400" />
-          {recs.length > 0
-            ? "Differs from the baseline, but this is a compound setting (several values at once) — editing those isn't supported yet."
-            : "Compound setting — editing isn't supported yet."}
+          <PencilSimple className="mt-0.5 h-4 w-4 shrink-0 text-stone-400" />
+          Compound setting (several values at once) — editing those isn’t supported yet.
         </p>
       )}
 
-      {entry.sources.length > 0 && (
-        <section>
-          <h3 className="font-sans text-xs font-semibold uppercase tracking-wide text-stone-500">Set by</h3>
-          <ul className="mt-2 space-y-2">
-            {entry.sources.map((s, n) => (
-              <li key={n} className="rounded-md border border-stone-200 p-3">
-                <SourceRow policyName={s.policyName} value={s.value} />
-                <div className="mt-2 text-xs text-stone-500">
-                  {s.deployed ? "Deployed" : <span className="text-stone-400">Not assigned to any group</span>}
-                </div>
-              </li>
-            ))}
-          </ul>
-          {entry.sources.length > 1 && !entry.conflict && (
-            <p className="mt-2 text-xs text-stone-500">
-              Defined in {entry.sources.length} policies with the same value. Harmless, but worth consolidating.
-            </p>
-          )}
-        </section>
-      )}
+      {entry.cspPath && <RefPath value={entry.cspPath} label={refLabel(entry.platform)} />}
 
       <HistorySection
         notes={notes}

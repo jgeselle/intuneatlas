@@ -66,6 +66,28 @@ export interface SettingRecommendation {
   source: string;
 }
 
+/**
+ * One active baseline rule that covers a setting, whatever the outcome —
+ * unlike SettingRecommendation above, which only exists for failures.
+ * Lets a reader see which baseline expects what even when the setting
+ * passes, or when it has no verdict at all.
+ */
+export interface BaselineCheck {
+  ruleId: string;
+  source: string;
+  pack: string;
+  /** The rule's expectation as a display string (same text as a recommendation's `recommended`). */
+  expected: string;
+  severity: "critical" | "high" | "medium" | "low";
+  why: string;
+  /**
+   * null when the setting wasn't judged against the rule: it's in
+   * conflict or not assigned, so there's no single effective value to
+   * compare — the expectation is still worth showing.
+   */
+  passed: boolean | null;
+}
+
 export interface SettingIndexEntry {
   key: string;
   name: string;
@@ -84,4 +106,10 @@ export interface SettingIndexEntry {
    * to [] up front, applyBaselines only ever pushes into it.
    */
   recs: SettingRecommendation[];
+  /**
+   * Every active baseline rule covering this setting, pass or fail.
+   * Absent until applyBaselines has run (a raw scan has no baseline
+   * opinion yet); empty once it has and no rule covers the setting.
+   */
+  checks?: BaselineCheck[];
 }
