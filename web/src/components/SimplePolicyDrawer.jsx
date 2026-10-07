@@ -12,7 +12,7 @@ function SimplePolicyDrawer({ item, kindLabel, notes, onAddNote, onDeleteNote, o
       chips={
         <>
           <Chip className={item.deployed ? "bg-teal-50 text-teal-700 ring-teal-200" : "bg-stone-100 text-stone-500 ring-stone-200"}>
-            {item.deployed ? "Deployed" : "Not assigned"}
+            {item.deployed ? "Assigned" : "Not assigned"}
           </Chip>
           <Chip className="bg-stone-100 text-stone-600 ring-stone-200">{platformLabel(item.platform)}</Chip>
           {item.priority !== undefined && (
@@ -22,7 +22,7 @@ function SimplePolicyDrawer({ item, kindLabel, notes, onAddNote, onDeleteNote, o
       }
     >
       <p className="rounded-md border border-stone-200 bg-stone-50 p-3 text-xs leading-relaxed text-stone-600">
-        Per-setting detail for {kindLabel.toLowerCase()} policies isn't scanned yet — this shows identity and deployment status only.
+        Per-setting detail for {kindLabel.toLowerCase()} policies isn't scanned yet — this shows identity and assignment status only.
       </p>
       <HistorySection notes={notes} onAdd={onAddNote} onDelete={onDeleteNote} readOnly={!canNote} viewer={viewer} />
     </DrawerShell>

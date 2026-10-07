@@ -35,11 +35,11 @@ function Overview({ settingIndex, compliancePolicies, enrollmentConfigurations, 
           tone={conflicts ? "amber" : "neutral"}
           icon={Sliders}
         />
-        <Stat label="Compliance policies" value={compliancePolicies.length} sub={complianceDeployed + " deployed"} icon={ShieldCheck} />
+        <Stat label="Compliance policies" value={compliancePolicies.length} sub={complianceDeployed + " assigned"} icon={ShieldCheck} />
         <Stat
           label="Enrollment configs"
           value={enrollmentConfigurations.length}
-          sub={enrollmentDeployed + " deployed"}
+          sub={enrollmentDeployed + " assigned"}
           icon={DeviceMobile}
         />
         <Stat label="Conflicts" value={conflicts} tone={conflicts ? "alert" : "neutral"} icon={Warning} />

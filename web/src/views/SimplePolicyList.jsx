@@ -12,7 +12,7 @@ function SimplePolicyList({ kindLabel, items, query, setQuery, onOpen }) {
       <header>
         <h1 className="text-xl font-semibold">{kindLabel}</h1>
         <p className="mt-1 text-sm text-stone-500">
-          {items.length} {kindLabel.toLowerCase()} found · {deployedCount} deployed.
+          {items.length} {kindLabel.toLowerCase()} found · {deployedCount} assigned.
         </p>
       </header>
 
@@ -54,7 +54,7 @@ function SimplePolicyList({ kindLabel, items, query, setQuery, onOpen }) {
                 )}
                 <td className="px-4 py-3">
                   <Chip className={i.deployed ? "bg-teal-50 text-teal-700 ring-teal-200" : "bg-stone-100 text-stone-500 ring-stone-200"}>
-                    {i.deployed ? "Deployed" : "Not assigned"}
+                    {i.deployed ? "Assigned" : "Not assigned"}
                   </Chip>
                 </td>
               </tr>
