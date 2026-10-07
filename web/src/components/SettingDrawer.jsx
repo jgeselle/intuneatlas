@@ -4,6 +4,7 @@ import { DrawerShell } from "./DrawerShell.jsx";
 import { Chip, Diff, RefPath, HistorySection, ValueDisplay, SourceRow } from "./bits.jsx";
 import { STATE_STYLE, SEVERITY_STYLE } from "../lib/styles.js";
 import { platformLabel, refLabel } from "../lib/format.js";
+import { rootSchema, editorKind, rangeLabel, validationError, usableValue } from "../lib/schema.js";
 
 const SECTION_HEADING = "font-sans text-xs font-semibold uppercase tracking-wide text-stone-500";
 
@@ -78,6 +79,7 @@ const SUMMARY_TONE = {
  * Several can coexist, and can disagree with each other.
  */
 function BaselineCheckCard({ check, current, canUse, isSelected, onUse }) {
+  // canUse is false when the expectation isn't something that can be staged as a value.
   const failed = check.passed === false;
   const Icon = check.passed === true ? CheckCircle : failed ? WarningCircle : MinusCircle;
   const iconTone = check.passed === true ? "text-teal-600" : failed ? "text-amber-500" : "text-stone-400";
@@ -130,14 +132,19 @@ function BaselineCheckCard({ check, current, canUse, isSelected, onUse }) {
  * separately — free-typing over a picked one correctly falls back to
  * "manual".
  */
-function ChangeValueSection({ current, value, setValue, recs, onStage }) {
+function ChangeValueSection({ current, value, setValue, recs, schema, onStage }) {
   const [reason, setReason] = useState("");
+  const kind = editorKind(schema);
   // A single-line input works fine for "Enabled"/"Not allowed." but not
   // for a long single string value (confirmed live: a 2,300-character
   // base64 blob) — genuinely simple (one value, not a group/collection),
   // just too long for one line.
   const isLong = current.length > 100 || value.length > 100;
-  const matchedRuleId = recs.find((r) => r.recommended === value)?.ruleId ?? "manual";
+  const matchedRuleId = recs.find((r) => usableValue(schema, r.recommended) === value)?.ruleId ?? "manual";
+  const error = value.trim() && value !== current ? validationError(schema, value) : null;
+  const range = kind === "integer" ? rangeLabel(schema) : null;
+  const fieldClass =
+    "mt-1 w-full rounded-md border border-stone-300 bg-white px-2.5 py-1.5 text-sm focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600";
 
   return (
     <section>
@@ -145,7 +152,28 @@ function ChangeValueSection({ current, value, setValue, recs, onStage }) {
       <div className="mt-2 rounded-md border border-stone-200 p-3">
         <label className="block">
           <span className="text-xs font-medium text-stone-500">New value</span>
-          {isLong ? (
+          {kind === "choice" ? (
+            <select value={value} onChange={(e) => setValue(e.target.value)} className={fieldClass}>
+              {/* A current value Intune's definition doesn't list (an option id that never resolved) still has to be showable. */}
+              {!schema.options.some((o) => o.label === value) && <option value={value}>{value}</option>}
+              {schema.options.map((o) => (
+                <option key={o.id} value={o.label}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          ) : kind === "integer" ? (
+            <input
+              type="number"
+              inputMode="numeric"
+              step={1}
+              min={schema.min}
+              max={schema.max}
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              className={fieldClass + " tabular-nums"}
+            />
+          ) : isLong ? (
             <textarea
               value={value}
               onChange={(e) => setValue(e.target.value)}
@@ -153,14 +181,14 @@ function ChangeValueSection({ current, value, setValue, recs, onStage }) {
               className="mt-1 w-full resize-y rounded-md border border-stone-300 bg-white p-2.5 font-mono text-xs focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600"
             />
           ) : (
-            <input
-              type="text"
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-              className="mt-1 w-full rounded-md border border-stone-300 bg-white px-2.5 py-1.5 text-sm focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600"
-            />
+            <input type="text" value={value} onChange={(e) => setValue(e.target.value)} className={fieldClass} />
           )}
         </label>
+        {error ? (
+          <p className="mt-1 text-xs text-red-700">{error}</p>
+        ) : range ? (
+          <p className="mt-1 text-xs text-stone-500">Allowed: {range}</p>
+        ) : null}
 
         <label className="mt-3 block">
           <span className="text-xs font-medium text-stone-500">Reason (optional)</span>
@@ -175,7 +203,7 @@ function ChangeValueSection({ current, value, setValue, recs, onStage }) {
 
         <button
           onClick={() => onStage(value, matchedRuleId, current, reason)}
-          disabled={!value.trim() || value === current}
+          disabled={!value.trim() || value === current || Boolean(error)}
           className="mt-3 rounded-md bg-teal-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-teal-700 active:scale-[0.97] focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500 disabled:bg-stone-200 disabled:text-stone-400"
         >
           Stage this change
@@ -183,6 +211,42 @@ function ChangeValueSection({ current, value, setValue, recs, onStage }) {
       </div>
     </section>
   );
+}
+
+/**
+ * What Intune's definition allows this setting to be, shown right under
+ * its current value: every option of a choice (the current one marked),
+ * or a number's range.
+ */
+function AllowedValues({ schema, current }) {
+  const kind = editorKind(schema);
+  if (kind === "choice") {
+    return (
+      <div className="mt-3">
+        <div className="text-xs font-medium text-stone-500">Options</div>
+        <ul className="mt-1.5 flex flex-wrap gap-1.5">
+          {schema.options.map((o) => {
+            const isCurrent = o.label === current;
+            return (
+              <li
+                key={o.id}
+                title={o.description || undefined}
+                className={
+                  "rounded border px-2 py-0.5 text-xs " +
+                  (isCurrent ? "border-stone-400 bg-stone-100 font-medium text-stone-800" : "border-stone-200 text-stone-500")
+                }
+              >
+                {o.label}
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    );
+  }
+  const range = kind === "integer" ? rangeLabel(schema) : null;
+  if (!range) return null;
+  return <div className="mt-3 text-xs text-stone-500">Allowed: whole number, {range}</div>;
 }
 
 /**
@@ -207,7 +271,10 @@ function SettingDrawer({ entry, notes, onAddNote, onDeleteNote, onClose, change,
   // Diff), instead of an empty string.
   const current = entry.values[0] ?? "Not configured";
   const canEdit = !change && isSimpleValue && canStage;
-  const [draft, setDraft] = useState(recs[0]?.recommended ?? current);
+  const schema = rootSchema(entry);
+  // Starts on the first failing baseline's expectation when that's a value
+  // the setting can actually take, otherwise on what it's set to now.
+  const [draft, setDraft] = useState((recs[0] && usableValue(schema, recs[0].recommended)) ?? current);
   const summary = summarize(entry, checks, entry.values[0]);
   const summaryTone = SUMMARY_TONE[summary.tone];
 
@@ -239,6 +306,7 @@ function SettingDrawer({ entry, notes, onAddNote, onDeleteNote, onClose, change,
                 <ValueDisplay value={entry.values[0] ?? ""} />
               </div>
             )}
+            {schema && isSimpleValue && <AllowedValues schema={schema} current={entry.conflict ? null : entry.values[0]} />}
             <div className="mt-3 text-xs font-medium text-stone-500">
               Set by {entry.sources.length === 1 ? "1 policy" : entry.sources.length + " policies"}
             </div>
@@ -279,16 +347,16 @@ function SettingDrawer({ entry, notes, onAddNote, onDeleteNote, onClose, change,
                 key={check.ruleId}
                 check={check}
                 current={current}
-                canUse={canEdit}
-                isSelected={draft === check.expected}
-                onUse={() => setDraft(check.expected)}
+                canUse={canEdit && usableValue(schema, check.expected) !== null}
+                isSelected={draft === usableValue(schema, check.expected)}
+                onUse={() => setDraft(usableValue(schema, check.expected))}
               />
             ))}
           </ul>
         )}
       </section>
 
-      {canEdit && <ChangeValueSection current={current} value={draft} setValue={setDraft} recs={recs} onStage={onStage} />}
+      {canEdit && <ChangeValueSection current={current} value={draft} setValue={setDraft} recs={recs} schema={schema} onStage={onStage} />}
 
       {change && (
         <p className="flex items-start gap-2 rounded-md border border-stone-200 bg-stone-50 p-3 text-xs leading-relaxed text-stone-600">
