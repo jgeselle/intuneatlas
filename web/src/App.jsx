@@ -74,8 +74,6 @@ export default function App({ initialReport, session }) {
   const [view, setView] = useState("overview");
   const [query, setQuery] = useState("");
   const [platform, setPlatform] = useState("All");
-  // Which two baselines the Settings page is comparing, if any — kept here so it survives switching pages.
-  const [compareSelection, setCompareSelection] = useState({ from: null, to: null });
   // Everything can be narrowed to what one group gets, chosen once in the
   // sidebar: `scopeGroup` is that group's id, `scoped` the settings and
   // policies as the group gets them (worked out by the server — conflicts
@@ -627,7 +625,6 @@ export default function App({ initialReport, session }) {
           {view === "configuration" && (
             <SettingsView
               entries={settingIndex}
-              scopeGroup={inScope ? scopeGroup : null}
               scopeLabel={scopeLabel}
               notes={notes}
               query={query}
@@ -635,10 +632,6 @@ export default function App({ initialReport, session }) {
               platform={platform}
               setPlatform={setPlatform}
               onOpen={(key) => setOpen({ type: "setting", key })}
-              baselinePacks={report.baselinePacks ?? []}
-              compareSelection={compareSelection}
-              setCompareSelection={setCompareSelection}
-              reportStamp={report.scannedAt}
             />
           )}
 

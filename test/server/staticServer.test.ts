@@ -257,64 +257,6 @@ test("/api/baselines: an upload may exceed the 1 MB limit other requests live un
 });
 
 // ------------------------------------------------------------------------
-// /api/baselines/compare — read-only, but it carries the tenant's own
-// values, so it sits behind the same right as the report.
-// ------------------------------------------------------------------------
-
-async function withCompareServer(port: number, role: Role, onCompareBaselines: StartServerOptions["onCompareBaselines"], run: (get: (query: string) => Promise<{ status: number; body: Record<string, unknown> }>) => Promise<void>) {
-  const identity: ViewerIdentity = { id: "oid", name: "Someone", email: "s@x.com", role };
-  const { server } = await startServer({
-    report: { settings: [] },
-    host: "127.0.0.1",
-    startPort: port,
-    session: mockSession({ getSession: async () => identity }),
-    ...(onCompareBaselines ? { onCompareBaselines } : {}),
-  });
-  try {
-    await run(async (query) => {
-      const res = await fetch(`http://127.0.0.1:${port}/api/baselines/compare?${query}`);
-      return { status: res.status, body: (await res.json()) as Record<string, unknown> };
-    });
-  } finally {
-    server.close();
-  }
-}
-
-test("/api/baselines/compare: any role that can view the report can compare; no role can't", async () => {
-  const seen: string[][] = [];
-  const compare: StartServerOptions["onCompareBaselines"] = async (_report, from, to) => {
-    seen.push([from, to]);
-    return [{ definitionId: "a", change: "added" }];
-  };
-  await withCompareServer(18790, "viewer", compare, async (get) => {
-    const res = await get("from=oib%2Fv3.8&to=oib%2Fv4.0");
-    assert.equal(res.status, 200);
-    assert.deepEqual(res.body, { from: "oib/v3.8", to: "oib/v4.0", changes: [{ definitionId: "a", change: "added" }] });
-  });
-  await withCompareServer(18791, null, compare, async (get) => {
-    assert.equal((await get("from=a%2F1&to=b%2F2")).status, 403);
-  });
-  assert.deepEqual(seen, [["oib/v3.8", "oib/v4.0"]]);
-});
-
-test("/api/baselines/compare: needs two different baselines; an unknown one is a 400 with its message", async () => {
-  const { BaselineInputError } = await import("../../src/baselines/manage.js");
-  const compare: StartServerOptions["onCompareBaselines"] = async () => {
-    throw new BaselineInputError('There is no baseline "nope/1".');
-  };
-  await withCompareServer(18792, "admin", compare, async (get) => {
-    assert.equal((await get("from=a%2F1&to=a%2F1")).status, 400);
-    assert.equal((await get("from=a%2F1")).status, 400);
-    const unknown = await get("from=nope%2F1&to=a%2F1");
-    assert.equal(unknown.status, 400);
-    assert.match(String(unknown.body.error), /no baseline "nope\/1"/);
-  });
-  await withCompareServer(18793, "admin", undefined, async (get) => {
-    assert.equal((await get("from=a%2F1&to=b%2F2")).status, 501);
-  });
-});
-
-// ------------------------------------------------------------------------
 // /api/scope — the report as one group gets it.
 // ------------------------------------------------------------------------
 
@@ -363,29 +305,6 @@ test("/api/scope: narrows the report to a group, judges it for the viewer, and n
   server = await start(18796, "admin", false);
   try {
     assert.equal((await get(18796, "group=grp-pilot")).status, 501);
-  } finally {
-    server.close();
-  }
-});
-
-test("/api/baselines/compare: with a group, the comparison is judged against the report as that group gets it", async () => {
-  const identity: ViewerIdentity = { id: "oid", name: "Someone", email: "s@x.com", role: "viewer" };
-  const seen: unknown[] = [];
-  const { server } = await startServer({
-    report: { whole: true },
-    host: "127.0.0.1",
-    startPort: 18797,
-    session: mockSession({ getSession: async () => identity }),
-    onScopeReport: (_report, groupId) => ({ scopedTo: groupId }),
-    onCompareBaselines: async (report) => {
-      seen.push(report);
-      return [];
-    },
-  });
-  try {
-    await fetch("http://127.0.0.1:18797/api/baselines/compare?from=a%2F1&to=b%2F2");
-    await fetch("http://127.0.0.1:18797/api/baselines/compare?from=a%2F1&to=b%2F2&group=grp-pilot");
-    assert.deepEqual(seen, [{ whole: true }, { scopedTo: "grp-pilot" }]);
   } finally {
     server.close();
   }

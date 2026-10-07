@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
-import { Sliders, WarningCircle, Warning, Prohibit, Question, MagnifyingGlass, ChatCircle, ArrowsLeftRight } from "@phosphor-icons/react";
+import { Sliders, WarningCircle, Warning, Prohibit, Question, MagnifyingGlass, ChatCircle } from "@phosphor-icons/react";
 import { Chip, ScopePrefix, Stat } from "../components/bits.jsx";
-import { CompareBar, ChangeFilter, CompareList } from "./BaselineCompare.jsx";
 import { STATE_STYLE } from "../lib/styles.js";
 import { platformLabel } from "../lib/format.js";
 
@@ -17,65 +16,9 @@ function SettingsView({
   platform,
   setPlatform,
   onOpen,
-  baselinePacks = [],
-  scopeGroup = null,
   scopeLabel,
-  compareSelection = { from: null, to: null },
-  setCompareSelection,
-  reportStamp,
 }) {
   const [state, setState] = useState("All");
-  // Comparing two baselines replaces the list with only the settings they
-  // treat differently. The result comes from the server (it has the
-  // baselines' contents; the browser only has verdicts) and is fetched
-  // again whenever the pair, the scan or the set of baselines changes.
-  const [comparison, setComparison] = useState(null);
-  const [changeKind, setChangeKind] = useState("All");
-  const comparing = Boolean(compareSelection.from && compareSelection.to);
-  // The two choosers only take up a row while they're wanted: opened from the Compare button, or already in use.
-  const canCompare = Boolean(setCompareSelection) && baselinePacks.length > 1;
-  const [compareOpen, setCompareOpen] = useState(Boolean(compareSelection.from || compareSelection.to));
-  function closeCompare() {
-    setCompareOpen(false);
-    setCompareSelection({ from: null, to: null });
-  }
-  const packsStamp = baselinePacks.map((p) => p.path + ":" + p.ruleCount).join("|");
-
-  useEffect(() => {
-    if (!comparing) {
-      setComparison(null);
-      return;
-    }
-    let stale = false;
-    setComparison({ loading: true });
-    fetch(
-      "/api/baselines/compare?from=" +
-        encodeURIComponent(compareSelection.from) +
-        "&to=" +
-        encodeURIComponent(compareSelection.to) +
-        // With a group chosen, where the tenant stands is judged as that group gets it.
-        (scopeGroup ? "&group=" + encodeURIComponent(scopeGroup) : ""),
-    )
-      .then(async (res) => {
-        const body = await res.json();
-        if (stale) return;
-        setComparison(res.ok ? { changes: body.changes } : { error: body.error || "Couldn't compare those baselines" });
-      })
-      .catch((err) => !stale && setComparison({ error: err.message }));
-    return () => {
-      stale = true;
-    };
-  }, [comparing, compareSelection.from, compareSelection.to, reportStamp, packsStamp, scopeGroup]);
-
-  const needle = query.toLowerCase();
-  const changes = (comparison?.changes ?? []).filter(
-    (c) =>
-      (platform === "All" || c.platform.toLowerCase() === platform.toLowerCase()) &&
-      (c.name.toLowerCase().includes(needle) || c.category.toLowerCase().includes(needle) || c.cspPath.toLowerCase().includes(needle)),
-  );
-  const shownChanges = changeKind === "All" ? changes : changes.filter((c) => c.change === changeKind);
-  // A compared setting opens its entry: the tenant's own, or the "Missing" one an active baseline gave it. Without either there is nothing to open.
-  const openKeyFor = (c) => c.entryKey ?? entries.find((e) => e.state === "Missing" && e.definitionId === c.definitionId)?.key;
   const platforms = ["All", ...Array.from(new Set(entries.map((e) => e.platform)))];
   const states = ["All", "Below baseline", "Conflict", "Missing", "Not assigned", "Meets baseline", "Not checked"];
 
@@ -155,26 +98,9 @@ function SettingsView({
               className="w-full rounded-md border border-stone-300 bg-white py-2 pl-9 pr-3 text-sm placeholder-stone-400 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
             />
           </div>
-          {canCompare && (
-            <button
-              onClick={() => (compareOpen ? closeCompare() : setCompareOpen(true))}
-              aria-expanded={compareOpen}
-              className={
-                "flex shrink-0 items-center gap-1.5 rounded-md border px-3 py-2 text-sm focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500 " +
-                (compareOpen ? "border-teal-500 bg-teal-50 text-teal-700" : "border-stone-300 bg-white text-stone-600 hover:bg-stone-50")
-              }
-            >
-              <ArrowsLeftRight className="h-4 w-4" />
-              Compare
-            </button>
-          )}
         </div>
-        {canCompare && compareOpen && (
-          <CompareBar packs={baselinePacks} selection={compareSelection} onChange={setCompareSelection} onClose={closeCompare} />
-        )}
         <div className="flex flex-wrap gap-1">
-          {comparing && <ChangeFilter changes={changes} value={changeKind} onChange={setChangeKind} />}
-          {!comparing && states.map((s) => (
+          {states.map((s) => (
             <button
               key={s}
               onClick={() => setState(s)}
@@ -204,19 +130,7 @@ function SettingsView({
         </div>
       </div>
 
-      {comparing ? (
-        comparison?.error ? (
-          <div className="rounded-lg border border-dashed border-stone-300 bg-white px-4 py-16 text-center">
-            <p className="text-sm font-medium">{comparison.error}</p>
-          </div>
-        ) : !comparison?.changes ? null : shownChanges.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-stone-300 bg-white px-4 py-16 text-center">
-            <p className="text-sm font-medium">{changes.length === 0 ? "These two baselines set the same values" : "No differences match that filter"}</p>
-          </div>
-        ) : (
-          <CompareList changes={shownChanges} openKeyFor={openKeyFor} onOpen={onOpen} />
-        )
-      ) : shown.length === 0 ? (
+      {shown.length === 0 ? (
         <div className="rounded-lg border border-dashed border-stone-300 bg-white px-4 py-16 text-center">
           <p className="text-sm font-medium">No settings match that filter</p>
           <p className="mt-1 text-xs text-stone-500">Clear the search or pick a different state.</p>

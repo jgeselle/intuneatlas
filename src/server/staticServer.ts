@@ -111,8 +111,6 @@ export interface StartServerOptions {
    * report. Throws BaselineInputError for a group the scan doesn't know.
    */
   onScopeReport?: (report: unknown, groupId: string) => unknown | Promise<unknown>;
-  /** What differs between two baselines, and where the tenant stands on each difference — read-only, any viewer. Throws BaselineInputError for an unknown baseline. */
-  onCompareBaselines?: (report: unknown, from: string, to: string) => Promise<unknown>;
   baselines?: {
     add: (input: AddPackInput) => Promise<string>;
     rename: (pack: string, name: string) => Promise<void>;
@@ -229,11 +227,6 @@ export async function startServer(options: StartServerOptions): Promise<{ url: s
 
       if (req.method === "GET" && req.url?.startsWith("/api/scope?")) {
         await handleScope(req, res, options.onScopeReport, options.onEvaluateForViewer, viewer, () => currentReport);
-        return;
-      }
-
-      if (req.method === "GET" && req.url?.startsWith("/api/baselines/compare?")) {
-        await handleCompareBaselines(req, res, options.onCompareBaselines, options.onScopeReport, viewer, () => currentReport);
         return;
       }
 
@@ -520,51 +513,6 @@ async function handleScope(
         belowBaselineCount: judged?.belowBaselineCount ?? 0,
       }),
     );
-  } catch (err) {
-    if (err instanceof BaselineInputError) {
-      res.writeHead(400, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: err.message }));
-      return;
-    }
-    sendApiError(res, err);
-  }
-}
-
-async function handleCompareBaselines(
-  req: IncomingMessage,
-  res: ServerResponse,
-  onCompareBaselines: StartServerOptions["onCompareBaselines"],
-  onScopeReport: StartServerOptions["onScopeReport"],
-  viewer: ViewerIdentity,
-  getReport: () => unknown,
-): Promise<void> {
-  if (!onCompareBaselines) {
-    res.writeHead(501, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ error: "Comparing baselines isn't available from this session." }));
-    return;
-  }
-  // Reads tenant facts (the tenant's own values appear in the result), so it needs the same right as the report itself.
-  if (!can(viewer.role, "view")) {
-    res.writeHead(403, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ error: "Your role doesn't include viewing the report." }));
-    return;
-  }
-  const params = new URL(req.url ?? "", "http://localhost").searchParams;
-  const from = params.get("from") ?? "";
-  const to = params.get("to") ?? "";
-  // Optional: judge where the tenant stands as one group gets it, rather than tenant-wide.
-  const group = params.get("group") ?? "";
-  if (!from || !to || from === to) {
-    res.writeHead(400, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ error: "Choose two different baselines to compare." }));
-    return;
-  }
-  try {
-    const whole = getReport();
-    const raw = whole && group && onScopeReport ? await onScopeReport(whole, group) : whole;
-    const changes = raw ? await onCompareBaselines(raw, from, to) : [];
-    res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ from, to, changes }));
   } catch (err) {
     if (err instanceof BaselineInputError) {
       res.writeHead(400, { "Content-Type": "application/json" });
