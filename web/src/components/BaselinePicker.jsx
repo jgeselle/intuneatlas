@@ -42,7 +42,8 @@ function BaselinePicker({ packs, activePacks, onChange }) {
 
   function toggle(pack) {
     const next = packs.filter((p) => (p.path === pack.path ? !isActive(pack) : isActive(p))).map((p) => p.path);
-    onChange(next);
+    // Ticking the last one is the same as "All" — sent as that, so a baseline added later is active too.
+    onChange(next.length === packs.length ? null : next);
   }
 
   function close() {
@@ -121,7 +122,7 @@ function BaselinePicker({ packs, activePacks, onChange }) {
               <div className="flex gap-3">
                 <button
                   onClick={() => onChange(null)}
-                  disabled={allActive}
+                  disabled={activeCount === packs.length}
                   className="text-xs font-medium text-teal-700 hover:underline focus:outline-none disabled:cursor-default disabled:text-stone-300 disabled:no-underline"
                 >
                   All

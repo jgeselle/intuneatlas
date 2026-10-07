@@ -6,6 +6,7 @@ import {
   DeviceMobile,
   Lightbulb,
   ListChecks,
+  Stack,
   CaretDoubleLeft,
 } from "@phosphor-icons/react";
 import { ConnectScreen } from "./ConnectScreen.jsx";
@@ -19,6 +20,7 @@ import { SettingsView } from "./views/SettingsView.jsx";
 import { SimplePolicyList } from "./views/SimplePolicyList.jsx";
 import { Recommendations } from "./views/Recommendations.jsx";
 import { ChangeLog } from "./views/ChangeLog.jsx";
+import { Baselines } from "./views/Baselines.jsx";
 
 const RAIL_COLLAPSE_KEY = "intuneatlas.rail-collapsed";
 
@@ -39,6 +41,7 @@ function withBaselineVerdicts(report, patch) {
     belowBaselineCount: patch.belowBaselineCount,
     baselinePacks: patch.baselinePacks,
     activeBaselinePacks: patch.activeBaselinePacks,
+    ...(patch.baselineFolder ? { baselineFolder: patch.baselineFolder } : {}),
   };
 }
 
@@ -239,6 +242,28 @@ export default function App({ initialReport, session }) {
     }
   }
 
+  // Adding, renaming and removing baselines changes files on the machine
+  // running the server (Admin only, enforced there). Each answers with
+  // fresh verdicts, since what the report is judged against just changed.
+  // Returns whether it worked, so a form knows whether to clear itself.
+  async function manageBaselines(method, payload, done) {
+    try {
+      const res = await fetch("/api/baselines", {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || "Couldn't update the baselines");
+      setReport((current) => withBaselineVerdicts(current, body));
+      flash(done);
+      return true;
+    } catch (err) {
+      flash(err.message);
+      return false;
+    }
+  }
+
   async function addNote(key, text) {
     try {
       const res = await fetch("/api/notes", {
@@ -344,6 +369,7 @@ export default function App({ initialReport, session }) {
       count: settingIndex.reduce((n, e) => n + e.recs.length, 0),
     },
     { id: "changes", label: "Change log", icon: ListChecks, count: Object.keys(changes).length },
+    { id: "baselines", label: "Baselines", icon: Stack, count: (report.baselinePacks ?? []).length },
   ];
 
   const openSetting = open?.type === "setting" ? settingIndex.find((e) => e.key === open.key) : null;
@@ -539,6 +565,21 @@ export default function App({ initialReport, session }) {
 
           {view === "recommendations" && (
             <Recommendations settingIndex={settingIndex} onOpen={(key) => setOpen({ type: "setting", key })} />
+          )}
+
+          {view === "baselines" && (
+            <Baselines
+              packs={report.baselinePacks ?? []}
+              activePacks={report.activeBaselinePacks ?? null}
+              settingIndex={settingIndex}
+              folder={report.baselineFolder}
+              viewer={session}
+              onUpdateSelection={updateBaselineSelection}
+              // No folder means the server reads baselines from somewhere that isn't the app's to manage.
+              onAdd={report.baselineFolder ? (input) => manageBaselines("POST", input, "Baseline added") : undefined}
+              onRename={(pack, name) => manageBaselines("PATCH", { pack, name }, "Baseline renamed")}
+              onRemove={(pack) => manageBaselines("DELETE", { pack }, "Baseline removed")}
+            />
           )}
 
           {view === "changes" && (
