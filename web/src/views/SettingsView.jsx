@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
-import { Sliders, WarningCircle, Warning, Prohibit, Question, MagnifyingGlass, ChatCircle } from "@phosphor-icons/react";
+import { Sliders, WarningCircle, Warning, Prohibit, Question, MagnifyingGlass, ChatCircle, ArrowsLeftRight } from "@phosphor-icons/react";
 import { Chip, Stat } from "../components/bits.jsx";
 import { CompareBar, ChangeFilter, CompareList } from "./BaselineCompare.jsx";
 import { STATE_STYLE } from "../lib/styles.js";
@@ -30,6 +30,13 @@ function SettingsView({
   const [comparison, setComparison] = useState(null);
   const [changeKind, setChangeKind] = useState("All");
   const comparing = Boolean(compareSelection.from && compareSelection.to);
+  // The two choosers only take up a row while they're wanted: opened from the Compare button, or already in use.
+  const canCompare = Boolean(setCompareSelection) && baselinePacks.length > 1;
+  const [compareOpen, setCompareOpen] = useState(Boolean(compareSelection.from || compareSelection.to));
+  function closeCompare() {
+    setCompareOpen(false);
+    setCompareSelection({ from: null, to: null });
+  }
   const packsStamp = baselinePacks.map((p) => p.path + ":" + p.ruleCount).join("|");
 
   useEffect(() => {
@@ -137,9 +144,22 @@ function SettingsView({
               className="w-full rounded-md border border-stone-300 bg-white py-2 pl-9 pr-3 text-sm placeholder-stone-400 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
             />
           </div>
+          {canCompare && (
+            <button
+              onClick={() => (compareOpen ? closeCompare() : setCompareOpen(true))}
+              aria-expanded={compareOpen}
+              className={
+                "flex shrink-0 items-center gap-1.5 rounded-md border px-3 py-2 text-sm focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500 " +
+                (compareOpen ? "border-teal-500 bg-teal-50 text-teal-700" : "border-stone-300 bg-white text-stone-600 hover:bg-stone-50")
+              }
+            >
+              <ArrowsLeftRight className="h-4 w-4" />
+              Compare
+            </button>
+          )}
         </div>
-        {setCompareSelection && baselinePacks.length > 1 && (
-          <CompareBar packs={baselinePacks} selection={compareSelection} onChange={setCompareSelection} />
+        {canCompare && compareOpen && (
+          <CompareBar packs={baselinePacks} selection={compareSelection} onChange={setCompareSelection} onClose={closeCompare} />
         )}
         <div className="flex flex-wrap gap-1">
           {comparing && <ChangeFilter changes={changes} value={changeKind} onChange={setChangeKind} />}

@@ -46,17 +46,16 @@ function sides(change) {
 
 /**
  * The two baseline choosers that turn the settings list into a
- * comparison: pick any two — versions of one baseline or two different
+ * comparison — shown only while the Compare button next to the search
+ * box is on: pick any two — versions of one baseline or two different
  * ones, active or not — and the list below shows only the settings they
  * treat differently.
  */
-function CompareBar({ packs, selection, onChange }) {
+function CompareBar({ packs, selection, onChange, onClose }) {
   const options = packs.map((p) => ({ value: p.path, label: p.name }));
-  const active = Boolean(selection.from || selection.to);
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <span className="text-xs font-medium text-stone-500">Compare</span>
+    <div className="flex animate-fade-in flex-wrap items-center gap-2">
       <div className="w-[22rem] max-w-full">
         <Dropdown
           value={selection.from}
@@ -76,16 +75,14 @@ function CompareBar({ packs, selection, onChange }) {
           ariaLabel="Compare to baseline"
         />
       </div>
-      {active && (
-        <button
-          onClick={() => onChange({ from: null, to: null })}
-          aria-label="Stop comparing"
-          title="Stop comparing"
-          className="rounded p-1.5 text-stone-400 hover:bg-stone-200 hover:text-stone-700 focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500"
-        >
-          <X className="h-3.5 w-3.5" />
-        </button>
-      )}
+      <button
+        onClick={onClose}
+        aria-label="Stop comparing"
+        title="Stop comparing"
+        className="rounded p-1.5 text-stone-400 hover:bg-stone-200 hover:text-stone-700 focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500"
+      >
+        <X className="h-3.5 w-3.5" />
+      </button>
     </div>
   );
 }
