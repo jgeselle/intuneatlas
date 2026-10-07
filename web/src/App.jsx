@@ -26,6 +26,17 @@ import { Dropdown } from "./components/Dropdown.jsx";
 const RAIL_COLLAPSE_KEY = "intuneatlas.rail-collapsed";
 /** The "no group chosen" entry of the group chooser — a value no group id can be. */
 const ALL_POLICIES = "::all";
+const SCOPE_KEY = "intuneatlas.scope-group";
+
+/** The group chosen last time in this browser, if it was chosen for this same tenant. */
+function readStoredScope(tenant) {
+  try {
+    const stored = JSON.parse(window.localStorage.getItem(SCOPE_KEY) ?? "null");
+    return stored && stored.tenant === tenant && typeof stored.group === "string" ? stored.group : null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * The report with a fresh set of baseline verdicts folded in (see
@@ -79,8 +90,18 @@ export default function App({ initialReport, session }) {
   // policies as the group gets them (worked out by the server — conflicts
   // and baseline verdicts differ per group, it isn't a filter over the
   // tenant-wide list). Every page reads from it while a group is chosen.
-  const [scopeGroup, setScopeGroup] = useState(null);
+  // Remembered across reloads, per tenant — a group id means nothing in another tenant.
+  const [scopeGroup, setScopeGroupState] = useState(() => readStoredScope(initialReport?.tenant));
   const [scoped, setScoped] = useState(null);
+  function setScopeGroup(group) {
+    setScopeGroupState(group);
+    try {
+      if (group) window.localStorage.setItem(SCOPE_KEY, JSON.stringify({ tenant: report.tenant, group }));
+      else window.localStorage.removeItem(SCOPE_KEY);
+    } catch {
+      // Storage unavailable (private mode, blocked): the choice just won't outlive the page.
+    }
+  }
   const [notes, setNotes] = useState(initialReport?.notes ?? {});
   const [changes, setChanges] = useState(initialReport?.changes ?? {});
   const [open, setOpen] = useState(null);
@@ -264,6 +285,10 @@ export default function App({ initialReport, session }) {
   // Every group a policy names (or that sits inside one that is named), by name where the scan could read names.
   const groupOptions = useMemo(() => groupChoices(report, report.groups), [report.settings, report.compliancePolicies, report.enrollmentConfigurations, report.groups]);
   const scopeLabel = inScope ? (groupOptions.find((g) => g.value === scopeGroup)?.label ?? scopeGroup) : undefined;
+  // A remembered group that the current scan no longer knows (deleted, or no policy names it any more) is dropped.
+  useEffect(() => {
+    if (scopeGroup && !groupOptions.some((g) => g.value === scopeGroup)) setScopeGroup(null);
+  }, [scopeGroup, groupOptions]);
   const compliancePolicies = (inScope ? scoped.compliancePolicies : report.compliancePolicies) ?? [];
   const enrollmentConfigurations = (inScope ? scoped.enrollmentConfigurations : report.enrollmentConfigurations) ?? [];
   const syncedAgo = report.scannedAt ? Math.max(0, Math.round((Date.now() - new Date(report.scannedAt).getTime()) / 60000)) : 0;
