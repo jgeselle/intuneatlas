@@ -263,6 +263,8 @@
   .chip-below{background:var(--amber-bg);color:var(--amber);border-color:#FCD34D}
   .chip-stone{background:#F5F5F4;color:var(--muted);border-color:var(--line-2)}
   .chip-green{background:#F3FDF6;color:var(--green-2);border-color:#B0F4CB}
+  .chip-missing{background:#FAF5FF;color:#7E22CE;border-color:#E9D5FF}
+  .chip-quiet{background:#fff;color:var(--faint);border-color:var(--line)}
 
   /* code sample */
   .code{
@@ -444,23 +446,28 @@
     <div class="wrap">
       <div class="sec-head">
         <p class="kicker">What it reports</p>
-        <h2>Four states. Only one of them is quiet.</h2>
+        <h2>Six states. Two of them are quiet.</h2>
         <p class="lede">
-          Every setting in the index lands in exactly one. Anything already correct stays grey, so the output is a
-          worklist rather than a wall of green ticks.
+          Every setting in the index lands in exactly one. Settings that meet a baseline, or that no baseline
+          covers, stay out of the way, so the output is a worklist rather than a wall of green ticks.
         </p>
       </div>
 
-      <div class="cols">
+      <div class="cols cols-3">
         <div class="box">
           <span class="chip chip-conflict">Conflict</span>
-          <h3>Two profiles disagree</h3>
-          <p>Same path, different values, overlapping assignment. Both sources are printed with their value so you know which one to rescope.</p>
+          <h3>Two policies disagree</h3>
+          <p>Same setting, different values, both assigned. Each policy is shown with its own value so you know which one to rescope.</p>
         </div>
         <div class="box">
           <span class="chip chip-below">Below baseline</span>
           <h3>Weaker than the benchmark</h3>
-          <p>Checked against whichever baseline you point it at. Every finding carries a rationale and a citation, not just a severity.</p>
+          <p>Checked against whichever baselines you have active. Every finding names the baseline and carries its rationale, not just a severity.</p>
+        </div>
+        <div class="box">
+          <span class="chip chip-missing">Missing</span>
+          <h3>Expected, set nowhere</h3>
+          <p>A baseline has a rule for a setting that no policy in the tenant configures at all.</p>
         </div>
         <div class="box">
           <span class="chip chip-stone">Not assigned</span>
@@ -468,9 +475,14 @@
           <p>The profile looks healthy in the portal but targets no group. Silent, and invisible in every per-policy view.</p>
         </div>
         <div class="box">
-          <span class="chip chip-green">Documented</span>
-          <h3>Someone wrote down why</h3>
-          <p>Notes live in a file in your repo, keyed by path. Findings print with their thread attached, so context survives the person who set it.</p>
+          <span class="chip chip-green">Meets baseline</span>
+          <h3>Checked and passing</h3>
+          <p>At least one active baseline covers the setting, and every rule that does is satisfied.</p>
+        </div>
+        <div class="box">
+          <span class="chip chip-quiet">Not checked</span>
+          <h3>No rule has an opinion</h3>
+          <p>No active baseline covers the setting, so its value is shown but not judged either way.</p>
         </div>
       </div>
     </div>
@@ -554,8 +566,9 @@
           <p class="kicker">Read the index</p>
           <h3>Web UI &mdash; <code style="font-family:var(--mono);font-size:.8125rem;font-weight:400">intuneatlas ui</code></h3>
           <p>
-            Every setting grouped by category, searchable by CSP path, with sources, note threads, and the review
-            gate for staged changes. Runs on your machine against the report on disk, with no server and no upload.
+            Every setting grouped by category, searchable by CSP path, with the policies that set it, each value
+            editable with Intune's own options and ranges, note threads, and the review gate for staged changes.
+            Runs on your machine against the report on disk, with no server and no upload.
           </p>
         </div>
         <div class="box">
