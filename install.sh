@@ -6,7 +6,10 @@
 
 set -euo pipefail
 
-API_URL="https://api.github.com/repos/jgeselle/intuneatlas/releases/latest"
+# GitHub's own "latest release" download link, not its API: the API
+# allows only 60 unauthenticated requests an hour per IP address, which a
+# whole office behind one address runs out of. This link has no such limit.
+ASSET_URL="https://github.com/jgeselle/intuneatlas/releases/latest/download/intuneatlas-linux.tar.gz"
 INSTALL_DIR="$HOME/.local/share/intuneatlas"
 BIN_DIR="$HOME/.local/bin"
 
@@ -15,22 +18,19 @@ if ! command -v tar >/dev/null 2>&1; then
   exit 1
 fi
 
-echo "Fetching the latest release..."
-RELEASE_JSON="$(curl -fsSL "$API_URL")"
-ASSET_URL="$(printf '%s' "$RELEASE_JSON" | grep -o '"browser_download_url": *"[^"]*intuneatlas-linux\.tar\.gz"' | head -n1 | cut -d'"' -f4)"
-TAG_NAME="$(printf '%s' "$RELEASE_JSON" | grep -o '"tag_name": *"[^"]*"' | head -n1 | cut -d'"' -f4)"
-if [ -z "$ASSET_URL" ]; then
-  echo "Couldn't find intuneatlas-linux.tar.gz in the latest release ($TAG_NAME)." >&2
-  exit 1
-fi
+echo "Downloading the latest release..."
+# Downloaded in full before the previous install is touched, so a failed
+# download leaves what was there working.
+ARCHIVE="$(mktemp)"
+trap 'rm -f "$ARCHIVE"' EXIT
+curl -fsSL "$ASSET_URL" -o "$ARCHIVE"
 
-echo "Downloading $TAG_NAME..."
 rm -rf "$INSTALL_DIR"
 mkdir -p "$INSTALL_DIR"
 # --strip-components drops the top-level "intuneatlas/" wrapper directory
 # the release tarball is packaged with, so the binary and its web/dist +
 # baselines siblings land directly in $INSTALL_DIR.
-curl -fsSL "$ASSET_URL" | tar -xz -C "$INSTALL_DIR" --strip-components=1
+tar -xzf "$ARCHIVE" -C "$INSTALL_DIR" --strip-components=1
 chmod +x "$INSTALL_DIR/intuneatlas"
 
 mkdir -p "$BIN_DIR"

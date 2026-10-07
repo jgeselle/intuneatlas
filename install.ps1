@@ -14,16 +14,12 @@ $repo = "jgeselle/intuneatlas"
 $installDir = "$env:LOCALAPPDATA\Programs\intuneatlas"
 $zipPath = "$env:TEMP\intuneatlas-windows.zip"
 
-Write-Host "Fetching the latest release..."
-$release = Invoke-RestMethod -Uri "https://api.github.com/repos/$repo/releases/latest"
-$asset = $release.assets | Where-Object { $_.name -eq "intuneatlas-windows.zip" }
-if (-not $asset) {
-    Write-Error "Couldn't find intuneatlas-windows.zip in the latest release ($($release.tag_name))."
-    exit 1
-}
-
-Write-Host "Downloading $($release.tag_name)..."
-Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $zipPath
+# GitHub's own "latest release" download link, not its API: the API
+# allows only 60 unauthenticated requests an hour per IP address, which a
+# whole office behind one address runs out of — and then the install
+# fails before downloading anything. This link has no such limit.
+Write-Host "Downloading the latest release..."
+Invoke-WebRequest -Uri "https://github.com/$repo/releases/latest/download/intuneatlas-windows.zip" -OutFile $zipPath
 
 if (Test-Path $installDir) {
     Write-Host "Removing previous install..."
