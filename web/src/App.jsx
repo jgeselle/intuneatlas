@@ -50,6 +50,8 @@ export default function App({ initialReport, session }) {
   const [view, setView] = useState("overview");
   const [query, setQuery] = useState("");
   const [platform, setPlatform] = useState("All");
+  // Which two baselines the Settings page is comparing, if any — kept here so it survives switching pages.
+  const [compareSelection, setCompareSelection] = useState({ from: null, to: null });
   const [notes, setNotes] = useState(initialReport?.notes ?? {});
   const [changes, setChanges] = useState(initialReport?.changes ?? {});
   const [open, setOpen] = useState(null);
@@ -538,8 +540,9 @@ export default function App({ initialReport, session }) {
               setPlatform={setPlatform}
               onOpen={(key) => setOpen({ type: "setting", key })}
               baselinePacks={report.baselinePacks ?? []}
-              activeBaselinePacks={report.activeBaselinePacks ?? null}
-              onUpdateBaselineSelection={updateBaselineSelection}
+              compareSelection={compareSelection}
+              setCompareSelection={setCompareSelection}
+              reportStamp={report.scannedAt}
             />
           )}
 
