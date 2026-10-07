@@ -75,6 +75,9 @@ export function getDb(): DatabaseSync {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       target_key TEXT NOT NULL,
       target_name TEXT NOT NULL,
+      setting_key TEXT NOT NULL DEFAULT '',
+      policy_id TEXT NOT NULL DEFAULT '',
+      policy_name TEXT NOT NULL DEFAULT '',
       rule_id TEXT NOT NULL,
       from_value TEXT NOT NULL,
       to_value TEXT NOT NULL,
@@ -149,6 +152,16 @@ function migrate(db: DatabaseSync): void {
   // become admin-only to edit/revert rather than owned by no one in
   // particular. Fail-closed, not a bug.
   const stagedChangesColumns = db.prepare(`PRAGMA table_info(staged_changes)`).all() as Array<{ name: string }>;
+  // setting_key / policy_id / policy_name — a staged change now targets one
+  // policy's value of a setting. Rows from before get '', which the UI
+  // reads as "a change to the setting as a whole" (target_key is then the
+  // setting's own key).
+  for (const column of ["setting_key", "policy_id", "policy_name"]) {
+    if (!stagedChangesColumns.some((c) => c.name === column)) {
+      db.exec(`ALTER TABLE staged_changes ADD COLUMN ${column} TEXT NOT NULL DEFAULT ''`);
+    }
+  }
+
   if (!stagedChangesColumns.some((c) => c.name === "staged_by")) {
     db.exec(`ALTER TABLE staged_changes ADD COLUMN staged_by TEXT NOT NULL DEFAULT ''`);
   }

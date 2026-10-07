@@ -35,6 +35,9 @@ export interface NoteRequestBody {
 export interface StageChangeRequestBody {
   targetKey: string;
   targetName: string;
+  settingKey?: string;
+  policyId?: string;
+  policyName?: string;
   ruleId: string;
   from: string;
   to: string;

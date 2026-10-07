@@ -4,6 +4,15 @@ export interface StagedChange {
   id: number;
   targetKey: string;
   targetName: string;
+  /**
+   * A change is to one policy's value of a setting, not to "the setting"
+   * in the abstract — two policies can set the same setting and each be
+   * changed on its own. Empty on changes staged before this was tracked
+   * (those were keyed by the setting alone).
+   */
+  settingKey: string;
+  policyId: string;
+  policyName: string;
   ruleId: string;
   from: string;
   to: string;
@@ -23,6 +32,9 @@ interface ChangeRow {
   id: number;
   target_key: string;
   target_name: string;
+  setting_key: string;
+  policy_id: string;
+  policy_name: string;
   rule_id: string;
   from_value: string;
   to_value: string;
@@ -39,6 +51,9 @@ function toStagedChange(r: ChangeRow): StagedChange {
     id: r.id,
     targetKey: r.target_key,
     targetName: r.target_name,
+    settingKey: r.setting_key,
+    policyId: r.policy_id,
+    policyName: r.policy_name,
     ruleId: r.rule_id,
     from: r.from_value,
     to: r.to_value,
@@ -53,8 +68,13 @@ function toStagedChange(r: ChangeRow): StagedChange {
 }
 
 export interface StageChangeInput {
+  /** Unique per staged change: the setting's key plus the policy being changed (see changeTargetKey in the web UI). */
   targetKey: string;
   targetName: string;
+  /** Which setting and which policy's value of it — optional only for older clients. */
+  settingKey?: string;
+  policyId?: string;
+  policyName?: string;
   ruleId: string;
   from: string;
   to: string;
@@ -81,10 +101,13 @@ export function stageChange(input: StageChangeInput, stagedBy: string, stagedByN
 
   db.prepare(
     `
-    INSERT INTO staged_changes (target_key, target_name, rule_id, from_value, to_value, reason, staged_by, staged_by_name, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO staged_changes (target_key, target_name, setting_key, policy_id, policy_name, rule_id, from_value, to_value, reason, staged_by, staged_by_name, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(target_key) DO UPDATE SET
       target_name = excluded.target_name,
+      setting_key = excluded.setting_key,
+      policy_id = excluded.policy_id,
+      policy_name = excluded.policy_name,
       rule_id = excluded.rule_id,
       from_value = excluded.from_value,
       to_value = excluded.to_value,
@@ -94,7 +117,21 @@ export function stageChange(input: StageChangeInput, stagedBy: string, stagedByN
       staged_by_name = excluded.staged_by_name,
       updated_at = excluded.updated_at
   `,
-  ).run(input.targetKey, input.targetName, input.ruleId, input.from, input.to, reason, stagedBy, stagedByName, now, now);
+  ).run(
+    input.targetKey,
+    input.targetName,
+    input.settingKey ?? "",
+    input.policyId ?? "",
+    input.policyName ?? "",
+    input.ruleId,
+    input.from,
+    input.to,
+    reason,
+    stagedBy,
+    stagedByName,
+    now,
+    now,
+  );
 
   const row = db.prepare(`SELECT * FROM staged_changes WHERE target_key = ?`).get(input.targetKey) as unknown as ChangeRow;
   return toStagedChange(row);
