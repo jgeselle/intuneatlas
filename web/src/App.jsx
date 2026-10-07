@@ -343,19 +343,36 @@ export default function App({ initialReport, session }) {
             : "lg:w-60 lg:sticky lg:top-0 lg:h-screen lg:self-start lg:overflow-y-auto")
         }
       >
-        {/* The wordmark's leading "I" doubles as the icon-strip's mark: the
-            rest of it fades out, and the left padding nudges over so that
-            one ~6px-wide glyph lands on the strip's center line (32px),
-            same as the nav icons below. */}
+        {/* The wordmark doubles as the icon-strip's mark: "ntune" squeezes
+            shut and "tlas" fades, leaving the two capitals as an "IA"
+            monogram, and the left padding nudges over so that ~18px-wide
+            pair lands on the strip's center line (32px), same as the nav
+            icons below. */}
         <div
           className={
             "flex items-center gap-2.5 py-4 pl-[20px] pr-4 transition-[padding] duration-150 ease-out " +
-            (railCollapsed && !railWide ? "lg:pl-[29px]" : "")
+            (railCollapsed && !railWide ? "lg:pl-[23px]" : "")
           }
         >
           <div className="min-w-0">
-            <div className="whitespace-nowrap font-display text-2xl leading-none tracking-wider text-white">
-              I<span className={"transition-opacity duration-150 " + railDim()}>ntuneAtlas</span>
+            <div className="flex items-baseline whitespace-nowrap font-display text-2xl leading-none tracking-wider text-white">
+              <span className="sr-only">IntuneAtlas</span>
+              <span aria-hidden="true">I</span>
+              {/* overflow-x-clip, not overflow-hidden: clips only sideways,
+                  so the line's tight leading doesn't shave the glyph tops. */}
+              <span
+                aria-hidden="true"
+                className={
+                  "max-w-[2.5em] overflow-x-clip transition-[max-width,opacity] duration-150 ease-out " +
+                  railDim(railCollapsed && !railWide ? "lg:max-w-0" : "")
+                }
+              >
+                ntune
+              </span>
+              <span aria-hidden="true">A</span>
+              <span aria-hidden="true" className={"transition-opacity duration-150 " + railDim()}>
+                tlas
+              </span>
             </div>
             <div
               className={"mt-0.5 truncate text-xs leading-tight text-teal-300 transition-opacity duration-150 " + railDim()}
