@@ -55,7 +55,7 @@ withAuthOptions(program.command("login"))
 withAuthOptions(program.command("scan"))
   .description("Pull Windows Settings Catalog policies and build the settings index.")
   .option("--out <path>", "Write JSON to a file instead of stdout")
-  .option("--baseline <path>", "Directory of baseline YAML rules (defaults to the bundled starter pack)")
+  .option("--baseline <path>", "Folder of baselines to use instead of your own (~/.intuneatlas/baselines)")
   .action(
     withErrorHandling((opts) =>
       runScan({
@@ -75,7 +75,7 @@ program
   .option("--tenant <id-or-domain>", "Tenant to sign in to — needed the first time, or to switch tenants")
   .option("--client-id <id>", "Your Entra app (client) ID — see intuneatlas.com/docs to register one. Saved after first use, so you only need this once; pass it again anytime to change it.")
   .option("--report <path>", "Read a report from a prior `scan --out` instead of scanning live")
-  .option("--baseline <path>", "Directory of baseline YAML rules (defaults to the bundled starter pack)")
+  .option("--baseline <path>", "Folder of baselines to use instead of your own (~/.intuneatlas/baselines)")
   .option(
     "--host <address>",
     "Interface to bind to (default: 127.0.0.1, this machine only). Anything else — e.g. 0.0.0.0 — shares it with a team; each teammate signs in with their own Microsoft account.",

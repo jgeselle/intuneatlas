@@ -138,6 +138,7 @@
       <a href="#register-app">Register an Entra app</a>
       <a href="#first-run">Sign in and run your first scan</a>
       <a href="#what-you-get">What you get</a>
+      <a href="#baselines">Adding a baseline</a>
       <a href="#sharing">Sharing it with a team</a>
       <a href="#next">Next</a>
     </div>
@@ -207,7 +208,7 @@
             <b>App roles</b> → <b>Create app role</b>, three times, one for each of:
             <code>viewer</code> (browse only), <code>contributor</code> (+ notes, staging and
             managing your own changes), and <code>admin</code> (+ triggering scans, managing
-            everyone's changes). For each: <b>Allowed member types</b> → <b>Users/Groups</b>,
+            everyone's changes, adding and removing baselines). For each: <b>Allowed member types</b> → <b>Users/Groups</b>,
             <b>Value</b> exactly the lowercase name above.
           </li>
           <li>
@@ -273,6 +274,39 @@
         </p>
       </section>
 
+      <section id="baselines">
+        <h2>Adding a baseline</h2>
+        <p>
+          Nothing is judged until you add a baseline. A baseline is a folder of Settings Catalog
+          policies exported from Intune as JSON — for example a release of the
+          <a href="https://github.com/SkipToTheEndpoint/OpenIntuneBaseline" target="_blank" rel="noopener noreferrer">Open Intune Baseline</a>,
+          or policies you exported from a reference tenant.
+        </p>
+        <ol>
+          <li>Download or export the baseline and unpack it to a folder.</li>
+          <li>In the web UI, open <strong>Baselines</strong> and choose that folder. Files that aren't Settings Catalog policies are ignored.</li>
+          <li>Give it a source (<code>oib</code>) and a name and version (<code>windows-v4.0</code>), then add it. Adding needs the Admin role.</li>
+          <li>Sync the tenant once, so settings the baseline expects but your tenant lacks get their names.</li>
+        </ol>
+        <p>
+          Baselines live in <code>~/.intuneatlas/baselines/&lt;source&gt;/&lt;name-and-version&gt;/</code> and survive
+          updates. You can also copy a folder there yourself. Each signed-in user chooses which baselines are active for them.
+        </p>
+        <p>
+          An optional <code>baseline.yml</code> in the baseline's folder adds what an export can't say, per setting:
+          severity, rationale, a reference, a looser comparison, or leaving a setting out.
+        </p>
+<pre>name: Contoso baseline – Windows 2026.1
+settings:
+  device_vendor_msft_policy_config_update_deferqualityupdatesperiodindays:
+    compare: atMost        # exact (default), atMost, atLeast
+    severity: high         # critical, high, medium, low
+    rationale: Security patches should not wait longer than a week.
+    reference: CIS Windows 11 Benchmark 5.0.0, 87.1
+  device_vendor_msft_policy_config_experience_allowcortana:
+    ignore: true</pre>
+      </section>
+
       <section id="sharing">
         <h2>Sharing it with a team</h2>
         <p>
@@ -280,8 +314,8 @@
           everyone who connects signs in with their own Microsoft account, and what they can
           do once signed in follows the App Role you assigned them
           (<a href="#register-app">above</a>): Viewers can browse, Contributors can also add
-          notes and manage their own staged changes, and only Admins can trigger a new scan
-          or manage anyone's changes.
+          notes and manage their own staged changes, and only Admins can trigger a new scan,
+          manage anyone's changes, or add and remove baselines.
         </p>
         <div class="note">
           Shared mode needs a real HTTPS hostname reachable by your teammates' browsers — a

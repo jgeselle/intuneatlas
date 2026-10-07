@@ -493,58 +493,58 @@
     <div class="wrap">
       <div class="sec-head">
         <p class="kicker">Baselines</p>
-        <h2>A baseline is just YAML in a directory.</h2>
+        <h2>A baseline is a policy you exported.</h2>
         <p class="lede">
-          Ships with a small starter pack — one Microsoft rule, one CIS rule. Add your own house rules, or drop in a
-          full benchmark like CIS or the Open Intune Baseline.
+          Any Settings Catalog policy exported from Intune works as a baseline, exactly as exported: the Open Intune
+          Baseline, a CIS build, or the policies of your own reference tenant. Nothing is converted, and nothing ships
+          with the app.
         </p>
       </div>
 
       <p class="muted" style="margin:0 0 1rem;font-size:.875rem">
-        Organized by source, then baseline name and version, then OS — <code>baselines/&lt;source&gt;/&lt;baseline-name-and-version&gt;/&lt;os&gt;/*.yml</code>.
+        Choose the downloaded folder on the Baselines page, or drop it into your baselines folder yourself. Settings are
+        matched by Intune's own setting ID and compared value by value, sub-settings included.
       </p>
 
       <div class="code">
         <header>
-          <code>baselines/microsoft/defender-hardening-guidance/windows/tamper-protection.yml</code>
-          <code class="muted">yaml</code>
+          <code>~/.intuneatlas/baselines/</code>
+          <code class="muted">folder</code>
         </header>
-<pre><span class="c">- </span><span class="k">id</span>: defender.tamper-protection
-  <span class="k">name</span>: Tamper protection
-  <span class="k">platform</span>: windows
-  <span class="k">path</span>: <span class="s">./Device/Vendor/MSFT/Defender/Configuration/TamperProtection</span>
-  <span class="k">expect</span>: enabled
-  <span class="k">severity</span>: critical
-  <span class="k">rationale</span>: &gt;
-    Any process running as SYSTEM can silently disable real-time
-    scanning while tamper protection is off.
-  <span class="k">source</span>: <span class="s">Microsoft Defender for Endpoint hardening guidance</span>
+<pre><span class="k">oib</span>/
+  <span class="k">windows-v4.0</span>/                 <span class="c"># one baseline</span>
+    baseline.yml                <span class="c"># optional</span>
+    SettingsCatalog/
+      Win - OIB - ES - Defender Antivirus - D - AV Configuration - v4.0.json
+      Win - OIB - ES - Encryption - D - BitLocker (OS Disk) - v3.7.json
+      <span class="c">…</span>
+  <span class="k">windows-v3.8</span>/                 <span class="c"># an older version, side by side</span>
 </pre>
       </div>
 
       <div class="code">
         <header>
-          <code>baselines/cis/windows-11-benchmark-l1/windows/quality-update-deferral.yml</code>
+          <code>oib/windows-v4.0/baseline.yml</code>
           <code class="muted">yaml</code>
         </header>
-<pre><span class="c">- </span><span class="k">id</span>: update.quality-deferral
-  <span class="k">name</span>: Quality update deferral
-  <span class="k">platform</span>: windows
-  <span class="k">path</span>: <span class="s">./Device/Vendor/MSFT/Policy/Config/Update/DeferQualityUpdatesPeriodInDays</span>
-  <span class="k">expect</span>:
-    <span class="k">max</span>: 7
-  <span class="k">severity</span>: high
-  <span class="k">source</span>: <span class="s">CIS Microsoft Windows 11 Benchmark, L1</span>
-  <span class="k">rationale</span>: &gt;
-    Deferring quality updates (which include security patches) much
-    beyond a week leaves known, actively-patched vulnerabilities
-    unaddressed for longer than necessary.
+<pre><span class="k">name</span>: Open Intune Baseline – Windows v4.0
+<span class="k">settings</span>:
+  <span class="k">device_vendor_msft_policy_config_update_deferqualityupdatesperiodindays</span>:
+    <span class="k">compare</span>: atMost        <span class="c"># this number or less</span>
+    <span class="k">severity</span>: high
+    <span class="k">rationale</span>: &gt;
+      Deferring quality updates much beyond a week leaves patched
+      vulnerabilities open for longer than necessary.
+    <span class="k">reference</span>: <span class="s">CIS Microsoft Windows 11 Benchmark, L1</span>
+  <span class="k">device_vendor_msft_policy_config_experience_allowcortana</span>:
+    <span class="k">ignore</span>: true           <span class="c"># leave this setting out</span>
 </pre>
       </div>
 
       <div class="notice">
-        Baseline rules are the easiest thing to contribute and the most useful. If your team has a house rule with a
-        real justification behind it, that's a pull request: one file, one block, no TypeScript required.
+        An exported policy says what a setting should be, not why. The optional <code>baseline.yml</code> adds
+        severity, rationale and references per setting without changing the stored values, and can relax a number to
+        "or less" or "or more".
       </div>
     </div>
   </section>
@@ -686,9 +686,9 @@
     <div class="wrap">
       <div class="sec-head">
         <p class="kicker">Contribute</p>
-        <h2>Baseline rules and platform coverage, mostly.</h2>
+        <h2>Baseline annotations and platform coverage, mostly.</h2>
         <p class="lede">
-          Two contributor paths. Writing a rule needs tenant experience and no TypeScript; extending platform
+          Two contributor paths. Annotating a baseline needs tenant experience and no TypeScript; extending platform
           coverage needs the opposite. Both are wanted.
         </p>
       </div>
@@ -717,9 +717,9 @@
       </div>
 
       <div class="notice">
-        Every baseline rule needs a citation: a benchmark section, vendor guidance, or a documented tenant
-        observation. "It's more secure" isn't reviewable, and a rule nobody can trace gets removed the first time it
-        fires a false positive on someone's fleet.
+        Every rationale needs a citation: a benchmark section, vendor guidance, or a documented tenant
+        observation. "It's more secure" isn't reviewable, and an annotation nobody can trace gets removed the first
+        time it flags something on someone's fleet that turns out to be fine.
       </div>
     </div>
   </section>

@@ -134,3 +134,124 @@ test("baselineVerdicts: real settings are reduced to their verdict, Missing entr
     activeBaselinePacks: ["oib/v4"],
   });
 });
+
+// ------------------------------------------------------------------------
+// /api/baselines — adding, renaming and removing baselines writes and
+// deletes files on the machine running the server, so who may call it and
+// what reaches the callbacks is pinned here.
+// ------------------------------------------------------------------------
+
+type Role = ViewerIdentity["role"];
+
+async function withBaselineServer(
+  port: number,
+  role: Role,
+  baselines: StartServerOptions["baselines"],
+  run: (call: (method: string, body: unknown) => Promise<{ status: number; body: Record<string, unknown> }>) => Promise<void>,
+) {
+  const identity: ViewerIdentity = { id: "oid", name: "Someone", email: "s@x.com", role };
+  const session = mockSession({ getSession: async () => identity });
+  const report = { settings: [{ key: "a::w", state: "Not checked", recs: [] }], belowBaselineCount: 0 };
+  const { server } = await startServer({
+    report,
+    host: "127.0.0.1",
+    startPort: port,
+    session,
+    ...(baselines ? { baselines } : {}),
+    onEvaluateForViewer: async (r) => ({ ...(r as object), baselinePacks: [{ path: "oib/v4" }], activeBaselinePacks: null }),
+  });
+  try {
+    await run(async (method, body) => {
+      const res = await fetch(`http://127.0.0.1:${port}/api/baselines`, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: typeof body === "string" ? body : JSON.stringify(body),
+      });
+      return { status: res.status, body: (await res.json()) as Record<string, unknown> };
+    });
+  } finally {
+    server.close();
+  }
+}
+
+function recordingBaselines() {
+  const calls: unknown[][] = [];
+  const baselines: NonNullable<StartServerOptions["baselines"]> = {
+    add: async (input) => {
+      calls.push(["add", input]);
+      return "oib/v4";
+    },
+    rename: async (pack, name) => {
+      calls.push(["rename", pack, name]);
+    },
+    remove: async (pack) => {
+      calls.push(["remove", pack]);
+    },
+  };
+  return { calls, baselines };
+}
+
+test("/api/baselines: only an Admin gets through — nothing is called for anyone else", async () => {
+  for (const [port, role] of [
+    [18783, "viewer"],
+    [18784, "contributor"],
+    [18785, null],
+  ] as Array<[number, Role]>) {
+    const { calls, baselines } = recordingBaselines();
+    await withBaselineServer(port, role, baselines, async (call) => {
+      for (const method of ["POST", "PATCH", "DELETE"]) {
+        const res = await call(method, { pack: "oib/v4", name: "X", source: "s", version: "v", files: [] });
+        assert.equal(res.status, 403, `${method} as ${role}`);
+      }
+    });
+    assert.deepEqual(calls, []);
+  }
+});
+
+test("/api/baselines: an Admin's add, rename and remove reach the callbacks and answer with fresh verdicts", async () => {
+  const { calls, baselines } = recordingBaselines();
+  await withBaselineServer(18786, "admin", baselines, async (call) => {
+    const input = { source: "oib", version: "v4", name: "OIB 4", files: [{ path: "p.json", contentBase64: "e30=" }] };
+    const added = await call("POST", input);
+    assert.equal(added.status, 200);
+    assert.equal(added.body.pack, "oib/v4");
+    assert.deepEqual(added.body.verdicts, { "a::w": { state: "Not checked", recs: [], checks: [] } });
+    assert.deepEqual(added.body.baselinePacks, [{ path: "oib/v4" }]);
+
+    assert.equal((await call("PATCH", { pack: "oib/v4", name: "Renamed" })).status, 200);
+    assert.equal((await call("DELETE", { pack: "oib/v4" })).status, 200);
+    assert.deepEqual(calls, [["add", input], ["rename", "oib/v4", "Renamed"], ["remove", "oib/v4"]]);
+  });
+});
+
+test("/api/baselines: a problem with the request comes back as a 400 with its message", async () => {
+  const { BaselineInputError } = await import("../../src/baselines/manage.js");
+  const baselines: NonNullable<StartServerOptions["baselines"]> = {
+    add: async () => {
+      throw new BaselineInputError("None of the uploaded files is a Settings Catalog policy exported from Intune.");
+    },
+    rename: async () => {},
+    remove: async () => {},
+  };
+  await withBaselineServer(18787, "admin", baselines, async (call) => {
+    const res = await call("POST", { source: "s", version: "v", files: [] });
+    assert.equal(res.status, 400);
+    assert.match(String(res.body.error), /Settings Catalog policy/);
+  });
+});
+
+test("/api/baselines: unavailable (501) when the server wasn't given a baselines folder to manage", async () => {
+  await withBaselineServer(18788, "admin", undefined, async (call) => {
+    assert.equal((await call("POST", { source: "s", version: "v", files: [] })).status, 501);
+  });
+});
+
+test("/api/baselines: an upload may exceed the 1 MB limit other requests live under; a rename may not", async () => {
+  const { calls, baselines } = recordingBaselines();
+  const big = "A".repeat(1_500_000);
+  await withBaselineServer(18789, "admin", baselines, async (call) => {
+    assert.equal((await call("POST", { source: "s", version: "v", files: [{ path: "p.json", contentBase64: big }] })).status, 200);
+    assert.equal((await call("PATCH", { pack: "oib/v4", name: big })).status, 413);
+  });
+  assert.deepEqual(calls.map((c) => c[0]), ["add"]);
+});

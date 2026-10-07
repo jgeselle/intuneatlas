@@ -51,15 +51,29 @@ clone instead: `npm install && npm run build && node dist/cli.js ui`.
 
 - **Conflicts** — two profiles set the same setting to different values with
   overlapping assignment.
-- **Below baseline** — a setting is weaker than whichever benchmark you point
-  it at (Microsoft security baselines, CIS, or your own house rules as YAML).
+- **Below baseline** — a setting falls short of a baseline you've loaded: the
+  Open Intune Baseline, a CIS export, or your own gold-standard policies.
 - **Not assigned** — a profile looks healthy in the portal but targets no
   group, so it silently affects nothing.
 - **Documented** — a note explaining a deliberate deviation, attached to the
   setting itself so context survives the person who wrote it.
 
-Baselines are meant to be plain YAML files in a directory, so contributing a
-rule doesn't require touching any code.
+## Baselines
+
+A baseline is a folder of **Settings Catalog policies exported from Intune** —
+the JSON exactly as exported, nothing converted. Settings are matched to your
+tenant by Intune's own setting ID, and compared value by value, sub-settings
+included.
+
+Add one from the web UI's Baselines page (choose the downloaded folder), or
+drop it into `~/.intuneatlas/baselines/<source>/<name-and-version>/` yourself.
+Nothing ships with the app; anything in a baseline download that isn't a
+Settings Catalog policy is skipped.
+
+An exported policy says what a setting should be, not why. An optional
+`baseline.yml` beside the policies adds that per setting, without changing the
+stored values: severity, rationale, a reference, "this number or less", or
+"ignore this one". See [`baselines/README.md`](./baselines/README.md).
 
 ## Trust model
 
@@ -98,7 +112,7 @@ than opening a public issue.
 - [x] Graph API read-only scan of Intune policies (Windows Settings Catalog, compliance, enrollment)
 - [x] Cross-policy setting merge + conflict/coverage detection
 - [x] `intuneatlas ui` — web UI over the generated index, solo or shared with a team (`--host`), everyone signing in with their own Microsoft account
-- [x] Baseline rule engine (YAML) with a real starter pack
+- [x] Baselines as exported Intune policies, matched by setting ID, with optional per-setting annotations — added, renamed and removed from the web UI
 - [x] Review-gated change log (stage a recommendation, require a reason and a signed-in reviewer)
 - [x] Packaging: standalone Windows binary (SEA), PowerShell installer, winget manifest template
 - [x] `ui --persist` / `--stop` — a shared instance that survives reboots (Scheduled Task on Windows, systemd on Linux)
