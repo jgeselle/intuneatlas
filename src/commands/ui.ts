@@ -24,6 +24,7 @@ import {
   getChangeById,
   revertChange,
   stageChange,
+  updateNewPolicyName,
   updateReason,
   updateReviewer,
   type StagedChange,
@@ -103,7 +104,8 @@ export async function runUi(options: UiOptions): Promise<void> {
       // the box and claim someone else reviewed a change.
       if (body.reviewedBy !== undefined) return updateReviewer(id, viewer.name);
       if (body.reason !== undefined) return updateReason(id, body.reason);
-      throw new Error("reason or reviewedBy is required");
+      if (body.policyName !== undefined) return updateNewPolicyName(id, body.policyName);
+      throw new Error("reason, reviewedBy or policyName is required");
     },
     onRevertChange: (id: number) => revertChange(id),
     getChangeById: (id: number) => getChangeById(id),

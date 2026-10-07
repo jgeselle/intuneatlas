@@ -13,6 +13,15 @@ export interface StagedChange {
   settingKey: string;
   policyId: string;
   policyName: string;
+  /**
+   * "existing": a change to the value a policy already in the tenant sets.
+   * "new": the setting is to go into a policy that doesn't exist yet —
+   * `policyName` is the name it should be created under (typically the
+   * baseline's own name for the policy that holds this setting), and
+   * `policyId` is empty. Every setting staged for the same name forms one
+   * new policy.
+   */
+  targetKind: "existing" | "new";
   ruleId: string;
   from: string;
   to: string;
@@ -41,6 +50,7 @@ interface ChangeRow {
   setting_key: string;
   policy_id: string;
   policy_name: string;
+  target_kind: string;
   rule_id: string;
   from_value: string;
   to_value: string;
@@ -61,6 +71,7 @@ function toStagedChange(r: ChangeRow): StagedChange {
     settingKey: r.setting_key,
     policyId: r.policy_id,
     policyName: r.policy_name,
+    targetKind: r.target_kind === "new" ? "new" : "existing",
     ruleId: r.rule_id,
     from: r.from_value,
     to: r.to_value,
@@ -83,6 +94,8 @@ export interface StageChangeInput {
   settingKey?: string;
   policyId?: string;
   policyName?: string;
+  /** "new" stages the setting into a policy to be created under `policyName`; defaults to "existing". */
+  targetKind?: "existing" | "new";
   ruleId: string;
   from: string;
   to: string;
@@ -110,13 +123,14 @@ export function stageChange(input: StageChangeInput, stagedBy: string, stagedByN
 
   db.prepare(
     `
-    INSERT INTO staged_changes (target_key, target_name, setting_key, policy_id, policy_name, rule_id, from_value, to_value, to_structured_json, reason, staged_by, staged_by_name, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO staged_changes (target_key, target_name, setting_key, policy_id, policy_name, target_kind, rule_id, from_value, to_value, to_structured_json, reason, staged_by, staged_by_name, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(target_key) DO UPDATE SET
       target_name = excluded.target_name,
       setting_key = excluded.setting_key,
       policy_id = excluded.policy_id,
       policy_name = excluded.policy_name,
+      target_kind = excluded.target_kind,
       rule_id = excluded.rule_id,
       from_value = excluded.from_value,
       to_value = excluded.to_value,
@@ -133,6 +147,7 @@ export function stageChange(input: StageChangeInput, stagedBy: string, stagedByN
     input.settingKey ?? "",
     input.policyId ?? "",
     input.policyName ?? "",
+    input.targetKind === "new" ? "new" : "existing",
     input.ruleId,
     input.from,
     input.to,
@@ -170,7 +185,21 @@ export function updateReviewer(id: number, reviewedBy: string): StagedChange {
   return updateField(id, "reviewed_by", reviewedBy);
 }
 
-function updateField(id: number, column: "reason" | "reviewed_by", value: string): StagedChange {
+/**
+ * Renames the policy a setting is staged to be created in. Only for
+ * changes that target a new policy — an existing policy's name is a fact
+ * about the tenant, not something staged.
+ */
+export function updateNewPolicyName(id: number, policyName: string): StagedChange {
+  const name = policyName.trim();
+  if (!name) throw new Error("A policy name is required.");
+  const existing = getChangeById(id);
+  if (!existing) throw new Error(`No staged change with id ${id}.`);
+  if (existing.targetKind !== "new") throw new Error("Only a change staged to a new policy can have its policy renamed.");
+  return updateField(id, "policy_name", name);
+}
+
+function updateField(id: number, column: "reason" | "reviewed_by" | "policy_name", value: string): StagedChange {
   const db = getDb();
   db.prepare(`UPDATE staged_changes SET ${column} = ?, updated_at = ? WHERE id = ?`).run(
     value,

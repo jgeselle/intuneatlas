@@ -79,6 +79,7 @@ export function getDb(): DatabaseSync {
       setting_key TEXT NOT NULL DEFAULT '',
       policy_id TEXT NOT NULL DEFAULT '',
       policy_name TEXT NOT NULL DEFAULT '',
+      target_kind TEXT NOT NULL DEFAULT 'existing',
       rule_id TEXT NOT NULL,
       from_value TEXT NOT NULL,
       to_value TEXT NOT NULL,
@@ -167,6 +168,12 @@ function migrate(db: DatabaseSync): void {
   // older rows and on changes to settings that have none (legacy profiles).
   if (!stagedChangesColumns.some((c) => c.name === "to_structured_json")) {
     db.exec(`ALTER TABLE staged_changes ADD COLUMN to_structured_json TEXT`);
+  }
+
+  // target_kind — 'existing' (a change to a policy in the tenant, all there
+  // was before) or 'new' (a setting staged into a policy to be created).
+  if (!stagedChangesColumns.some((c) => c.name === "target_kind")) {
+    db.exec(`ALTER TABLE staged_changes ADD COLUMN target_kind TEXT NOT NULL DEFAULT 'existing'`);
   }
 
   for (const column of ["setting_key", "policy_id", "policy_name"]) {

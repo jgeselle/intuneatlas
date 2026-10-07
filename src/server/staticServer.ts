@@ -39,6 +39,7 @@ export interface StageChangeRequestBody {
   settingKey?: string;
   policyId?: string;
   policyName?: string;
+  targetKind?: "existing" | "new";
   ruleId: string;
   from: string;
   to: string;
@@ -49,6 +50,8 @@ export interface StageChangeRequestBody {
 export interface UpdateChangeRequestBody {
   reason?: string;
   reviewedBy?: string;
+  /** Renames the policy a change staged to a *new* policy is to be created in. */
+  policyName?: string;
 }
 
 interface WithTargetKey {
@@ -703,6 +706,11 @@ async function handleStageChange(
       res.end(JSON.stringify({ error: "targetKey, targetName, ruleId, from, and to are required" }));
       return;
     }
+    if (body.targetKind === "new" && !String(body.policyName ?? "").trim()) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "A change staged to a new policy needs the policy's name." }));
+      return;
+    }
 
     const change = onStageChange(body, viewer);
     onSaved(change);
@@ -742,9 +750,9 @@ async function handleUpdateChange(
 
   try {
     const body = JSON.parse(await readRequestBody(req)) as UpdateChangeRequestBody;
-    if (body.reason === undefined && body.reviewedBy === undefined) {
+    if (body.reason === undefined && body.reviewedBy === undefined && body.policyName === undefined) {
       res.writeHead(400, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: "reason or reviewedBy is required" }));
+      res.end(JSON.stringify({ error: "reason, reviewedBy or policyName is required" }));
       return;
     }
 
