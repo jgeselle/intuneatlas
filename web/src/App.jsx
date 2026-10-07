@@ -354,7 +354,7 @@ export default function App({ initialReport, session }) {
           }
         >
           <div className="min-w-0">
-            <div className="whitespace-nowrap font-display text-2xl leading-none tracking-wide text-white">
+            <div className="whitespace-nowrap font-display text-2xl leading-none tracking-wider text-white">
               I<span className={"transition-opacity duration-150 " + railDim()}>ntuneAtlas</span>
             </div>
             <div
