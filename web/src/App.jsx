@@ -217,6 +217,14 @@ export default function App({ initialReport, session }) {
   const syncFullShown = !railCollapsed || menuPinned || syncRevealed;
   const syncStatusVisible = !railCollapsed || menuPinned || syncStatusFaded;
 
+  // A menu opened from the rail (the account menu, the group chooser) keeps the collapsed rail
+  // expanded for as long as it's open. Unpinning waits out the menu's own closing animation, so
+  // the rail doesn't snap shut under it.
+  function pinRailWhileOpen(isOpen) {
+    if (isOpen) setMenuPinned(true);
+    else window.setTimeout(() => setMenuPinned(false), 180);
+  }
+
   function toggleRailCollapsed() {
     setRailCollapsed((collapsed) => {
       const next = !collapsed;
@@ -567,6 +575,9 @@ export default function App({ initialReport, session }) {
               options={[{ value: ALL_POLICIES, label: "All policies" }, ...groupOptions]}
               onChange={(value) => setScopeGroup(value === ALL_POLICIES ? null : value)}
               ariaLabel="Show everything for"
+              // Same as the account menu: while its list is open the collapsed rail must stay
+              // expanded, or moving the pointer onto the list would close the rail under it.
+              onOpenChange={pinRailWhileOpen}
             />
           </div>
         )}
@@ -617,13 +628,7 @@ export default function App({ initialReport, session }) {
                 up
                 full
                 textClassName={railDim()}
-                onOpenChange={(isOpen) => {
-                  if (isOpen) {
-                    setMenuPinned(true);
-                  } else {
-                    window.setTimeout(() => setMenuPinned(false), 180);
-                  }
-                }}
+                onOpenChange={pinRailWhileOpen}
               />
             </div>
           )}

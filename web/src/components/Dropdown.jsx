@@ -17,7 +17,7 @@ import { CaretDown, Check } from "@phosphor-icons/react";
  * letter jumps to the next option starting with it; Enter or Space picks;
  * Escape or Tab closes.
  */
-function Dropdown({ value, options, onChange, placeholder = "Select…", ariaLabel, muted = false, tone = "light" }) {
+function Dropdown({ value, options, onChange, placeholder = "Select…", ariaLabel, muted = false, tone = "light", onOpenChange }) {
   // "dark": the button sits on the sidebar's dark green; the list it opens is the same white one either way.
   const dark = tone === "dark";
   const [open, setOpen] = useState(false);
@@ -44,6 +44,17 @@ function Dropdown({ value, options, onChange, placeholder = "Select…", ariaLab
     buttonRef.current?.focus();
     if (option.value !== value) onChange(option.value);
   }
+
+  // Lets whatever holds the dropdown know it's open — the sidebar uses it to stay expanded
+  // while its list is showing. Skips the first render: nothing has changed yet.
+  const announced = useRef(false);
+  useEffect(() => {
+    if (!announced.current) {
+      announced.current = true;
+      return;
+    }
+    onOpenChange?.(open);
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
