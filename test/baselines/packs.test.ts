@@ -6,14 +6,13 @@ import type { BaselineRule } from "../../src/baselines/types.js";
 function rule(overrides: Partial<BaselineRule>): BaselineRule {
   return {
     id: "r",
-    name: "R",
-    platform: "windows",
-    path: "./x",
-    expect: "1",
-    severity: "low",
-    rationale: "why",
-    source: "Source",
     pack: "pack",
+    source: "Source",
+    policyName: "Policy",
+    definitionId: "def",
+    platform: "windows10",
+    expected: { kind: "simple", definitionId: "def", name: "def", value: 1 },
+    compare: "exact",
     ...overrides,
   };
 }

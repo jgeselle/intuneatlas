@@ -1,4 +1,6 @@
-import { applyBaselines, findUncoveredEntries } from "../baselines/evaluate.js";
+import { applyBaselines, findUncoveredEntries, type BaselineDefinitions } from "../baselines/evaluate.js";
+import { resolveBaselineDefinitions } from "./settingDefinitions.js";
+import { definitionIdsIn } from "./settingValue.js";
 import { normalizeState } from "./states.js";
 import type { BaselineRule } from "../baselines/types.js";
 import { fetchCompliancePolicies } from "./compliancePolicies.js";
@@ -28,6 +30,13 @@ export interface ScanReport {
   settings: ReturnType<typeof buildSettingIndex>;
   compliancePolicies: Awaited<ReturnType<typeof fetchCompliancePolicies>>;
   enrollmentConfigurations: Awaited<ReturnType<typeof fetchEnrollmentConfigurations>>;
+  /**
+   * Definitions the loaded baselines mention that no policy in the tenant
+   * uses, looked up during the scan so a "Missing" setting has a name, a
+   * path and readable values. Tenant-independent facts about Intune's
+   * catalog — not a judgment — which is why a scan may carry them.
+   */
+  baselineDefinitions?: BaselineDefinitions;
 }
 
 /**
@@ -41,7 +50,7 @@ export interface ScanReport {
  * never needs a rescan: it's just re-running a pure, local function over
  * facts already on disk.
  */
-export async function buildReport(token: string, flow: string, tenant: string): Promise<ScanReport> {
+export async function buildReport(token: string, flow: string, tenant: string, baselineDefinitionIds: string[] = []): Promise<ScanReport> {
   const [policies, legacyPolicies, compliancePolicies, enrollmentConfigurations, tenantName] = await Promise.all([
     fetchConfigurationPolicies(token),
     fetchLegacyDeviceConfigurations(token),
@@ -53,6 +62,9 @@ export async function buildReport(token: string, flow: string, tenant: string): 
   // a legacy Device Restrictions profile writing the same real setting need
   // to land in the same bucket to be conflict-checked against each other.
   const settingIndex = buildSettingIndex([...policies, ...legacyPolicies]);
+  const known = new Set(settingIndex.flatMap((e) => Object.keys(e.schemas ?? {})));
+  const unknown = baselineDefinitionIds.filter((id) => !known.has(id));
+  const baselineDefinitions = unknown.length > 0 ? await resolveBaselineDefinitions(token, unknown) : undefined;
 
   return {
     scannedAt: new Date().toISOString(),
@@ -67,6 +79,7 @@ export async function buildReport(token: string, flow: string, tenant: string): 
     settings: settingIndex,
     compliancePolicies,
     enrollmentConfigurations,
+    ...(baselineDefinitions ? { baselineDefinitions } : {}),
   };
 }
 
@@ -100,17 +113,22 @@ export function applyBaselinesToReport(report: ScanReport, baselineRules: Baseli
   const rawSettings = report.settings
     .map((e) => ({ ...e, state: normalizeState(e.state) }))
     .filter((e) => e.state !== "Missing");
-  const evaluated = applyBaselines(rawSettings, activeRules);
+  const evaluated = applyBaselines(rawSettings, activeRules, report.baselineDefinitions);
   // Synthetic "Missing" entries for baseline rules with no matching
   // setting anywhere in the tenant — appended for display only, after
   // belowBaselineCount is computed from the real scanned entries, so that
   // count stays truthful to what was actually found in the tenant rather
   // than what the baseline merely wishes existed.
-  const settingsWithGaps = [...evaluated, ...findUncoveredEntries(evaluated, activeRules)];
+  const settingsWithGaps = [...evaluated, ...findUncoveredEntries(evaluated, activeRules, report.baselineDefinitions)];
 
   return {
     ...report,
     belowBaselineCount: evaluated.filter((e) => e.state === "Below baseline").length,
     settings: settingsWithGaps,
   };
+}
+
+/** Every definition id the given baseline rules mention, sub-settings included — what buildReport should be able to describe. */
+export function baselineDefinitionIds(rules: BaselineRule[]): string[] {
+  return Array.from(new Set(rules.flatMap((rule) => definitionIdsIn(rule.expected))));
 }

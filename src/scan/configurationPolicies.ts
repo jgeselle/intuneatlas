@@ -2,6 +2,7 @@ import { GRAPH_BETA_BASE } from "../config.js";
 import { graphGetAll } from "../graph.js";
 import { mapAssignmentTargets } from "./assignments.js";
 import { resolveDeclaredSchemas, resolveSettingDefinition, type ResolvedDefinition } from "./settingDefinitions.js";
+import { renderNode, type GraphSettingInstance } from "./settingValue.js";
 import type { RawPolicy, RawSetting, SettingSchema, SettingValueNode } from "./types.js";
 
 interface GraphPolicy {
@@ -9,28 +10,6 @@ interface GraphPolicy {
   name: string;
   platforms: string;
   assignments?: Array<{ target: { "@odata.type": string; groupId?: string } }>;
-}
-
-interface GraphSettingInstance {
-  "@odata.type": string;
-  settingDefinitionId: string;
-  simpleSettingValue?: { value: unknown };
-  // children here is a *dependent* setting — one that only exists because
-  // this specific option was selected (e.g. "Block Flash: Enabled" with a
-  // dependent "Block Flash Action: ..."), a different mechanism from
-  // groupSettingValue below. Confirmed against a live tenant: the child's
-  // own settingDefinitionId has rootDefinitionId pointing at this PARENT
-  // choice definition, not at a group definition.
-  choiceSettingValue?: { value: string; children?: GraphSettingInstance[] };
-  simpleSettingCollectionValue?: Array<{ value: unknown }>;
-  choiceSettingCollectionValue?: Array<{ value: string }>;
-  // A group is one compound instance made of several child settings; a
-  // group-collection is one or more such instances (e.g. one per
-  // configured Attack Surface Reduction rule). Confirmed against a live
-  // tenant: children is a flat array of further settingInstance objects
-  // (same recursive shape as this interface itself).
-  groupSettingValue?: { children: GraphSettingInstance[] };
-  groupSettingCollectionValue?: Array<{ children: GraphSettingInstance[] }>;
 }
 
 interface GraphSetting {
@@ -160,48 +139,5 @@ function scalar(value: unknown): string | number | boolean {
   return typeof value === "number" || typeof value === "boolean" ? value : String(value);
 }
 
-/**
- * The tree as the plain text every reader has always worked with (the
- * index, conflict detection, baseline rules, the CSV export).
- *
- * Any compound value (a collection's items, a group's children, a
- * dependent child) is newline-joined rather than comma/semicolon-joined
- * or parenthesized. Confirmed against real data that this matters, not
- * just cosmetic: a group with several children easily runs well past a
- * thousand characters, and the web UI splits on "\n" to render each part
- * as its own line instead of one unreadable run-on string. Every level
- * of nesting still produces one line per child ("ChildName: value"), so
- * a child whose own value is itself multi-line doesn't collapse back
- * into an unreadable blob — each of its lines gets the child's name
- * prefixed too.
- */
-export function renderNode(node: SettingValueNode): string {
-  switch (node.kind) {
-    case "simple":
-      return String(node.value);
-    case "choice":
-      return node.children?.length ? [node.label, ...childLines(node.children)].join("\n") : node.label;
-    case "simpleCollection":
-      return node.items.map(String).join("\n");
-    case "choiceCollection":
-      return node.items.map((item) => item.label).join("\n");
-    case "group":
-      return childLines(node.children).join("\n");
-    case "groupCollection":
-      if (node.groups.length === 1) return childLines(node.groups[0]).join("\n");
-      // Multiple instances (e.g. several configured ASR rules) get numbered so
-      // they're distinguishable rather than reading as one flat list.
-      return node.groups.flatMap((group, i) => childLines(group).map((line) => `[${i + 1}] ${line}`)).join("\n");
-    default:
-      return "(unsupported setting type)";
-  }
-}
-
-/** One line per child, "ChildName: value" — a multi-line child value gets the name prefixed onto each of its own lines. */
-function childLines(children: SettingValueNode[]): string[] {
-  return children.flatMap((child) =>
-    renderNode(child)
-      .split("\n")
-      .map((line) => `${child.name}: ${line}`),
-  );
-}
+// Kept as this module's export too: it's where every caller has always found it.
+export { renderNode };

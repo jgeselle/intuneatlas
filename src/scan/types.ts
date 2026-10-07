@@ -130,19 +130,28 @@ export interface SettingIndexSource {
   structured?: SettingValueNode;
 }
 
-/** Attached by the baseline engine (src/baselines/evaluate.ts) when a matching rule fails. */
+/** One place a setting's value falls short of a baseline's — see compareValues in src/baselines/compare.ts. */
+export interface ValueDifference {
+  path: string[];
+  expected: string;
+  actual: string | null;
+}
+
+/** Attached by the baseline engine (src/baselines/evaluate.ts) for every baseline the setting falls short of. */
 export interface SettingRecommendation {
   ruleId: string;
   current: string;
   recommended: string;
-  severity: "critical" | "high" | "medium" | "low";
-  why: string;
+  /** The baseline's display name. */
   source: string;
+  /** Present only where the baseline's annotations give them — an exported policy alone has neither. */
+  severity?: "critical" | "high" | "medium" | "low";
+  why?: string;
 }
 
 /**
- * One active baseline rule that covers a setting, whatever the outcome —
- * unlike SettingRecommendation above, which only exists for failures.
+ * One active baseline's position on a setting, whatever the outcome —
+ * unlike SettingRecommendation above, which only exists for shortfalls.
  * Lets a reader see which baseline expects what even when the setting
  * passes, or when it has no verdict at all.
  */
@@ -150,16 +159,30 @@ export interface BaselineCheck {
   ruleId: string;
   source: string;
   pack: string;
-  /** The rule's expectation as a display string (same text as a recommendation's `recommended`). */
+  /** The exported policy inside the baseline that sets this. */
+  policyName: string;
+  /** The baseline's value as text, and with its structure (names and labels filled in where known). */
   expected: string;
-  severity: "critical" | "high" | "medium" | "low";
-  why: string;
+  expectedNode: SettingValueNode;
   /**
-   * null when the setting wasn't judged against the rule: it's in
+   * Other values the same baseline also accepts for this setting — it can
+   * set one setting in several policies meant for different groups of
+   * devices (update rings, OS versions), and matching any of them passes.
+   */
+  alternatives?: string[];
+  /** Set when the baseline accepts more than its exact value: a number that may also be lower ("atMost") or higher ("atLeast"). */
+  compare?: "atMost" | "atLeast";
+  severity?: "critical" | "high" | "medium" | "low";
+  why?: string;
+  reference?: string;
+  /**
+   * null when the setting wasn't judged against the baseline: it's in
    * conflict or not assigned, so there's no single effective value to
    * compare — the expectation is still worth showing.
    */
   passed: boolean | null;
+  /** Where exactly it falls short, when it does. */
+  differences?: ValueDifference[];
 }
 
 export interface SettingIndexEntry {

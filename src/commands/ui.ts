@@ -2,9 +2,9 @@ import { readFile } from "node:fs/promises";
 import open from "open";
 import { resolveClientId } from "../auth/index.js";
 import { createWebSessionManager } from "../auth/webSession.js";
-import { defaultBaselinesDir, loadBaselines } from "../baselines/loader.js";
+import { baselineDirs, loadBaselines } from "../baselines/loader.js";
 import { listBaselinePacks, type BaselinePack } from "../baselines/packs.js";
-import { applyBaselinesToReport, buildReport, type ScanReport } from "../scan/report.js";
+import { applyBaselinesToReport, baselineDefinitionIds, buildReport, type ScanReport } from "../scan/report.js";
 import {
   LOOPBACK_HOSTS,
   startServer,
@@ -65,7 +65,7 @@ export async function runUi(options: UiOptions): Promise<void> {
     report: staticReport ? enrichReport(staticReport) : null,
     host,
     session,
-    onScanRequest: async (graphToken) => enrichReport(await runViewerTriggeredScan(tenantId, graphToken)),
+    onScanRequest: async (graphToken) => enrichReport(await runViewerTriggeredScan(tenantId, graphToken, baselinePath)),
     onEvaluateForViewer: (report, viewer) => evaluateForViewer(report as RawEnrichedReport, viewer, baselinePath),
     onSetBaselineSelection: (viewerId, packs) => {
       if (packs === null) clearSelectedPacks(viewerId);
@@ -117,10 +117,12 @@ async function resolveStaticReport(options: UiOptions): Promise<ScanReport | und
   return getLatestScan(options.tenant);
 }
 
-async function runViewerTriggeredScan(tenantId: string, graphToken: string): Promise<ScanReport> {
+async function runViewerTriggeredScan(tenantId: string, graphToken: string, baselinePath: string | undefined): Promise<ScanReport> {
   // recordScan persists only the raw report — evaluating against a
   // different baseline selection later never needs another scan.
-  const rawReport = await buildReport(graphToken, "interactive-browser", tenantId);
+  // The baselines only tell the scan which definitions to also look up, so settings a baseline expects but the tenant lacks have names.
+  const baselineRules = await loadBaselines(baselineDirs(baselinePath));
+  const rawReport = await buildReport(graphToken, "interactive-browser", tenantId, baselineDefinitionIds(baselineRules));
   recordScan(rawReport);
   return rawReport;
 }
@@ -139,7 +141,7 @@ async function evaluateForViewer(
   viewer: ViewerIdentity,
   baselinePath: string | undefined,
 ): Promise<ViewerReport> {
-  const baselineRules = await loadBaselines(baselinePath ?? defaultBaselinesDir());
+  const baselineRules = await loadBaselines(baselineDirs(baselinePath));
   const activePacks = getSelectedPacks(viewer.id);
   const evaluated = applyBaselinesToReport(report, baselineRules, activePacks);
   return {

@@ -1,247 +1,229 @@
-import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { applyBaselines, findUncoveredEntries } from "../../src/baselines/evaluate.js";
+import { applyBaselines, findUncoveredEntries, type BaselineDefinitions } from "../../src/baselines/evaluate.js";
 import type { BaselineRule } from "../../src/baselines/types.js";
-import type { SettingIndexEntry } from "../../src/scan/types.js";
+import type { SettingIndexEntry, SettingSchema, SettingValueNode } from "../../src/scan/types.js";
 
-interface Fixture {
-  description: string;
-  entries: SettingIndexEntry[];
-  rules: BaselineRule[];
-  expect: Array<Partial<SettingIndexEntry>>;
-}
-
-const FIXTURES_DIR = join(import.meta.dirname, "fixtures");
-
-for (const file of readdirSync(FIXTURES_DIR).filter((f) => f.endsWith(".json")).sort()) {
-  const fixture = JSON.parse(readFileSync(join(FIXTURES_DIR, file), "utf8")) as Fixture;
-
-  test(`applyBaselines: ${file} — ${fixture.description}`, () => {
-    const result = applyBaselines(fixture.entries, fixture.rules);
-    assert.equal(result.length, fixture.expect.length);
-
-    for (const expected of fixture.expect) {
-      const actual = result.find((entry) => entry.key === expected.key);
-      assert.ok(actual, `expected an entry with key "${expected.key}"`);
-      for (const [field, value] of Object.entries(expected)) {
-        assert.deepEqual((actual as unknown as Record<string, unknown>)[field], value, `field "${field}" on "${expected.key}"`);
-      }
-    }
-  });
-}
-
-test("applyBaselines: every matching rule attaches its own recommendation — a setting can have several, from different sources", () => {
-  const entries: SettingIndexEntry[] = [
-    {
-      key: "Require BitLocker::windows10",
-      name: "Require BitLocker",
-      cspPath: "./x",
-      category: "Encryption",
-      platform: "windows10",
-      values: ["0"],
-      sources: [],
-      conflict: false,
-      state: "Not checked",
-      recs: [],
-    },
-  ];
-  const rules: BaselineRule[] = [
-    { id: "first-rule", name: "First", platform: "windows", path: "./x", expect: "1", severity: "critical", rationale: "first", source: "A", pack: "test" },
-    { id: "second-rule", name: "Second", platform: "windows", path: "./x", expect: "1", severity: "low", rationale: "second", source: "B", pack: "test" },
-  ];
-
-  const [result] = applyBaselines(entries, rules);
-  assert.equal(result.recs.length, 2);
-  assert.deepEqual(result.recs.map((r) => r.ruleId), ["first-rule", "second-rule"]);
-  assert.deepEqual(result.recs.map((r) => r.source), ["A", "B"]);
+/** A two-option choice setting as a scan would index it, set to `option` by one assigned policy. */
+const SCHEMA: SettingSchema = {
+  definitionId: "tamper",
+  name: "Tamper protection",
+  kind: "choice",
+  options: [
+    { id: "tamper_0", label: "Disabled" },
+    { id: "tamper_1", label: "Enabled" },
+  ],
+};
+const scannedChoice = (option: 0 | 1): SettingValueNode => ({
+  kind: "choice",
+  definitionId: "tamper",
+  name: "Tamper protection",
+  optionId: `tamper_${option}`,
+  label: SCHEMA.options![option].label,
 });
-
-test("applyBaselines: a rule that's already satisfied doesn't produce a recommendation, even alongside one that isn't", () => {
-  const entries: SettingIndexEntry[] = [
-    {
-      key: "Require BitLocker::windows10",
-      name: "Require BitLocker",
-      cspPath: "./x",
-      category: "Encryption",
-      platform: "windows10",
-      values: ["1"],
-      sources: [],
-      conflict: false,
-      state: "Not checked",
-      recs: [],
-    },
-  ];
-  const rules: BaselineRule[] = [
-    { id: "already-satisfied", name: "Satisfied", platform: "windows", path: "./x", expect: "1", severity: "critical", rationale: "ok", source: "A", pack: "test" },
-    { id: "still-failing", name: "Failing", platform: "windows", path: "./x", expect: "0", severity: "low", rationale: "conflicting rule", source: "B", pack: "test" },
-  ];
-
-  const [result] = applyBaselines(entries, rules);
-  assert.deepEqual(result.recs.map((r) => r.ruleId), ["still-failing"]);
-});
-
-test("applyBaselines: no rule at all for the path — entry stays Not checked, with an empty checks list", () => {
-  const entries: SettingIndexEntry[] = [
-    {
-      key: "Unrelated Setting::windows10",
-      name: "Unrelated Setting",
-      cspPath: "./nowhere",
-      category: "Misc",
-      platform: "windows10",
-      values: ["anything"],
-      sources: [],
-      conflict: false,
-      state: "Not checked",
-      recs: [],
-    },
-  ];
-  const result = applyBaselines(entries, []);
-  assert.deepEqual(result, [{ ...entries[0], checks: [] }]);
-});
-
-test("findUncoveredEntries: a rule whose path matches nothing in the tenant produces one synthetic entry", () => {
-  const rules: BaselineRule[] = [
-    { id: "gap-rule", name: "BitLocker recovery key backup", platform: "windows", path: "./nowhere", expect: "1", severity: "high", rationale: "why", source: "CIS", pack: "test" },
-  ];
-
-  const [result] = findUncoveredEntries([], rules);
-  assert.equal(result.key, "uncovered::./nowhere::windows");
-  assert.equal(result.name, "BitLocker recovery key backup");
-  assert.equal(result.cspPath, "./nowhere");
-  assert.equal(result.platform, "windows");
-  assert.deepEqual(result.values, []);
-  assert.deepEqual(result.sources, []);
-  assert.equal(result.conflict, false);
-  assert.equal(result.state, "Missing");
-  assert.deepEqual(result.recs.map((r) => r.ruleId), ["gap-rule"]);
-});
-
-test("findUncoveredEntries: a real entry at that path — in ANY state — counts as covered, not just Meets baseline/Below baseline", () => {
-  const makeEntry = (state: SettingIndexEntry["state"]): SettingIndexEntry => ({
-    key: "k::windows10",
-    name: "Some setting",
-    cspPath: "./x",
-    category: "Cat",
+function entry(overrides: Partial<SettingIndexEntry> = {}): SettingIndexEntry {
+  const structured = scannedChoice(0);
+  return {
+    key: "tamper::windows10",
+    name: "Tamper protection",
+    cspPath: "./Defender/TamperProtection",
+    category: "Defender",
     platform: "windows10",
-    values: ["1"],
-    sources: [],
-    conflict: state === "Conflict",
-    state,
+    values: ["Disabled"],
+    sources: [{ policyId: "p1", policyName: "Policy 1", value: "Disabled", deployed: true, structured }],
+    conflict: false,
+    state: "Not checked",
+    definitionId: "tamper",
+    schemas: { tamper: SCHEMA },
     recs: [],
-  });
-  const rules: BaselineRule[] = [
-    { id: "r", name: "R", platform: "windows", path: "./x", expect: "1", severity: "low", rationale: "why", source: "A", pack: "test" },
-  ];
+    ...overrides,
+  };
+}
+/** A baseline rule as the loader produces it from an export: ids only, no names or labels. */
+function rule(option: 0 | 1, overrides: Partial<BaselineRule> = {}): BaselineRule {
+  return {
+    id: `oib/v4::Defender::tamper::${option}`,
+    pack: "oib/v4",
+    source: "OIB v4",
+    policyName: "Defender",
+    definitionId: "tamper",
+    platform: "windows10",
+    expected: { kind: "choice", definitionId: "tamper", name: "tamper", optionId: `tamper_${option}`, label: `tamper_${option}` },
+    compare: "exact",
+    ...overrides,
+  };
+}
 
-  for (const state of ["Conflict", "Not assigned", "Below baseline", "Meets baseline", "Not checked"] as const) {
-    assert.deepEqual(findUncoveredEntries([makeEntry(state)], rules), [], `state "${state}" should count as covered`);
+test("applyBaselines: a setting no rule covers is Not checked, with an empty checks list", () => {
+  const [result] = applyBaselines([entry()], [rule(1, { definitionId: "something_else" })]);
+  assert.equal(result.state, "Not checked");
+  assert.deepEqual(result.checks, []);
+  assert.deepEqual(result.recs, []);
+});
+
+test("applyBaselines: matches by definition id and reports the baseline's value with real labels, not ids", () => {
+  const [result] = applyBaselines([entry()], [rule(1, { severity: "critical", rationale: "why", reference: "ref" })]);
+  assert.equal(result.state, "Below baseline");
+  assert.deepEqual(result.recs, [
+    { ruleId: "oib/v4::Defender::tamper::1", current: "Disabled", recommended: "Enabled", source: "OIB v4", severity: "critical", why: "why" },
+  ]);
+  const [check] = result.checks!;
+  assert.equal(check.expected, "Enabled");
+  assert.equal(check.policyName, "Defender");
+  assert.equal(check.passed, false);
+  assert.equal(check.reference, "ref");
+  assert.deepEqual(check.differences, [{ path: [], expected: "Enabled", actual: "Disabled" }]);
+  assert.equal((check.expectedNode as { label: string }).label, "Enabled");
+});
+
+test("applyBaselines: a met baseline gives Meets baseline, no recommendation, and still says who expects what", () => {
+  const [result] = applyBaselines([entry()], [rule(0)]);
+  assert.equal(result.state, "Meets baseline");
+  assert.deepEqual(result.recs, []);
+  assert.equal(result.checks![0].passed, true);
+  assert.equal("differences" in result.checks![0], false);
+  assert.equal("severity" in result.checks![0], false, "an export alone carries no severity");
+});
+
+test("applyBaselines: one baseline setting the same thing in several policies accepts any of them", () => {
+  const ring1 = rule(0, { id: "a", policyName: "Ring 1" });
+  const ring2 = rule(1, { id: "b", policyName: "Ring 2" });
+  const [result] = applyBaselines([entry()], [ring2, ring1]);
+  assert.equal(result.state, "Meets baseline");
+  assert.equal(result.checks!.length, 1, "one check per baseline, not per policy inside it");
+  assert.equal(result.checks![0].policyName, "Ring 1", "reported against the alternative it matches");
+  assert.deepEqual(result.checks![0].alternatives, ["Enabled"]);
+});
+
+test("applyBaselines: different baselines are judged separately and can disagree", () => {
+  const [result] = applyBaselines([entry()], [rule(0), rule(1, { id: "cis", pack: "cis/l1", source: "CIS L1" })]);
+  assert.equal(result.state, "Below baseline");
+  assert.deepEqual(result.checks!.map((c) => [c.source, c.passed]), [
+    ["OIB v4", true],
+    ["CIS L1", false],
+  ]);
+  assert.deepEqual(result.recs.map((r) => r.source), ["CIS L1"]);
+});
+
+test("applyBaselines: conflicting and unassigned settings keep their state but still carry what the baseline expects", () => {
+  for (const state of ["Conflict", "Not assigned"] as const) {
+    const [result] = applyBaselines([entry({ state })], [rule(1)]);
+    assert.equal(result.state, state);
+    assert.deepEqual(result.checks!.map((c) => [c.expected, c.passed]), [["Enabled", null]]);
   }
 });
 
-test("findUncoveredEntries: several uncovered rules sharing the same path+platform merge into one entry", () => {
-  const rules: BaselineRule[] = [
-    { id: "r1", name: "First", platform: "windows", path: "./x", expect: "1", severity: "high", rationale: "a", source: "CIS", pack: "test" },
-    { id: "r2", name: "Second", platform: "windows", path: "./x", expect: "1", severity: "low", rationale: "b", source: "Microsoft", pack: "test" },
-  ];
-
-  const result = findUncoveredEntries([], rules);
-  assert.equal(result.length, 1);
-  assert.deepEqual(result[0].recs.map((r) => r.ruleId), ["r1", "r2"]);
-  assert.deepEqual(result[0].recs.map((r) => r.source), ["CIS", "Microsoft"]);
+test("applyBaselines: a rule for another platform doesn't apply", () => {
+  const [result] = applyBaselines([entry()], [rule(1, { platform: "macOS" })]);
+  assert.equal(result.state, "Not checked");
 });
 
-test("findUncoveredEntries: an entry on a different platform doesn't cover a rule for this one", () => {
-  const entries: SettingIndexEntry[] = [
-    {
-      key: "k::iOS",
-      name: "Some setting",
-      cspPath: "./x",
-      category: "Cat",
-      platform: "iOS",
-      values: ["1"],
-      sources: [],
-      conflict: false,
-      state: "Not checked",
-      recs: [],
-    },
-  ];
-  const rules: BaselineRule[] = [
-    { id: "r", name: "R", platform: "windows", path: "./x", expect: "1", severity: "low", rationale: "why", source: "A", pack: "test" },
-  ];
-
-  const result = findUncoveredEntries(entries, rules);
-  assert.equal(result.length, 1);
-  assert.equal(result[0].platform, "windows");
+test("applyBaselines: a setting without a definition id (a legacy profile's) is never matched", () => {
+  const [result] = applyBaselines([entry({ definitionId: undefined, schemas: undefined })], [rule(1)]);
+  assert.equal(result.state, "Not checked");
 });
 
-test("findUncoveredEntries: no rules at all — nothing to report", () => {
-  assert.deepEqual(findUncoveredEntries([], []), []);
-});
-
-test("applyBaselines: the verdict is recomputed from scratch — re-judging against different rules leaves no stale state or recommendations", () => {
-  const entry: SettingIndexEntry = {
-    key: "x::windows10",
-    name: "X",
-    cspPath: "./x",
-    category: "C",
-    platform: "windows10",
-    values: ["0"],
-    sources: [],
-    conflict: false,
-    state: "Not checked",
-    recs: [],
-  };
-  const rule: BaselineRule = { id: "r", name: "R", platform: "windows", path: "./x", expect: "1", severity: "high", rationale: "why", source: "S", pack: "test" };
-
-  const [failing] = applyBaselines([entry], [rule]);
+test("applyBaselines: the verdict is recomputed from scratch — re-judging against different rules leaves nothing stale", () => {
+  const [failing] = applyBaselines([entry()], [rule(1)]);
   assert.equal(failing.state, "Below baseline");
-  assert.equal(failing.recs.length, 1);
-
-  // Same (already-judged) entry, but the rule is no longer active.
   const [unjudged] = applyBaselines([failing], []);
   assert.equal(unjudged.state, "Not checked");
   assert.deepEqual(unjudged.recs, []);
-
-  // And with the rule back but the value now satisfying it.
-  const [passing] = applyBaselines([{ ...failing, values: ["1"] }], [rule]);
-  assert.equal(passing.state, "Meets baseline");
-  assert.deepEqual(passing.recs, []);
+  assert.deepEqual(unjudged.checks, []);
 });
 
-test("applyBaselines: checks lists every covering rule, pass or fail — and without a verdict for conflicting/unassigned settings", () => {
-  const base: SettingIndexEntry = {
-    key: "x::windows10",
-    name: "X",
-    cspPath: "./x",
-    category: "C",
-    platform: "windows10",
-    values: ["1"],
-    sources: [],
-    conflict: false,
-    state: "Not checked",
-    recs: [],
+test("applyBaselines: a compound value is held sub-setting by sub-setting", () => {
+  const scanned: SettingValueNode = {
+    kind: "choice",
+    definitionId: "startup",
+    name: "Startup authentication",
+    optionId: "startup_1",
+    label: "Enabled",
+    children: [{ kind: "simple", definitionId: "startup_pin", name: "Minimum PIN length", value: 4 }],
   };
-  const passes: BaselineRule = { id: "p", name: "P", platform: "windows", path: "./x", expect: "1", severity: "high", rationale: "why p", source: "Source P", pack: "a/p" };
-  const fails: BaselineRule = { id: "f", name: "F", platform: "windows", path: "./x", expect: { max: 0 }, severity: "low", rationale: "why f", source: "Source F", pack: "b/f" };
+  const schemas: Record<string, SettingSchema> = {
+    startup: { definitionId: "startup", name: "Startup authentication", kind: "choice", options: [{ id: "startup_1", label: "Enabled", childIds: ["startup_pin"] }] },
+    startup_pin: { definitionId: "startup_pin", name: "Minimum PIN length", kind: "simple", valueType: "integer" },
+  };
+  const e = entry({
+    key: "startup::windows10",
+    definitionId: "startup",
+    schemas,
+    values: ["Enabled\nMinimum PIN length: 4"],
+    sources: [{ policyId: "p", policyName: "P", value: "Enabled\nMinimum PIN length: 4", deployed: true, structured: scanned }],
+  });
+  const r = rule(1, {
+    definitionId: "startup",
+    expected: {
+      kind: "choice",
+      definitionId: "startup",
+      name: "startup",
+      optionId: "startup_1",
+      label: "startup_1",
+      children: [{ kind: "simple", definitionId: "startup_pin", name: "startup_pin", value: 6 }],
+    },
+  });
+  const [result] = applyBaselines([e], [r]);
+  assert.equal(result.state, "Below baseline");
+  assert.deepEqual(result.checks![0].differences, [{ path: ["Minimum PIN length"], expected: "6", actual: "4" }]);
+  assert.equal(result.checks![0].expected, "Enabled\nMinimum PIN length: 6");
+});
 
-  const [judged] = applyBaselines([base], [passes, fails]);
-  assert.equal(judged.state, "Below baseline");
-  assert.deepEqual(
-    judged.checks!.map((c) => [c.ruleId, c.source, c.pack, c.expected, c.passed]),
-    [
-      ["p", "Source P", "a/p", "1", true],
-      ["f", "Source F", "b/f", "0 or less", false],
-    ],
-  );
+const DEFINITIONS: BaselineDefinitions = {
+  schemas: { laps: { definitionId: "laps", name: "Backup directory", kind: "choice", options: [{ id: "laps_1", label: "Entra ID" }] } },
+  info: { laps: { cspPath: "./LAPS/BackupDirectory", category: "LAPS" } },
+};
+const lapsRule = (overrides: Partial<BaselineRule> = {}): BaselineRule =>
+  rule(1, { id: "laps-rule", definitionId: "laps", expected: { kind: "choice", definitionId: "laps", name: "laps", optionId: "laps_1", label: "laps_1" }, ...overrides });
 
-  const [uncovered] = applyBaselines([{ ...base, cspPath: "./other" }], [passes]);
-  assert.deepEqual(uncovered.checks, []);
+test("findUncoveredEntries: a setting a baseline expects but no policy configures becomes one Missing entry, named from the scan's lookups", () => {
+  const [missing, ...rest] = findUncoveredEntries([entry()], [rule(1), lapsRule()], DEFINITIONS);
+  assert.equal(rest.length, 0, "the tamper rule has a real entry, in whatever state");
+  assert.equal(missing.state, "Missing");
+  assert.equal(missing.name, "Backup directory");
+  assert.equal(missing.cspPath, "./LAPS/BackupDirectory");
+  assert.equal(missing.definitionId, "laps");
+  assert.deepEqual(missing.values, []);
+  assert.deepEqual(missing.recs, [{ ruleId: "laps-rule", current: "Not configured", recommended: "Entra ID", source: "OIB v4" }]);
+  assert.deepEqual(missing.checks!.map((c) => [c.expected, c.passed, c.differences]), [["Entra ID", false, [{ path: [], expected: "Entra ID", actual: null }]]]);
+});
 
-  for (const state of ["Conflict", "Not assigned"] as const) {
-    const [unjudged] = applyBaselines([{ ...base, state }], [passes]);
-    assert.equal(unjudged.state, state);
-    assert.deepEqual(unjudged.checks!.map((c) => [c.ruleId, c.passed]), [["p", null]]);
+test("findUncoveredEntries: without a lookup for it, a Missing setting falls back to its raw id rather than vanishing", () => {
+  const [missing] = findUncoveredEntries([], [lapsRule()]);
+  assert.equal(missing.name, "laps");
+  assert.equal(missing.cspPath, "");
+  assert.equal(missing.recs[0].recommended, "laps_1");
+});
+
+test("findUncoveredEntries: several baselines expecting the same missing setting share one entry, a recommendation each", () => {
+  const entries = findUncoveredEntries([], [lapsRule(), lapsRule({ id: "cis-laps", pack: "cis/l1", source: "CIS L1" })], DEFINITIONS);
+  assert.equal(entries.length, 1);
+  assert.deepEqual(entries[0].recs.map((r) => r.source), ["OIB v4", "CIS L1"]);
+});
+
+test("findUncoveredEntries: an entry in ANY state counts as covered", () => {
+  for (const state of ["Conflict", "Not assigned", "Below baseline", "Meets baseline", "Not checked"] as const) {
+    assert.deepEqual(findUncoveredEntries([entry({ state })], [rule(1)]), [], `state "${state}" should count as covered`);
   }
+});
+
+test("applyBaselines: a relaxed comparison from the annotations is honoured and carried on the check", () => {
+  const schemas: Record<string, SettingSchema> = { defer: { definitionId: "defer", name: "Deferral days", kind: "simple", valueType: "integer" } };
+  const scanned = (value: number) =>
+    entry({
+      key: "defer::windows10",
+      definitionId: "defer",
+      schemas,
+      values: [String(value)],
+      sources: [{ policyId: "p", policyName: "P", value: String(value), deployed: true, structured: { kind: "simple", definitionId: "defer", name: "Deferral days", value } }],
+    });
+  const atMost7 = rule(1, { definitionId: "defer", expected: { kind: "simple", definitionId: "defer", name: "defer", value: 7 }, compare: "atMost" });
+
+  const [lower] = applyBaselines([scanned(3)], [atMost7]);
+  assert.equal(lower.state, "Meets baseline");
+  assert.equal(lower.checks![0].compare, "atMost");
+
+  const [higher] = applyBaselines([scanned(14)], [atMost7]);
+  assert.equal(higher.state, "Below baseline");
+  assert.deepEqual(higher.checks![0].differences, [{ path: [], expected: "7 or less", actual: "14" }]);
 });

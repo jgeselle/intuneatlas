@@ -29,7 +29,8 @@ export function getDb(): DatabaseSync {
       tenant TEXT NOT NULL,
       tenant_name TEXT,
       policy_count INTEGER NOT NULL,
-      legacy_policy_count INTEGER NOT NULL DEFAULT 0
+      legacy_policy_count INTEGER NOT NULL DEFAULT 0,
+      baseline_definitions_json TEXT
     );
 
     CREATE TABLE IF NOT EXISTS settings_snapshot (
@@ -146,6 +147,11 @@ function migrate(db: DatabaseSync): void {
   const scanColumns = db.prepare(`PRAGMA table_info(scans)`).all() as Array<{ name: string }>;
   if (!scanColumns.some((c) => c.name === "tenant_name")) {
     db.exec(`ALTER TABLE scans ADD COLUMN tenant_name TEXT`);
+  }
+  // baseline_definitions_json — definitions looked up for settings a
+  // baseline expects but no policy in the tenant configures.
+  if (!scanColumns.some((c) => c.name === "baseline_definitions_json")) {
+    db.exec(`ALTER TABLE scans ADD COLUMN baseline_definitions_json TEXT`);
   }
 
   // staged_by (role-based access control) — rows from before this column

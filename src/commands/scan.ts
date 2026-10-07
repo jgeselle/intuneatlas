@@ -1,8 +1,8 @@
 import { writeFile } from "node:fs/promises";
 import { resolveAuth, type ResolveAuthOptions } from "../auth/index.js";
 import { can } from "../auth/roles.js";
-import { defaultBaselinesDir, loadBaselines } from "../baselines/loader.js";
-import { applyBaselinesToReport, buildReport } from "../scan/report.js";
+import { baselineDirs, loadBaselines } from "../baselines/loader.js";
+import { applyBaselinesToReport, baselineDefinitionIds, buildReport } from "../scan/report.js";
 import { recordScan } from "../storage/scans.js";
 
 export interface ScanOptions extends ResolveAuthOptions {
@@ -23,10 +23,12 @@ export async function runScan(options: ScanOptions): Promise<void> {
   // Scanning and evaluating are deliberately separate: recordScan persists
   // only the raw report, so evaluating against a different baseline
   // selection later never needs another scan.
-  const rawReport = await buildReport(token, auth.flow, auth.tenantId);
+  // (The baselines are read first only so the scan can also look up the
+  // definitions they mention — what a setting is called, not how it's judged.)
+  const baselineRules = await loadBaselines(baselineDirs(options.baseline));
+  const rawReport = await buildReport(token, auth.flow, auth.tenantId, baselineDefinitionIds(baselineRules));
   recordScan(rawReport);
 
-  const baselineRules = await loadBaselines(options.baseline ?? defaultBaselinesDir());
   const report = applyBaselinesToReport(rawReport, baselineRules);
   const json = JSON.stringify(report, null, 2);
 

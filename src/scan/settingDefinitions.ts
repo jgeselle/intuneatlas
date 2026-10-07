@@ -241,3 +241,30 @@ function declaredIds(list: SettingSchema[]): string[] {
   }
   return [...ids];
 }
+
+/**
+ * Looks up definitions a baseline mentions that no policy in the tenant
+ * uses — without them a "Missing" setting could only be shown by its raw
+ * id. Returns their schemas (and their declared sub-settings') plus where
+ * each lives. Ids Graph has no definition for are left out.
+ */
+export async function resolveBaselineDefinitions(
+  token: string,
+  definitionIds: string[],
+): Promise<{ schemas: Record<string, SettingSchema>; info: Record<string, { cspPath: string; category: string }> }> {
+  const schemas: Record<string, SettingSchema> = {};
+  const info: Record<string, { cspPath: string; category: string }> = {};
+  await Promise.all(
+    Array.from(new Set(definitionIds)).map(async (id) => {
+      try {
+        const definition = await resolveSettingDefinition(token, id);
+        schemas[id] = definition.schema;
+        info[id] = { cspPath: definition.cspPath, category: definition.category };
+      } catch (err) {
+        if (!(err instanceof Error && /failed: 404\b/.test(err.message))) throw err;
+      }
+    }),
+  );
+  await resolveDeclaredSchemas(token, schemas);
+  return { schemas, info };
+}

@@ -66,8 +66,9 @@ same way as the first).
   The wrapping payload shape is confirmed against Microsoft's schema
   docs; a specific group definition's own validation on the guessed
   child values is the part only a live run can confirm.
-- `belowBaseline [keyword]` — a policy that should trip the bundled
-  `update.quality-deferral` baseline rule. Default keyword: `Defer`.
+- `belowBaseline [keyword]` — a policy that sets quality update deferral
+  to 14 days, which a baseline expecting 7 or less is not met by (bring
+  your own baseline; none ships with the app). Default keyword: `Defer`.
 - `volume [count]` — many policies (default 200) spread across a handful
   of settings, for scale/UI testing.
 - `multiPlatform` — one policy per platform (Windows, iOS, macOS,

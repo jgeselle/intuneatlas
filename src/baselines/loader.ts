@@ -1,96 +1,209 @@
 import { readdir, readFile } from "node:fs/promises";
-import { dirname, join, relative, sep } from "node:path";
+import { existsSync } from "node:fs";
+import { homedir } from "node:os";
+import { basename, dirname, join, relative, sep } from "node:path";
 import { load } from "js-yaml";
 import { resolveAppPath } from "../packagedPaths.js";
-import type { BaselineRule } from "./types.js";
+import { rawNode, type GraphSettingInstance } from "../scan/settingValue.js";
+import type { BaselineRule, CompareMode, Severity } from "./types.js";
 
-export function defaultBaselinesDir(): string {
+/** Baselines that ship with the app — replaced wholesale by every update. */
+export function bundledBaselinesDir(): string {
   return resolveAppPath("baselines", import.meta.url);
 }
 
-const REQUIRED_FIELDS: Array<keyof BaselineRule> = [
-  "id",
-  "name",
-  "platform",
-  "path",
-  "expect",
-  "severity",
-  "rationale",
-  "source",
-];
-const SEVERITIES = new Set(["critical", "high", "medium", "low"]);
+/**
+ * The user's own baselines. Lives with the rest of the tool's local state
+ * rather than in the install directory, which both installers delete and
+ * recreate on every update.
+ */
+export function userBaselinesDir(): string {
+  return join(homedir(), ".intuneatlas", "baselines");
+}
 
-/** Recursively reads every *.yml/*.yaml file under `dir` and collects their rules, tagging each with which pack it came from. */
-export async function loadBaselines(dir: string): Promise<BaselineRule[]> {
-  const files = await findYamlFiles(dir);
+/** Where baselines are read from: one explicit directory if given (`--baseline`), otherwise the bundled and the user's. */
+export function baselineDirs(explicit?: string): string[] {
+  return explicit ? [explicit] : [bundledBaselinesDir(), userBaselinesDir()];
+}
+
+const ANNOTATIONS_FILE = "baseline.yml";
+const SEVERITIES = new Set<string>(["critical", "high", "medium", "low"]);
+const COMPARE_MODES = new Set<string>(["exact", "atMost", "atLeast"]);
+
+/** What a pack's baseline.yml may say about one setting. */
+interface SettingAnnotation {
+  severity?: Severity;
+  rationale?: string;
+  reference?: string;
+  compare?: CompareMode;
+  /** Leave this setting out of the baseline altogether. */
+  ignore?: boolean;
+}
+
+interface PackAnnotations {
+  name?: string;
+  settings: Record<string, SettingAnnotation>;
+}
+
+interface ExportedPolicy {
+  name?: string;
+  displayName?: string;
+  platforms?: string;
+  settings?: Array<{ settingInstance?: GraphSettingInstance }>;
+}
+
+/**
+ * Reads every baseline pack under the given directories.
+ *
+ * A pack is a folder two levels down — `<source>/<name-and-version>/`,
+ * e.g. `oib/windows-v4.0/` — holding, at any depth:
+ *
+ * - Settings Catalog policies exported from Intune as JSON, exactly as
+ *   exported. Each setting in each policy becomes one rule. Anything else
+ *   in the folder (compliance policies, scripts, a manifest, docs) is
+ *   skipped: a real baseline download is dropped in whole, not curated.
+ * - optionally one `baseline.yml` at the pack's root, with a display
+ *   `name` and per-setting annotations under `settings:`, keyed by
+ *   definition id — severity, rationale, reference, compare, ignore.
+ *
+ * A directory that doesn't exist is fine (the user's folder usually
+ * doesn't until they add something).
+ */
+export async function loadBaselines(dirs: string | string[]): Promise<BaselineRule[]> {
   const rules: BaselineRule[] = [];
+  for (const dir of Array.isArray(dirs) ? dirs : [dirs]) {
+    if (!existsSync(dir)) continue;
+    const files = await findFiles(dir);
+    const annotations = new Map<string, PackAnnotations>();
 
-  for (const file of files) {
-    const raw = await readFile(file, "utf8");
-    const parsed = load(raw);
-    if (!Array.isArray(parsed)) {
-      throw new Error(`${file}: expected a YAML list of rules at the top level.`);
+    for (const file of files.filter((f) => basename(f) === ANNOTATIONS_FILE)) {
+      // Only at a pack's own root — a stray baseline.yml deeper in a download isn't ours.
+      if (relative(dir, dirname(file)).split(sep).filter(Boolean).length === 2) {
+        annotations.set(packForFile(dir, file), await readAnnotations(file));
+      }
     }
-    const pack = packForFile(dir, file);
-    parsed.forEach((rule, i) => rules.push({ ...validateRule(rule, `${file} (rule #${i + 1})`), pack }));
-  }
 
+    for (const file of files.filter((f) => /\.json$/i.test(f))) {
+      const policy = await readExportedPolicy(file);
+      if (!policy) continue;
+      const pack = packForFile(dir, file);
+      const packAnnotations = annotations.get(pack);
+      const policyName = policy.name ?? policy.displayName ?? basename(file).replace(/\.json$/i, "");
+
+      for (const { settingInstance } of policy.settings ?? []) {
+        if (!settingInstance?.settingDefinitionId) continue;
+        const annotation = packAnnotations?.settings[settingInstance.settingDefinitionId] ?? {};
+        if (annotation.ignore) continue;
+        rules.push({
+          id: `${pack}::${policyName}::${settingInstance.settingDefinitionId}`,
+          pack,
+          source: packAnnotations?.name ?? prettifyPack(pack),
+          policyName,
+          definitionId: settingInstance.settingDefinitionId,
+          platform: policy.platforms ?? "",
+          expected: rawNode(settingInstance),
+          compare: annotation.compare ?? "exact",
+          ...(annotation.severity ? { severity: annotation.severity } : {}),
+          ...(annotation.rationale ? { rationale: annotation.rationale } : {}),
+          ...(annotation.reference ? { reference: annotation.reference } : {}),
+        });
+      }
+    }
+  }
   return rules;
 }
 
 /**
  * A rule's pack is its file's first two path segments under `dir` — e.g.
- * baselines/cis/windows-11-benchmark-l1/windows/quality-update.yml ->
- * "cis/windows-11-benchmark-l1". Always forward-slash-joined regardless
- * of platform, so it's a stable identifier to persist and compare
- * against (see src/storage/baselineSelections.ts), not a real filesystem
- * path. A file sitting directly under `dir` with no subfolder at all
- * gets "" — a catch-all pack for anything that doesn't follow the
- * source/name-version convention.
+ * baselines/oib/windows-v4.0/SettingsCatalog/x.json -> "oib/windows-v4.0".
+ * Always forward-slash-joined regardless of platform, so it's a stable
+ * identifier to persist and compare against (see
+ * src/storage/baselineSelections.ts), not a real filesystem path. A file
+ * with fewer than two folders above it gets what there is ("" for one
+ * sitting directly under `dir`).
  */
 function packForFile(dir: string, file: string): string {
   const rel = relative(dir, dirname(file));
-  const segments = rel.split(sep).filter(Boolean);
-  return segments.slice(0, 2).join("/");
+  return rel.split(sep).filter(Boolean).slice(0, 2).join("/");
 }
 
-async function findYamlFiles(dir: string): Promise<string[]> {
+/** "oib/windows-v4.0" -> "Oib Windows V4.0" — only the fallback when baseline.yml gives no name. */
+function prettifyPack(pack: string): string {
+  return pack
+    .split("/")
+    .flatMap((segment) => segment.split("-"))
+    .filter(Boolean)
+    .map((word) => word[0].toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+/**
+ * Real exports come in more than one encoding (confirmed on a published
+ * baseline: most files UTF-8 with a BOM, some UTF-16) — the BOM decides.
+ */
+function decode(bytes: Buffer): string {
+  if (bytes[0] === 0xff && bytes[1] === 0xfe) return bytes.subarray(2).toString("utf16le");
+  if (bytes[0] === 0xfe && bytes[1] === 0xff) return Buffer.from(bytes.subarray(2)).swap16().toString("utf16le");
+  if (bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf) return bytes.subarray(3).toString("utf8");
+  return bytes.toString("utf8");
+}
+
+/** The file as a Settings Catalog policy export, or undefined if it's anything else — including JSON that doesn't parse. */
+async function readExportedPolicy(file: string): Promise<ExportedPolicy | undefined> {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(decode(await readFile(file)));
+  } catch {
+    return undefined;
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return undefined;
+  const settings = (parsed as ExportedPolicy).settings;
+  if (!Array.isArray(settings) || !settings.some((s) => s?.settingInstance?.settingDefinitionId)) return undefined;
+  return parsed as ExportedPolicy;
+}
+
+async function readAnnotations(file: string): Promise<PackAnnotations> {
+  const parsed = load(decode(await readFile(file)));
+  if (parsed === null || parsed === undefined) return { settings: {} };
+  if (typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new Error(`${file}: expected a mapping with optional "name" and "settings".`);
+  }
+  const { name, settings } = parsed as { name?: unknown; settings?: unknown };
+  if (settings !== undefined && (settings === null || typeof settings !== "object" || Array.isArray(settings))) {
+    throw new Error(`${file}: "settings" must map setting definition ids to their annotations.`);
+  }
+
+  const result: PackAnnotations = { settings: {} };
+  if (typeof name === "string" && name.trim()) result.name = name.trim();
+  for (const [definitionId, raw] of Object.entries((settings ?? {}) as Record<string, unknown>)) {
+    if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
+      throw new Error(`${file}: settings.${definitionId} must be a mapping.`);
+    }
+    const a = raw as Record<string, unknown>;
+    if (a.severity !== undefined && !SEVERITIES.has(String(a.severity))) {
+      throw new Error(`${file}: settings.${definitionId}.severity must be one of critical, high, medium, low (got "${String(a.severity)}").`);
+    }
+    if (a.compare !== undefined && !COMPARE_MODES.has(String(a.compare))) {
+      throw new Error(`${file}: settings.${definitionId}.compare must be one of exact, atMost, atLeast (got "${String(a.compare)}").`);
+    }
+    result.settings[definitionId] = {
+      ...(a.severity !== undefined ? { severity: a.severity as Severity } : {}),
+      ...(typeof a.rationale === "string" && a.rationale.trim() ? { rationale: a.rationale.trim() } : {}),
+      ...(typeof a.reference === "string" && a.reference.trim() ? { reference: a.reference.trim() } : {}),
+      ...(a.compare !== undefined ? { compare: a.compare as CompareMode } : {}),
+      ...(a.ignore === true ? { ignore: true } : {}),
+    };
+  }
+  return result;
+}
+
+async function findFiles(dir: string): Promise<string[]> {
   const entries = await readdir(dir, { withFileTypes: true });
   const files: string[] = [];
-
-  for (const entry of entries) {
+  for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
     const fullPath = join(dir, entry.name);
-    if (entry.isDirectory()) {
-      files.push(...(await findYamlFiles(fullPath)));
-    } else if (/\.ya?ml$/i.test(entry.name)) {
-      files.push(fullPath);
-    }
+    if (entry.isDirectory()) files.push(...(await findFiles(fullPath)));
+    else files.push(fullPath);
   }
-
   return files;
-}
-
-function validateRule(rule: unknown, context: string): Omit<BaselineRule, "pack"> {
-  if (typeof rule !== "object" || rule === null) {
-    throw new Error(`${context}: rule must be an object.`);
-  }
-
-  const r = rule as Record<string, unknown>;
-  for (const field of REQUIRED_FIELDS) {
-    if (r[field] === undefined) {
-      throw new Error(`${context}: missing required field "${field}".`);
-    }
-  }
-  if (!SEVERITIES.has(r.severity as string)) {
-    throw new Error(`${context}: severity must be one of critical, high, medium, low.`);
-  }
-  const expect = r.expect;
-  const validExpect =
-    typeof expect === "string" ||
-    (typeof expect === "object" && expect !== null && ("min" in expect || "max" in expect));
-  if (!validExpect) {
-    throw new Error(`${context}: expect must be a string, or an object with min/max.`);
-  }
-
-  return r as unknown as Omit<BaselineRule, "pack">;
 }
