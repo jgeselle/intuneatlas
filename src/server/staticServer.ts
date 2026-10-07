@@ -102,6 +102,8 @@ export interface StartServerOptions {
    * `--baseline` directory instead, which is then not the app's to manage.
    * Each throws BaselineInputError for anything wrong with the request.
    */
+  /** What differs between two baselines, and where the tenant stands on each difference — read-only, any viewer. Throws BaselineInputError for an unknown baseline. */
+  onCompareBaselines?: (report: unknown, from: string, to: string) => Promise<unknown>;
   baselines?: {
     add: (input: AddPackInput) => Promise<string>;
     rename: (pack: string, name: string) => Promise<void>;
@@ -213,6 +215,11 @@ export async function startServer(options: StartServerOptions): Promise<{ url: s
           viewer,
           () => currentReport,
         );
+        return;
+      }
+
+      if (req.method === "GET" && req.url?.startsWith("/api/baselines/compare?")) {
+        await handleCompareBaselines(req, res, options.onCompareBaselines, viewer, () => currentReport);
         return;
       }
 
@@ -451,6 +458,47 @@ async function handleSetBaselineSelection(
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify(report ? baselineVerdicts(report) : null));
   } catch (err) {
+    sendApiError(res, err);
+  }
+}
+
+async function handleCompareBaselines(
+  req: IncomingMessage,
+  res: ServerResponse,
+  onCompareBaselines: StartServerOptions["onCompareBaselines"],
+  viewer: ViewerIdentity,
+  getReport: () => unknown,
+): Promise<void> {
+  if (!onCompareBaselines) {
+    res.writeHead(501, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Comparing baselines isn't available from this session." }));
+    return;
+  }
+  // Reads tenant facts (the tenant's own values appear in the result), so it needs the same right as the report itself.
+  if (!can(viewer.role, "view")) {
+    res.writeHead(403, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Your role doesn't include viewing the report." }));
+    return;
+  }
+  const params = new URL(req.url ?? "", "http://localhost").searchParams;
+  const from = params.get("from") ?? "";
+  const to = params.get("to") ?? "";
+  if (!from || !to || from === to) {
+    res.writeHead(400, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ error: "Choose two different baselines to compare." }));
+    return;
+  }
+  try {
+    const raw = getReport();
+    const changes = raw ? await onCompareBaselines(raw, from, to) : [];
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ from, to, changes }));
+  } catch (err) {
+    if (err instanceof BaselineInputError) {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: err.message }));
+      return;
+    }
     sendApiError(res, err);
   }
 }
