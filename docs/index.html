@@ -8,18 +8,23 @@
 <meta name="color-scheme" content="light">
 <link rel="canonical" href="https://intuneatlas.com/docs/">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%2326704B' stroke-width='3' stroke-linejoin='round'%3E%3Ccircle cx='12' cy='12' r='9.5'/%3E%3Cpolygon points='15.6 8.4 13.7 13.7 8.4 15.6 10.3 10.3' fill='%2326704B' stroke-width='1.5'/%3E%3C/svg%3E">
+<!-- Self-hosted: the CSP (see /_headers) allows fonts from this origin only. -->
+<link rel="preload" href="/assets/fonts/inter-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
 <style>
+  @font-face{font-family:"Inter";font-style:normal;font-weight:100 900;font-display:swap;src:url(/assets/fonts/inter-latin-wght-normal.woff2) format("woff2")}
+  @font-face{font-family:"Space Grotesk";font-style:normal;font-weight:300 700;font-display:swap;src:url(/assets/fonts/space-grotesk-latin-wght-normal.woff2) format("woff2")}
   :root{
     --ink:#0A2B1A;--teal:#26704B;--teal-2:#1B5739;
     --paper:#FAF9F7;--line:#E7E5E4;--line-2:#D6D3D1;
     --text:#1C1917;--muted:#78716C;--faint:#A8A29E;
-    --sans:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --sans:"Inter",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    --head:"Space Grotesk",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
     --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
   }
   *,*::before,*::after{box-sizing:border-box}
   html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
   body{margin:0;background:var(--paper);color:var(--text);font-family:var(--sans);font-size:16px;line-height:1.65;-webkit-font-smoothing:antialiased}
-  h1,h2,h3{margin:0;line-height:1.25;font-weight:600;letter-spacing:-.02em}
+  h1,h2,h3{margin:0;line-height:1.25;font-weight:600;letter-spacing:-.02em;font-family:var(--head)}
   p{margin:0}
   a{color:var(--teal-2)}
   ul,ol{margin:0;padding:0;list-style:none}
