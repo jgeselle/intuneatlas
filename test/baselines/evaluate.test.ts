@@ -227,3 +227,12 @@ test("applyBaselines: a relaxed comparison from the annotations is honoured and 
   assert.equal(higher.state, "Below baseline");
   assert.deepEqual(higher.checks![0].differences, [{ path: [], expected: "7 or less", actual: "14" }]);
 });
+
+test("findUncoveredEntries: a Missing entry carries only the definitions its own baseline values mention, not the whole lookup table", () => {
+  const definitions: BaselineDefinitions = {
+    schemas: { ...DEFINITIONS.schemas, unrelated: { definitionId: "unrelated", name: "Unrelated", kind: "simple" } },
+    info: DEFINITIONS.info,
+  };
+  const [missing] = findUncoveredEntries([], [lapsRule()], definitions);
+  assert.deepEqual(Object.keys(missing.schemas!), ["laps"]);
+});

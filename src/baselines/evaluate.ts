@@ -1,4 +1,4 @@
-import { hydrateNode, renderNode } from "../scan/settingValue.js";
+import { definitionIdsIn, hydrateNode, renderNode } from "../scan/settingValue.js";
 import type { BaselineCheck, SettingIndexEntry, SettingSchema, SettingValueNode } from "../scan/types.js";
 import { compareValues, type Difference } from "./compare.js";
 import type { BaselineRule } from "./types.js";
@@ -147,7 +147,9 @@ export function findUncoveredEntries(entries: SettingIndexEntry[], rules: Baseli
       conflict: false,
       state: "Missing" as const,
       definitionId,
-      ...(schemas[definitionId] ? { schemas } : {}),
+      // Only the definitions this one setting's baseline values mention — handing every
+      // Missing entry the whole lookup table multiplied the report's size a hundredfold.
+      ...(schemas[definitionId] ? { schemas: pickSchemas(schemas, groupRules) } : {}),
       recs: perPack.map(([rule]) => ({
         ruleId: rule.id,
         current: "Not configured",
@@ -161,6 +163,14 @@ export function findUncoveredEntries(entries: SettingIndexEntry[], rules: Baseli
       ),
     };
   });
+}
+
+function pickSchemas(schemas: Record<string, SettingSchema>, rules: BaselineRule[]): Record<string, SettingSchema> {
+  const picked: Record<string, SettingSchema> = {};
+  for (const id of new Set(rules.flatMap((rule) => definitionIdsIn(rule.expected)))) {
+    if (schemas[id]) picked[id] = schemas[id];
+  }
+  return picked;
 }
 
 function groupBy<T>(items: T[], key: (item: T) => string): Map<string, T[]> {
