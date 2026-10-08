@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowCounterClockwise, Check, PencilSimple } from "@phosphor-icons/react";
+import { ArrowCounterClockwise, Check, PaperPlaneTilt, PencilSimple } from "@phosphor-icons/react";
 import { Chip, Diff, PageSubtitle, Empty } from "../components/bits.jsx";
 
 function ChangeCard({ change, onUpdateField, onRevert, viewer, inGroup = false, onOpen }) {
@@ -197,9 +197,16 @@ function ChangeLog({ changes, onUpdateField, onRevert, viewer, onOpen, canOpen }
 
   return (
     <div className="space-y-5">
-      <header>
-        <h1 className="text-xl font-semibold">Change log</h1>
-        <PageSubtitle>{list.length > 0 && ready + " of " + list.length + " ready"}</PageSubtitle>
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold">Change log</h1>
+          <PageSubtitle>{list.length > 0 && ready + " of " + list.length + " ready"}</PageSubtitle>
+        </div>
+        {/* Where deploying to the tenant will start from. Disabled until write-back exists. */}
+        <button disabled className="inline-flex cursor-not-allowed items-center gap-2 rounded-md bg-stone-200 px-3.5 py-2 text-sm font-medium text-stone-400">
+          <PaperPlaneTilt className="h-4 w-4" />
+          Deploy
+        </button>
       </header>
 
       {list.length === 0 ? (
