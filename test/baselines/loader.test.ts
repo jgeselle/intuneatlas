@@ -233,7 +233,7 @@ test("loadBaselines: an exported compliance policy becomes one rule per setting 
       assert.deepEqual(rules[0].expected, {
         kind: "choice",
         definitionId: "compliance.windows10.bitLockerEnabled",
-        name: "BitLocker enabled",
+        name: "Require BitLocker",
         optionId: "compliance.windows10.bitLockerEnabled_true",
         label: "Require",
       });

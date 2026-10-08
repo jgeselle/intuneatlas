@@ -156,8 +156,8 @@ test("compliance settings: one a baseline expects and no policy has is Missing, 
   assert.equal(judged.settings.length, 1);
   const [missing] = judged.settings;
   assert.equal(missing.state, "Missing");
-  assert.equal(missing.name, "Secure boot enabled");
-  assert.equal(missing.category, "Device health");
+  assert.equal(missing.name, "Require Secure Boot to be enabled on the device");
+  assert.equal(missing.category, "Device Health");
   assert.equal(missing.cspPath, "windows10CompliancePolicy/secureBootEnabled");
   assert.equal(missing.checks?.[0].expected, "Require");
   assert.deepEqual(Object.keys(missing.schemas ?? {}), ["compliance.windows10.secureBootEnabled"]);

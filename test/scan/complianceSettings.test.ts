@@ -25,15 +25,15 @@ test("complianceSettingsOf", async (t) => {
     ]);
 
     const length = byId["compliance.windows10.passwordMinimumLength"];
-    assert.equal(length.name, "Password minimum length");
+    assert.equal(length.name, "Minimum password length");
     assert.equal(length.value, "12");
-    assert.equal(length.category, "Password");
+    assert.equal(length.category, "System Security");
     assert.equal(length.cspPath, "windows10CompliancePolicy/passwordMinimumLength");
-    assert.deepEqual(length.structured, { kind: "simple", definitionId: "compliance.windows10.passwordMinimumLength", name: "Password minimum length", value: 12 });
+    assert.deepEqual(length.structured, { kind: "simple", definitionId: "compliance.windows10.passwordMinimumLength", name: "Minimum password length", value: 12 });
     assert.equal(length.schemas?.["compliance.windows10.passwordMinimumLength"].valueType, "integer");
 
     const bitLocker = byId["compliance.windows10.bitLockerEnabled"];
-    assert.equal(bitLocker.name, "BitLocker enabled");
+    assert.equal(bitLocker.name, "Require BitLocker");
     assert.equal(bitLocker.value, "Require");
     assert.deepEqual(
       bitLocker.schemas?.["compliance.windows10.bitLockerEnabled"].options?.map((o) => o.label),
@@ -90,7 +90,7 @@ test("complianceSettingsOf", async (t) => {
     const id = "compliance.windows10.validOperatingSystemBuildRanges";
 
     assert.equal(ranges.settingDefinitionId, id);
-    assert.equal(ranges.name, "Valid operating system build ranges");
+    assert.equal(ranges.name, "Valid operating system builds");
     assert.equal(ranges.structured?.kind, "groupCollection");
     assert.equal(
       ranges.value,
@@ -187,8 +187,13 @@ test("humanize", () => {
 test("complianceDefinitions knows every compliance setting without asking Graph", () => {
   const { schemas, info } = complianceDefinitions();
   assert.equal(schemas["compliance.iOS.passcodeMinimumLength"], undefined); // Graph spells the type "ios"
-  assert.equal(schemas["compliance.ios.passcodeMinimumLength"].name, "Passcode minimum length");
-  assert.deepEqual(info["compliance.macOS.firewallEnabled"], { cspPath: "macOSCompliancePolicy/firewallEnabled", category: "Threat protection" });
+  assert.equal(schemas["compliance.ios.passcodeMinimumLength"].name, "Minimum password length");
+  // A property the portal reference doesn't list keeps the name derived from it.
+  assert.equal(schemas["compliance.windows10.earlyLaunchAntiMalwareDriverEnabled"].name, "Early launch anti malware driver enabled");
+  // The same property can be called differently per platform, as in the portal.
+  assert.equal(schemas["compliance.ios.securityBlockJailbrokenDevices"].name, "Jailbroken devices");
+  assert.equal(schemas["compliance.android.securityBlockJailbrokenDevices"].name, "Rooted devices");
+  assert.deepEqual(info["compliance.macOS.firewallEnabled"], { cspPath: "macOSCompliancePolicy/firewallEnabled", category: "System Security" });
   assert.ok(Object.keys(schemas).every(isComplianceDefinition));
   // Lists, and the actions, come with the sub-settings they are made of.
   assert.deepEqual(schemas["compliance.ios.restrictedApps"].childIds?.map((id) => schemas[id].name), ["App id", "App store url", "Name", "Publisher"]);

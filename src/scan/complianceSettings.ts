@@ -1,3 +1,4 @@
+import { portalNameOf } from "./complianceNames.js";
 import { COMPLIANCE_ENUMS, COMPLIANCE_OBJECTS, COMPLIANCE_TYPES, type ComplianceFieldType, type CompliancePropertyType } from "./complianceSchema.generated.js";
 import { renderNode } from "./settingValue.js";
 import type { RawSetting, SettingSchema, SettingValueNode } from "./types.js";
@@ -75,7 +76,10 @@ const isList = (field: Field): field is { list: Record<string, ComplianceFieldTy
 /** Abbreviations a plain split on capitals would lower-case. */
 const ABBREVIATIONS = new Set(["os", "tpm", "rtp", "usb", "dma"]);
 
-/** "passwordMinimumLength" -> "Password minimum length". Intune's portal has its own wording for each; Graph doesn't publish it. */
+/**
+ * "passwordMinimumLength" -> "Password minimum length": a readable name from an identifier. Used for
+ * enum members, the fields inside a list setting, and any property the portal names table doesn't cover.
+ */
 export function humanize(identifier: string): string {
   return identifier
     .replace(/bitLocker/i, "Bitlocker")
@@ -90,13 +94,24 @@ export function humanize(identifier: string): string {
     .join(" ");
 }
 
-/** Display grouping only, by what the property's name starts with or mentions. */
-function categoryOf(property: string): string {
+/**
+ * The section a setting is listed under: the portal's, where known (see
+ * complianceNames.ts); otherwise the portal section its property name
+ * suggests.
+ */
+function categoryOf(type: string, property: string): string {
   if (property === ACTIONS) return "Actions for noncompliance";
-  if (/threatProtection|defender|antivirus|antiSpyware|^rtp|signature|firewall|gatekeeper/i.test(property)) return "Threat protection";
-  if (/^workProfile|password|passcode/i.test(property)) return "Password";
-  if (/version|patchLevel|^os[A-Z]|operatingSystem|pendingSystemUpdates/i.test(property)) return "Operating system";
-  return "Device health";
+  const portal = portalNameOf(type, property);
+  if (portal) return portal.section;
+  if (/password|passcode|firewall|defender|antivirus|antiSpyware|^rtp|signature|gatekeeper|encryption/i.test(property)) return "System Security";
+  if (/version|patchLevel|^os[A-Z]|operatingSystem|pendingSystemUpdates/i.test(property)) return "Device Properties";
+  return "Device Health";
+}
+
+/** A property's own name: the portal's where known, otherwise derived from the property name. */
+function nameOf(type: string, property: string): string {
+  if (property === ACTIONS) return "Actions for noncompliance";
+  return portalNameOf(type, property)?.name ?? humanize(property);
 }
 
 function typeOf(type: string, property: string, value: unknown): CompliancePropertyType | undefined {
@@ -119,8 +134,8 @@ export function complianceDefinitionId(type: string, property: string): string {
  * (which word depends on what the property does), an enum a choice among
  * its members, the rest a number or text.
  */
-function fieldSchema(definitionId: string, property: string, kind: ComplianceFieldType): SettingSchema {
-  const base = { definitionId, name: property === "actionType" ? "Action" : humanize(property) };
+function fieldSchema(definitionId: string, property: string, kind: ComplianceFieldType, name = property === "actionType" ? "Action" : humanize(property)): SettingSchema {
+  const base = { definitionId, name };
   if (kind === "boolean") {
     const on = /block|disable|prevent/i.test(property) ? "Block" : "Require";
     return {
@@ -156,7 +171,7 @@ const fieldsOf = (objectName: string): Array<[string, Field]> =>
  */
 function schemasOf(type: string, property: string, kind: CompliancePropertyType): Record<string, SettingSchema> {
   const definitionId = complianceDefinitionId(type, property);
-  if (!isObject(kind)) return { [definitionId]: fieldSchema(definitionId, property, kind) };
+  if (!isObject(kind)) return { [definitionId]: fieldSchema(definitionId, property, kind, nameOf(type, property)) };
 
   const schemas: Record<string, SettingSchema> = {};
   const childIds: string[] = [];
@@ -172,7 +187,7 @@ function schemasOf(type: string, property: string, kind: CompliancePropertyType)
     for (const i of inner) schemas[i.definitionId] = i;
   }
   return {
-    [definitionId]: { definitionId, name: property === ACTIONS ? "Actions for noncompliance" : humanize(property), kind: kind.list ? "groupCollection" : "group", childIds },
+    [definitionId]: { definitionId, name: nameOf(type, property), kind: kind.list ? "groupCollection" : "group", childIds },
     ...schemas,
   };
 }
@@ -295,7 +310,7 @@ export function complianceSettingsOf(policy: Record<string, unknown>): RawSettin
       name: schemas[definitionId].name,
       // Where the value lives in Graph — the closest thing a compliance setting has to a CSP path.
       cspPath: `${type}CompliancePolicy/${property}`,
-      category: categoryOf(property),
+      category: categoryOf(type, property),
       value: renderNode(structured),
       structured,
       schemas,
@@ -316,7 +331,7 @@ export function complianceActionsSetting(platform: string, scheduledActionsForRu
   const schemas = schemasOf(platform, ACTIONS, ACTIONS_TYPE);
   const structured = nodeOf(schemas, definitionId, ACTIONS_TYPE, value);
   if (!structured) return undefined;
-  return { settingDefinitionId: definitionId, name: schemas[definitionId].name, cspPath: `compliancePolicies/${ACTIONS}`, category: categoryOf(ACTIONS), value: renderNode(structured), structured, schemas };
+  return { settingDefinitionId: definitionId, name: schemas[definitionId].name, cspPath: `compliancePolicies/${ACTIONS}`, category: categoryOf(platform, ACTIONS), value: renderNode(structured), structured, schemas };
 }
 
 /**
@@ -399,11 +414,11 @@ export function complianceDefinitions(): { schemas: Record<string, SettingSchema
     const type = typeName.replace(/CompliancePolicy$/, "");
     for (const [property, kind] of [...Object.entries(properties), [ACTIONS, ACTIONS_TYPE] as const]) {
       Object.assign(known.schemas, schemasOf(type, property, kind));
-      known.info[complianceDefinitionId(type, property)] = { cspPath: `${typeName}/${property}`, category: categoryOf(property) };
+      known.info[complianceDefinitionId(type, property)] = { cspPath: `${typeName}/${property}`, category: categoryOf(type, property) };
     }
   }
   Object.assign(known.schemas, schemasOf("linux", ACTIONS, ACTIONS_TYPE));
-  known.info[complianceDefinitionId("linux", ACTIONS)] = { cspPath: `compliancePolicies/${ACTIONS}`, category: categoryOf(ACTIONS) };
+  known.info[complianceDefinitionId("linux", ACTIONS)] = { cspPath: `compliancePolicies/${ACTIONS}`, category: categoryOf("linux", ACTIONS) };
   for (const { property, schema } of TENANT_SETTINGS) {
     const id = complianceDefinitionId(TENANT, property);
     known.schemas[id] = schema(id);
