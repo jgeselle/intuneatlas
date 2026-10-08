@@ -1,5 +1,6 @@
 import { GRAPH_BETA_BASE } from "../config.js";
 import { graphGet } from "../graph.js";
+import { graphDefinitionId, inComplianceCatalog, toComplianceCatalogId } from "./complianceCatalog.js";
 import type { SettingKind, SettingSchema } from "./types.js";
 
 interface SettingDefinitionOption {
@@ -107,11 +108,15 @@ export async function resolveSettingDefinition(
   const cached = cache.get(settingDefinitionId);
   if (cached) return cached;
 
+  // A compliance catalog setting (see complianceCatalog.ts) is asked for in its own catalog, by Graph's
+  // own id, and comes back with every id it mentions marked the same way. Categories are shared.
+  const compliance = inComplianceCatalog(settingDefinitionId);
   const definition = await graphGet<SettingDefinitionResponse>(
     token,
-    definitionPath(settingDefinitionId),
+    definitionPath(graphDefinitionId(settingDefinitionId), compliance ? "complianceSettings" : "configurationSettings"),
     GRAPH_BETA_BASE,
   );
+  const schema = compliance ? asComplianceSchema(toSchema(definition)) : toSchema(definition);
 
   const resolved: ResolvedDefinition = {
     name: definition.displayName,
@@ -120,7 +125,7 @@ export async function resolveSettingDefinition(
     ...(definition.options
       ? { options: new Map(definition.options.map((o) => [o.itemId, o.displayName])) }
       : {}),
-    schema: toSchema(definition),
+    schema,
   };
 
   cache.set(settingDefinitionId, resolved);
@@ -138,8 +143,8 @@ export async function resolveSettingDefinition(
  * key syntax, `configurationSettings('<id>')`, with the id
  * percent-encoded and any single quote in it doubled.
  */
-export function definitionPath(id: string): string {
-  const base = "/deviceManagement/configurationSettings";
+export function definitionPath(id: string, catalog: "configurationSettings" | "complianceSettings" = "configurationSettings"): string {
+  const base = `/deviceManagement/${catalog}`;
   if (/^[A-Za-z0-9._~{}-]+$/.test(id)) return `${base}/${id}`;
   // encodeURIComponent leaves ( ) ' ! * alone; inside a quoted key they must not be left for Graph to interpret.
   const encoded = encodeURIComponent(id.replace(/'/g, "''")).replace(/[()'!*]/g, (c) => "%" + c.charCodeAt(0).toString(16).toUpperCase());
@@ -182,6 +187,17 @@ export async function resolveSettingDefinitionOrStandIn(token: string, settingDe
  * lists options; anything else is left "unknown" and the value's own
  * instance type decides how it's read.
  */
+function asComplianceSchema(schema: SettingSchema): SettingSchema {
+  return {
+    ...schema,
+    definitionId: toComplianceCatalogId(schema.definitionId),
+    ...(schema.childIds ? { childIds: schema.childIds.map(toComplianceCatalogId) } : {}),
+    ...(schema.options
+      ? { options: schema.options.map((o) => (o.childIds ? { ...o, childIds: o.childIds.map(toComplianceCatalogId) } : o)) }
+      : {}),
+  };
+}
+
 function kindOf(definition: SettingDefinitionResponse): SettingKind {
   const type = definition["@odata.type"] ?? "";
   if (type.endsWith("ChoiceSettingCollectionDefinition")) return "choiceCollection";

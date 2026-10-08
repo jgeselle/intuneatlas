@@ -1,6 +1,7 @@
 import { GRAPH_BETA_BASE } from "../config.js";
 import { graphGetAll } from "../graph.js";
 import { mapAssignmentTargets } from "./assignments.js";
+import { asComplianceInstance } from "./complianceCatalog.js";
 import { resolveDeclaredSchemas, resolveSettingDefinitionOrStandIn, type ResolvedDefinition } from "./settingDefinitions.js";
 import { renderNode, type GraphSettingInstance } from "./settingValue.js";
 import type { RawPolicy, RawSetting, SettingSchema, SettingValueNode } from "./types.js";
@@ -16,15 +17,23 @@ interface GraphSetting {
   settingInstance: GraphSettingInstance;
 }
 
-export async function fetchConfigurationPolicies(token: string): Promise<RawPolicy[]> {
+export function fetchConfigurationPolicies(token: string): Promise<RawPolicy[]> {
+  return fetchCatalogPolicies(token, "configurationPolicies");
+}
+
+/**
+ * Policies made of Settings Catalog setting instances. Two collections
+ * are built this way: configuration policies, and the compliance
+ * policies Intune uses for Linux — the same resource shape, settings
+ * route and assignments (confirmed live), with definitions in a catalog
+ * of their own, which is what marking their ids takes care of (see
+ * complianceCatalog.ts).
+ */
+export async function fetchCatalogPolicies(token: string, collection: "configurationPolicies" | "compliancePolicies"): Promise<RawPolicy[]> {
   // Confirmed live against a real tenant: this resource 404s on v1.0
   // ("Resource not found for the segment 'configurationPolicies'") — it's
   // still beta-only, same as setting-definition resolution below.
-  const policies = await graphGetAll<GraphPolicy>(
-    token,
-    "/deviceManagement/configurationPolicies?$expand=Assignments",
-    GRAPH_BETA_BASE,
-  );
+  const policies = await graphGetAll<GraphPolicy>(token, `/deviceManagement/${collection}?$expand=Assignments`, GRAPH_BETA_BASE);
 
   return Promise.all(
     policies.map(async (policy) => ({
@@ -32,20 +41,17 @@ export async function fetchConfigurationPolicies(token: string): Promise<RawPoli
       name: policy.name,
       platform: policy.platforms,
       assignments: mapAssignmentTargets(policy.assignments),
-      settings: await fetchPolicySettings(token, policy.id),
+      settings: await fetchPolicySettings(token, collection, policy.id),
     })),
   );
 }
 
-async function fetchPolicySettings(token: string, policyId: string): Promise<RawSetting[]> {
-  const graphSettings = await graphGetAll<GraphSetting>(
-    token,
-    `/deviceManagement/configurationPolicies/${policyId}/settings`,
-    GRAPH_BETA_BASE,
-  );
+async function fetchPolicySettings(token: string, collection: "configurationPolicies" | "compliancePolicies", policyId: string): Promise<RawSetting[]> {
+  const graphSettings = await graphGetAll<GraphSetting>(token, `/deviceManagement/${collection}/${policyId}/settings`, GRAPH_BETA_BASE);
 
   return Promise.all(
-    graphSettings.map(async ({ settingInstance }) => {
+    graphSettings.map(async (graphSetting) => {
+      const settingInstance = collection === "compliancePolicies" ? asComplianceInstance(graphSetting.settingInstance) : graphSetting.settingInstance;
       const definition = await resolveSettingDefinitionOrStandIn(token, settingInstance.settingDefinitionId);
       const schemas: Record<string, SettingSchema> = {};
       const structured = await buildNode(token, settingInstance, definition, schemas);

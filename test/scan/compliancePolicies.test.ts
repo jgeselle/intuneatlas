@@ -37,6 +37,10 @@ function rule(definitionId: string, properties: Record<string, unknown>, compare
   return { id: `b::${definitionId}`, pack: "b/v1", source: "Baseline", policyName: "Compliance", definitionId, platform: "windows10", expected, compare };
 }
 
+/** The second place compliance policies live (Linux, Settings Catalog format) — empty in the tests about the first. */
+const isCatalogList = (url: string | URL) => String(url).includes("/deviceManagement/compliancePolicies?");
+const emptyList = () => new Response(JSON.stringify({ value: [] }), { status: 200, headers: { "content-type": "application/json" } });
+
 test("fetchCompliancePolicies: keeps each policy's identity, and its configured settings alongside", async (t) => {
   const originalFetch = global.fetch;
   t.after(() => {
@@ -44,6 +48,7 @@ test("fetchCompliancePolicies: keeps each policy's identity, and its configured 
   });
   let requested = "";
   global.fetch = (async (url: string | URL) => {
+    if (isCatalogList(url)) return emptyList();
     requested = String(url);
     return new Response(
       JSON.stringify({
@@ -169,6 +174,7 @@ test("fetchCompliancePolicies: asks for the actions for noncompliance, and goes 
   const respond = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 
   global.fetch = (async (url: string | URL) => {
+    if (isCatalogList(url)) return emptyList();
     requested.push(decodeURIComponent(String(url)));
     return respond(200, { value: [withActions] });
   }) as typeof fetch;
@@ -178,6 +184,7 @@ test("fetchCompliancePolicies: asks for the actions for noncompliance, and goes 
 
   requested.length = 0;
   global.fetch = (async (url: string | URL) => {
+    if (isCatalogList(url)) return emptyList();
     requested.push(decodeURIComponent(String(url)));
     return String(url).includes("scheduledActionsForRule") ? respond(400, { error: { message: "nested expand not supported" } }) : respond(200, { value: [policy] });
   }) as typeof fetch;
@@ -201,4 +208,135 @@ test("compliance settings: a baseline's actions for noncompliance are a floor �
   const late = judge(["block", 24], ["retire", 720]);
   assert.equal(late.state, "Below baseline");
   assert.deepEqual(late.checks?.[0].differences, [{ path: ["Grace period hours"], expected: "0", actual: "24" }]);
+});
+
+test("fetchCompliancePolicies: reads Linux compliance policies too — Settings Catalog format, definitions from the compliance catalog", async (t) => {
+  const originalFetch = global.fetch;
+  t.after(() => {
+    global.fetch = originalFetch;
+  });
+  const respond = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+  const DISTROS = "linux_distribution_alloweddistros";
+  // Shapes as returned by a live tenant's complianceSettings.
+  const definitions: Record<string, unknown> = {
+    linux_passwordpolicy_minimumlength: {
+      "@odata.type": "#microsoft.graph.deviceManagementConfigurationSimpleSettingDefinition",
+      id: "linux_passwordpolicy_minimumlength",
+      displayName: "Minimum Length",
+      baseUri: "com.microsoft.manage.LinuxMdm",
+      offsetUri: "/PasswordPolicy/MinimumLength",
+      categoryId: "cat-password",
+      valueDefinition: { "@odata.type": "#microsoft.graph.deviceManagementConfigurationIntegerSettingValueDefinition", minimumValue: 1, maximumValue: 127 },
+    },
+    [DISTROS]: {
+      "@odata.type": "#microsoft.graph.deviceManagementConfigurationSettingGroupCollectionDefinition",
+      id: DISTROS,
+      displayName: "Allowed Distros",
+      baseUri: "com.microsoft.manage.LinuxMdm",
+      offsetUri: "/Distribution/AllowedDistros",
+      categoryId: "cat-distros",
+      childIds: [`${DISTROS}_item_$type`, `${DISTROS}_item_minimumversion`],
+    },
+    [`${DISTROS}_item_$type`]: {
+      "@odata.type": "#microsoft.graph.deviceManagementConfigurationChoiceSettingDefinition",
+      id: `${DISTROS}_item_$type`,
+      displayName: "Type",
+      baseUri: "com.microsoft.manage.LinuxMdm",
+      offsetUri: "/Distribution/AllowedDistros/{0}/$type",
+      categoryId: "cat-distros",
+      options: [
+        { itemId: `${DISTROS}_item_$type_ubuntu`, displayName: "Ubuntu" },
+        { itemId: `${DISTROS}_item_$type_rhel`, displayName: "RHEL" },
+      ],
+    },
+    [`${DISTROS}_item_minimumversion`]: {
+      "@odata.type": "#microsoft.graph.deviceManagementConfigurationSimpleSettingDefinition",
+      id: `${DISTROS}_item_minimumversion`,
+      displayName: "Minimum OS Version",
+      baseUri: "com.microsoft.manage.LinuxMdm",
+      offsetUri: "/Distribution/AllowedDistros/{0}/MinimumVersion",
+      categoryId: "cat-distros",
+      valueDefinition: { "@odata.type": "#microsoft.graph.deviceManagementConfigurationStringSettingValueDefinition" },
+    },
+  };
+  const asked: string[] = [];
+  global.fetch = (async (input: string | URL) => {
+    const url = decodeURIComponent(String(input));
+    asked.push(url);
+    if (url.includes("/deviceManagement/deviceCompliancePolicies?")) return respond(200, { value: [] });
+    if (url.includes("/deviceManagement/compliancePolicies?")) {
+      return respond(200, {
+        value: [{ id: "lx1", name: "Linux compliance", platforms: "linux", technologies: "linuxMdm", assignments: [{ target: { "@odata.type": "#microsoft.graph.allDevicesAssignmentTarget" } }] }],
+      });
+    }
+    if (url.includes("/deviceManagement/compliancePolicies/lx1/settings")) {
+      return respond(200, {
+        value: [
+          { settingInstance: { settingDefinitionId: "linux_passwordpolicy_minimumlength", simpleSettingValue: { value: 12 } } },
+          {
+            settingInstance: {
+              settingDefinitionId: DISTROS,
+              groupSettingCollectionValue: [
+                {
+                  children: [
+                    { settingDefinitionId: `${DISTROS}_item_$type`, choiceSettingValue: { value: `${DISTROS}_item_$type_ubuntu`, children: [] } },
+                    { settingDefinitionId: `${DISTROS}_item_minimumversion`, simpleSettingValue: { value: "22.04" } },
+                  ],
+                },
+              ],
+            },
+          },
+        ],
+      });
+    }
+    const category = /\/configurationCategories\/(cat-\w+)/.exec(url);
+    if (category) return respond(200, { id: category[1], displayName: category[1] === "cat-password" ? "Password Policy" : "Allowed Distributions" });
+    const definition = /\/complianceSettings(?:\/|\(')([^?')]+)/.exec(url);
+    if (definition && definitions[definition[1]]) return respond(200, definitions[definition[1]]);
+    return respond(404, { error: { message: `unexpected ${url}` } });
+  }) as typeof fetch;
+
+  const { policies, settings } = await fetchCompliancePolicies("token");
+
+  assert.deepEqual(policies, [{ id: "lx1", name: "Linux compliance", platform: "linux", deployed: true, targets: [{ kind: "allDevices" }] }]);
+  assert.equal(settings.length, 1);
+  const [length, distros] = settings[0].settings;
+
+  // Never asked of the configuration catalog — a live tenant answers 404 there.
+  assert.equal(asked.some((url) => url.includes("/configurationSettings")), false);
+
+  assert.equal(length.settingDefinitionId, "compliance.catalog.linux_passwordpolicy_minimumlength");
+  assert.equal(length.name, "Minimum Length");
+  assert.equal(length.category, "Password Policy");
+  assert.equal(length.value, "12");
+  assert.deepEqual(length.schemas?.[length.settingDefinitionId], {
+    definitionId: "compliance.catalog.linux_passwordpolicy_minimumlength",
+    name: "Minimum Length",
+    kind: "simple",
+    valueType: "integer",
+    min: 1,
+    max: 127,
+  });
+
+  assert.equal(distros.value, "Type: Ubuntu\nMinimum OS Version: 22.04");
+  const schema = distros.schemas?.[`compliance.catalog.${DISTROS}`];
+  assert.deepEqual(schema?.childIds, [`compliance.catalog.${DISTROS}_item_$type`, `compliance.catalog.${DISTROS}_item_minimumversion`]);
+  // What a value stores — the option id — stays Graph's own.
+  assert.deepEqual(distros.schemas?.[`compliance.catalog.${DISTROS}_item_$type`].options?.map((o) => o.id), [`${DISTROS}_item_$type_ubuntu`, `${DISTROS}_item_$type_rhel`]);
+
+  // In the index they are compliance settings like the rest.
+  const [entry] = buildSettingIndex(settings, undefined, { conflicts: false }).filter((e) => e.name === "Minimum Length");
+  assert.equal(entry.key, "compliance.catalog.linux_passwordpolicy_minimumlength::linux");
+});
+
+test("fetchCompliancePolicies: a tenant where the Linux collection can't be listed is scanned without it", async (t) => {
+  const originalFetch = global.fetch;
+  t.after(() => {
+    global.fetch = originalFetch;
+  });
+  const respond = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+  global.fetch = (async (url: string | URL) =>
+    isCatalogList(url) ? respond(404, { error: { message: "Resource not found for the segment 'compliancePolicies'" } }) : respond(200, { value: [] })) as typeof fetch;
+
+  assert.deepEqual(await fetchCompliancePolicies("token"), { policies: [], settings: [] });
 });

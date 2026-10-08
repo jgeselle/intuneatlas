@@ -1,7 +1,8 @@
 import { GRAPH_BETA_BASE } from "../config.js";
 import { graphGetAll } from "../graph.js";
-import { mapAssignmentTargets } from "./assignments.js";
+import { isDeployed, mapAssignmentTargets } from "./assignments.js";
 import { complianceSettingsOf } from "./complianceSettings.js";
+import { fetchCatalogPolicies } from "./configurationPolicies.js";
 import { mapSimplePolicy } from "./simplePolicy.js";
 import type { RawPolicy, RawSimplePolicy } from "./types.js";
 
@@ -22,6 +23,12 @@ interface GraphCompliancePolicy {
  *
  * Read from beta: several current policy types (Android Enterprise
  * fully managed and AOSP among them) exist only there.
+ *
+ * There are two kinds, in two places: the typed, one-per-platform
+ * policies, and — for Linux — policies in the Settings Catalog format
+ * (see complianceCatalog.ts). Both end up in the same two lists. A
+ * tenant where the second collection can't be listed is scanned without
+ * it.
  *
  * The actions for noncompliance are asked for along with the policies.
  * Should Graph refuse that nested expansion, the scan goes on without
@@ -44,5 +51,13 @@ export async function fetchCompliancePolicies(token: string): Promise<{ policies
       settings: complianceSettingsOf(policy),
     }))
     .filter((policy) => policy.settings.length > 0);
-  return { policies, settings };
+
+  const catalog = await fetchCatalogPolicies(token, "compliancePolicies").catch((error: unknown) => {
+    if (error instanceof Error && /failed: (400|404)\b/.test(error.message)) return [];
+    throw error;
+  });
+  return {
+    policies: [...policies, ...catalog.map((p) => ({ id: p.id, name: p.name, platform: p.platform, deployed: isDeployed(p.assignments), targets: p.assignments }))],
+    settings: [...settings, ...catalog.filter((p) => p.settings.length > 0)],
+  };
 }

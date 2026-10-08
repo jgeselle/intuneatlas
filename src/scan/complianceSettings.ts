@@ -23,18 +23,23 @@ import type { RawSetting, SettingSchema, SettingValueNode } from "./types.js";
  * list of such groups, one sub-setting per field. The actions for
  * noncompliance, which hang off the policy rather than sitting on it,
  * are read the same way, as one setting listing each action.
+ *
+ * (Linux compliance policies are a different kind altogether — see
+ * complianceCatalog.ts. Their ids share the prefix below.)
  */
 
 const PREFIX = "compliance.";
 
-/** Whether a setting definition id is a compliance policy property (as opposed to a Settings Catalog definition). */
+/** Whether a setting definition id belongs to a compliance policy — a typed policy's property, or a compliance catalog setting — rather than a configuration policy. */
 export function isComplianceDefinition(definitionId: string | undefined): boolean {
   return Boolean(definitionId?.startsWith(PREFIX));
 }
 
 /** "#microsoft.graph.windows10CompliancePolicy" -> "windows10"; undefined for anything that isn't a compliance policy type. */
 export function complianceTypeOf(odataType: unknown): string | undefined {
-  return typeof odataType === "string" ? /^#microsoft\.graph\.(\w+)CompliancePolicy$/.exec(odataType)?.[1] : undefined;
+  const type = typeof odataType === "string" ? /^#microsoft\.graph\.(\w+)CompliancePolicy$/.exec(odataType)?.[1] : undefined;
+  // "deviceManagementCompliancePolicy" is the other kind — Settings Catalog format, no properties to read (see complianceCatalog.ts).
+  return type === "deviceManagement" ? undefined : type;
 }
 
 /** Everything on the Graph resource that describes the policy rather than configuring a device. */

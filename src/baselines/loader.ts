@@ -4,6 +4,7 @@ import { homedir } from "node:os";
 import { basename, dirname, join, relative, sep } from "node:path";
 import { load } from "js-yaml";
 import { resolveAppPath } from "../packagedPaths.js";
+import { asComplianceInstance } from "../scan/complianceCatalog.js";
 import { complianceSettingsOf, complianceTypeOf } from "../scan/complianceSettings.js";
 import { rawNode, type GraphSettingInstance } from "../scan/settingValue.js";
 import { platformFromODataType } from "../scan/simplePolicy.js";
@@ -49,6 +50,8 @@ interface PackAnnotations {
 }
 
 interface ExportedPolicy {
+  "@odata.type"?: string;
+  technologies?: string;
   name?: string;
   displayName?: string;
   platforms?: string;
@@ -196,10 +199,13 @@ async function readExportedPolicy(file: string): Promise<BaselinePolicy | undefi
 }
 
 /**
- * Two kinds of export are understood: a Settings Catalog policy (a
- * `settings` list of setting instances) and a compliance policy (a
- * typed resource with its settings as properties). A policy with
- * nothing configured in it is not a baseline policy.
+ * Three kinds of export are understood: a Settings Catalog policy (a
+ * `settings` list of setting instances), a typed compliance policy (a
+ * resource with its settings as properties), and a compliance policy in
+ * the Settings Catalog format, as Intune uses for Linux — told from a
+ * configuration policy by its type or, in an export that dropped the
+ * type, by its Linux technology. A policy with nothing configured in it
+ * is not a baseline policy.
  */
 function parseExportedPolicy(bytes: Buffer): BaselinePolicy | undefined {
   let parsed: unknown;
@@ -223,9 +229,11 @@ function parseExportedPolicy(bytes: Buffer): BaselinePolicy | undefined {
 
   const catalog = parsed as ExportedPolicy;
   if (!Array.isArray(catalog.settings)) return undefined;
+  const compliance = catalog["@odata.type"] === "#microsoft.graph.deviceManagementCompliancePolicy" || /linuxMdm/i.test(catalog.technologies ?? "");
   const settings = catalog.settings
     .map((s) => s?.settingInstance)
     .filter((instance): instance is GraphSettingInstance => Boolean(instance?.settingDefinitionId))
+    .map((instance) => (compliance ? asComplianceInstance(instance) : instance))
     .map((instance) => ({ definitionId: instance.settingDefinitionId, expected: rawNode(instance) }));
   if (settings.length === 0) return undefined;
   const name = catalog.name ?? catalog.displayName;

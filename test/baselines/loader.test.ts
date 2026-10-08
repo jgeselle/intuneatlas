@@ -240,3 +240,32 @@ test("loadBaselines: an exported compliance policy becomes one rule per setting 
     },
   );
 });
+
+test("loadBaselines: an exported Linux compliance policy keeps its settings apart from configuration settings of the same id", async () => {
+  await withTempDir(
+    {
+      "house/linux-v1/linux.json": JSON.stringify({
+        "@odata.type": "#microsoft.graph.deviceManagementCompliancePolicy",
+        name: "Linux compliance",
+        platforms: "linux",
+        technologies: "linuxMdm",
+        settings: [{ settingInstance: integerInstance("linux_passwordpolicy_minimumlength", 12) }],
+      }),
+      // The same export with the type stripped, as some export tools write it.
+      "house/linux-v1/untyped.json": JSON.stringify({ name: "Linux encryption", platforms: "linux", technologies: "linuxMdm", settings: [{ settingInstance: choiceInstance("linux_deviceencryption_required", "true") }] }),
+      "house/linux-v1/config.json": exportedPolicy("Windows config", [integerInstance("linux_passwordpolicy_minimumlength", 8)]),
+    },
+    async (dir) => {
+      const rules = await loadBaselines(dir);
+      assert.deepEqual(
+        rules.map((r) => [r.policyName, r.definitionId, r.platform]).sort(),
+        [
+          ["Linux compliance", "compliance.catalog.linux_passwordpolicy_minimumlength", "linux"],
+          ["Linux encryption", "compliance.catalog.linux_deviceencryption_required", "linux"],
+          ["Windows config", "linux_passwordpolicy_minimumlength", "windows10"],
+        ],
+      );
+      assert.equal(rules.find((r) => r.policyName === "Linux compliance")?.expected.definitionId, "compliance.catalog.linux_passwordpolicy_minimumlength");
+    },
+  );
+});

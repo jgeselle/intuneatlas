@@ -167,6 +167,8 @@ test("complianceSettingsOf", async (t) => {
   await t.test("reads nothing from a resource that isn't a compliance policy", () => {
     assert.deepEqual(complianceSettingsOf({ "@odata.type": "#microsoft.graph.windows10GeneralConfiguration", passwordRequired: true }), []);
     assert.deepEqual(complianceSettingsOf({ passwordRequired: true }), []);
+    // The Settings Catalog kind of compliance policy has a `settings` list, not properties.
+    assert.deepEqual(complianceSettingsOf({ "@odata.type": "#microsoft.graph.deviceManagementCompliancePolicy", name: "Linux", platforms: "linux" }), []);
   });
 });
 

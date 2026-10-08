@@ -50,6 +50,7 @@ function refLabel(platform) {
   if (p.includes("windows")) return "CSP / OMA-URI";
   if (p.includes("ios") || p.includes("macos")) return "Payload key";
   if (p.includes("android")) return "Managed configuration key";
+  if (p.includes("linux")) return "Setting path";
   return "Graph property";
 }
 

@@ -7,6 +7,7 @@ import type { GroupDirectory } from "./types.js";
 import { normalizeState } from "./states.js";
 import type { BaselineRule } from "../baselines/types.js";
 import { fetchCompliancePolicies } from "./compliancePolicies.js";
+import { inComplianceCatalog } from "./complianceCatalog.js";
 import { complianceDefinitions, isComplianceDefinition } from "./complianceSettings.js";
 import { fetchConfigurationPolicies } from "./configurationPolicies.js";
 import { fetchLegacyDeviceConfigurations } from "./deviceConfigurations.js";
@@ -85,7 +86,8 @@ export async function buildReport(token: string, flow: string, tenant: string, b
   // and differing values among them aren't conflicts — then listed with the rest.
   const settingIndex = [...buildSettingIndex([...policies, ...legacyPolicies], groups), ...buildSettingIndex(compliance.settings, groups, { conflicts: false })];
   const known = new Set(settingIndex.flatMap((e) => Object.keys(e.schemas ?? {})));
-  const unknown = baselineDefinitionIds.filter((id) => !known.has(id) && !isComplianceDefinition(id));
+  // The typed compliance policies' settings are known without asking; the compliance catalog's are looked up like any other.
+  const unknown = baselineDefinitionIds.filter((id) => !known.has(id) && (!isComplianceDefinition(id) || inComplianceCatalog(id)));
   const baselineDefinitions = unknown.length > 0 ? await resolveBaselineDefinitions(token, unknown) : undefined;
 
   return {
