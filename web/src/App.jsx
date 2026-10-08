@@ -78,7 +78,21 @@ function withBaselineVerdicts(report, patch) {
   };
 }
 
+/**
+ * Decides which screen there is to show: no role, nothing scanned yet, or
+ * the app itself. Kept apart from Dashboard on purpose — Dashboard's hooks
+ * all need a report, and a component can't run some of its hooks only once
+ * a report has arrived (the first scan finishing used to blank the page
+ * for exactly that reason).
+ */
 export default function App({ initialReport, session }) {
+  const [report, setReport] = useState(initialReport);
+  if (session && !session.role) return <NoRoleScreen session={session} />;
+  if (!report) return <ConnectScreen onConnected={setReport} session={session} />;
+  return <Dashboard initialReport={report} session={session} />;
+}
+
+function Dashboard({ initialReport, session }) {
   const [report, setReport] = useState(initialReport);
   const [view, setView] = useState("overview");
   // A page can be opened already filtered — the Overview's shortcut into the Settings list. Any other way there starts unfiltered.
@@ -255,14 +269,6 @@ export default function App({ initialReport, session }) {
     const t = window.setInterval(() => forceTick((n) => n + 1), 60000);
     return () => window.clearInterval(t);
   }, []);
-
-  if (session && !session.role) {
-    return <NoRoleScreen session={session} />;
-  }
-
-  if (!report) {
-    return <ConnectScreen onConnected={setReport} session={session} />;
-  }
 
   const wholeTenant = report.settings ?? [];
   // Fetched again whenever anything it depends on changes: the group, a new scan, or which baselines are judged against.
