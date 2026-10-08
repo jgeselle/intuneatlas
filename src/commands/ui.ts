@@ -37,6 +37,8 @@ export interface UiOptions {
   baseline?: string;
   /** Interface to bind to (default: 127.0.0.1, this machine only). */
   host?: string;
+  /** This build's version, for the UI to show. */
+  version?: string;
 }
 
 /** Raw — settings carry no baseline judgment yet, notes/changes are tenant-wide and shared. */
@@ -75,6 +77,7 @@ export async function runUi(options: UiOptions): Promise<void> {
     // the page happens in onEvaluateForViewer below, every time, so it's
     // never stale relative to whatever that viewer's own selection is.
     report: staticReport ? enrichReport(staticReport) : null,
+    ...(options.version ? { version: options.version } : {}),
     host,
     // 7878 unless told otherwise — for a platform that dictates the port its containers listen on.
     ...(Number(process.env.INTUNEATLAS_PORT) > 0 ? { startPort: Number(process.env.INTUNEATLAS_PORT) } : {}),

@@ -103,6 +103,7 @@ program
         report: opts.report,
         baseline: opts.baseline,
         host: opts.host,
+        version: program.version(),
       });
     }),
   );

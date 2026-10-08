@@ -4,6 +4,8 @@ import { initialsOf } from "../lib/format.js";
 
 function AccountMenu({ session, tenant, up = false, full = false, textClassName = "", onOpenChange }) {
   const [open, setOpen] = useState(false);
+  // Which build is running — put into the page by the server, like the session.
+  const version = window.__INTUNEATLAS_VERSION__;
 
   // Lets a parent rail pin itself open while the popover is up (see
   // `menuPinned` in App) — needed only for the collapsible-sidebar
@@ -86,7 +88,7 @@ function AccountMenu({ session, tenant, up = false, full = false, textClassName 
           </div>
         </div>
 
-        {(session.role || tenant) && (
+        {(session.role || tenant || version) && (
           <dl className="mt-3 space-y-1.5 border-t border-stone-100 pt-3 text-xs">
             {session.role && (
               <div className="flex items-baseline justify-between gap-3">
@@ -98,6 +100,12 @@ function AccountMenu({ session, tenant, up = false, full = false, textClassName 
               <div className="flex items-baseline justify-between gap-3">
                 <dt className="text-stone-500">Tenant</dt>
                 <dd className="truncate text-right text-stone-700">{tenant}</dd>
+              </div>
+            )}
+            {version && (
+              <div className="flex items-baseline justify-between gap-3">
+                <dt className="text-stone-500">Version</dt>
+                <dd className="truncate text-right tabular-nums text-stone-700">{version}</dd>
               </div>
             )}
           </dl>

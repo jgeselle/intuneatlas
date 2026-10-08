@@ -62,6 +62,8 @@ interface WithTargetKey {
 export interface StartServerOptions {
   /** null means "nothing scanned yet" — the UI shows its connect screen. */
   report: unknown | null;
+  /** The app's own version, shown in the UI — so a hosted instance can be told apart from the code it is supposed to run. */
+  version?: string;
   startPort?: number;
   /** Interface to bind to. Defaults to loopback-only; anything else is a shared/team deployment. */
   host?: string;
@@ -275,7 +277,7 @@ export async function startServer(options: StartServerOptions): Promise<{ url: s
         return;
       }
 
-      await serveStatic(req, res, () => currentReport, viewer, options.onEvaluateForViewer);
+      await serveStatic(req, res, () => currentReport, viewer, options.onEvaluateForViewer, options.version);
     } catch (err) {
       // serveStatic's readFile throwing ENOENT for a genuinely missing
       // static asset is the routine, expected case this 404 exists for —
@@ -377,6 +379,7 @@ async function serveStatic(
   getReport: () => unknown,
   viewer: ViewerIdentity,
   onEvaluateForViewer: StartServerOptions["onEvaluateForViewer"],
+  version?: string,
 ): Promise<void> {
   const dist = webDist();
   const requestPath = (req.url ?? "/").split("?")[0];
@@ -393,7 +396,8 @@ async function serveStatic(
     const report = raw && onEvaluateForViewer ? await onEvaluateForViewer(raw, viewer) : raw;
     const injectedScript =
       `<script>window.__INTUNEATLAS_REPORT__ = ${jsonForScriptTag(report)};` +
-      `window.__INTUNEATLAS_SESSION__ = ${jsonForScriptTag(viewer)};</script>`;
+      `window.__INTUNEATLAS_SESSION__ = ${jsonForScriptTag(viewer)};` +
+      `window.__INTUNEATLAS_VERSION__ = ${jsonForScriptTag(version ?? null)};</script>`;
     body = Buffer.from(body.toString("utf8").replace("</head>", `${injectedScript}</head>`));
   }
 
