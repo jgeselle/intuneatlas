@@ -26,11 +26,7 @@ function ConnectScreen({ onConnected, session }) {
       <div className="w-full max-w-sm animate-rise-in rounded-lg border border-stone-200 bg-white p-6">
         <div className="font-heading text-xl font-semibold leading-none tracking-tight text-teal-800">IntuneAtlas</div>
         <h1 className="mt-4 text-lg font-semibold">No scan yet</h1>
-        <p className="mt-1 text-sm text-stone-500">
-          {session ? `Signed in as ${session.name}. ` : ""}
-          Nothing's been pulled from Intune yet
-          {canScan ? " — scan now to build the settings index." : "."}
-        </p>
+        {session && <p className="mt-1 text-sm text-stone-500">Signed in as {session.name}</p>}
         {canScan ? (
           <form onSubmit={submit} className="mt-4">
             <button
@@ -43,7 +39,7 @@ function ConnectScreen({ onConnected, session }) {
           </form>
         ) : (
           <p className="mt-4 rounded-md border border-stone-200 bg-stone-50 p-3 text-xs leading-relaxed text-stone-600">
-            Ask an Admin to run the first scan — only the Admin role can trigger a tenant scan.
+            Only the Admin role can run a scan.
           </p>
         )}
         {error && <p className="mt-3 text-xs text-red-700">{error}</p>}

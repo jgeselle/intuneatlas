@@ -67,19 +67,38 @@ function Diff({ from, to }) {
 }
 
 /**
- * Names the group a page is currently showing, at the start of its
- * subtitle — nothing when the page shows the whole tenant. The group is
- * chosen once, in the sidebar, and every page follows it; this is what
- * keeps a group's numbers from being read as the tenant's.
+ * A page's subtitle: the group the page is currently showing (chosen once,
+ * in the sidebar, for every page), then whatever fact the page has to
+ * state about itself — a count, a location. Either may be absent; with
+ * neither there is no subtitle at all. Pages don't describe themselves.
  */
-function ScopePrefix({ label }) {
-  if (!label) return null;
+function PageSubtitle({ scopeLabel, children }) {
+  const hasFact = children !== undefined && children !== null && children !== false && children !== "";
+  if (!scopeLabel && !hasFact) return null;
   return (
-    <>
-      <span className="font-medium text-stone-700">{label}</span>
-      {" · "}
-    </>
+    <p className="mt-1 text-sm text-stone-500">
+      {scopeLabel && <span className="font-medium text-stone-700">{scopeLabel}</span>}
+      {scopeLabel && hasFact ? " · " : ""}
+      {hasFact ? children : null}
+    </p>
   );
+}
+
+/**
+ * "There is nothing here", said the same way everywhere: one muted,
+ * centred line stating what is absent — no icon, no advice.
+ *
+ * - default: a page whose list is empty — a dashed outline where the
+ *   list would be.
+ * - `bare`: inside something that already has its own border (a card, a
+ *   table) — the line alone.
+ * - `compact`: a section of the setting panel — the dashed outline at
+ *   the panel's smaller scale.
+ */
+function Empty({ children, bare = false, compact = false }) {
+  const size = compact ? "px-3 py-4 text-xs" : bare ? "px-4 py-10 text-sm" : "px-4 py-12 text-sm";
+  const outline = bare ? "" : "rounded-lg border border-dashed border-stone-300 " + (compact ? "bg-stone-50 " : "bg-white ");
+  return <p className={outline + size + " text-center text-stone-500"}>{children}</p>;
 }
 
 /** A baseline's severity for a setting — nothing at all when the baseline doesn't rate it (a plain exported policy doesn't). */
@@ -312,13 +331,4 @@ function Stat({ label, value, sub, tone = "neutral", icon: Icon }) {
   );
 }
 
-function NotAvailableYet({ title, children }) {
-  return (
-    <div className="rounded-lg border border-dashed border-stone-300 bg-white px-4 py-10 text-center">
-      <p className="text-sm font-medium text-stone-600">{title}</p>
-      <p className="mx-auto mt-1 max-w-sm text-xs text-stone-500">{children}</p>
-    </div>
-  );
-}
-
-export { Chip, ScopePrefix, SeverityChip, Diff, Differences, RefPath, HistorySection, Stat, NotAvailableYet, ValueDisplay };
+export { Chip, Empty, PageSubtitle, SeverityChip, Diff, Differences, RefPath, HistorySection, Stat, ValueDisplay };

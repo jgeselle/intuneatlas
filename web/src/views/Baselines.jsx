@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 import { FolderOpen, PencilSimple, Plus, Trash } from "@phosphor-icons/react";
+import { PageSubtitle, Empty } from "../components/bits.jsx";
 import { platformLabel } from "../lib/format.js";
 
 const FIELD =
@@ -259,18 +260,13 @@ function Baselines({ packs, activePacks, settingIndex, folder, viewer, onUpdateS
     <div className="space-y-5">
       <header>
         <h1 className="text-xl font-semibold">Baselines</h1>
-        {(folder || scopeLabel) && (
-          <p className="mt-1 text-sm text-stone-500">
-            {/* The counts on each baseline below are for the chosen group. */}
-            {scopeLabel && <span className="font-medium text-stone-700">{scopeLabel}</span>}
-            {scopeLabel && folder ? " · " : ""}
-            {folder && (
-              <>
-                Stored in <code className="font-mono text-xs text-stone-600">{folder}</code>
-              </>
-            )}
-          </p>
-        )}
+        <PageSubtitle scopeLabel={scopeLabel}>
+          {folder && (
+            <>
+              Stored in <code className="font-mono text-xs text-stone-600">{folder}</code>
+            </>
+          )}
+        </PageSubtitle>
       </header>
 
       {canManage && <AddBaseline onAdd={onAdd} />}
@@ -282,9 +278,7 @@ function Baselines({ packs, activePacks, settingIndex, folder, viewer, onUpdateS
       )}
 
       {packs.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-stone-300 bg-white px-4 py-10 text-center">
-          <p className="text-sm font-medium text-stone-600">No baselines</p>
-        </div>
+        <Empty>No baselines</Empty>
       ) : (
         <ul className="space-y-3">
           {packs.map((pack) => (

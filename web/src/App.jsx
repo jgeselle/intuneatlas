@@ -429,7 +429,7 @@ export default function App({ initialReport, session }) {
       const change = await res.json();
       if (!res.ok) throw new Error(change.error || "Couldn't stage the change");
       setChanges((c) => ({ ...c, [change.targetKey]: change }));
-      flash(reason?.trim() ? "Change staged. Add a reviewer before it's ready." : "Change staged. Add a reason and reviewer before it's ready.");
+      flash("Change staged");
     } catch (err) {
       flash(err.message);
     }

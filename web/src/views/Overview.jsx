@@ -1,5 +1,5 @@
-import { Sliders, ShieldCheck, DeviceMobile, Warning, CheckCircle, Check, Clock } from "@phosphor-icons/react";
-import { ScopePrefix, SeverityChip, Stat, NotAvailableYet } from "../components/bits.jsx";
+import { Sliders, ShieldCheck, DeviceMobile, Warning, Check, Clock } from "@phosphor-icons/react";
+import { PageSubtitle, SeverityChip, Stat, Empty } from "../components/bits.jsx";
 import { severityRank } from "../lib/styles.js";
 import { platformLabel } from "../lib/format.js";
 
@@ -24,10 +24,7 @@ function Overview({ settingIndex, compliancePolicies, enrollmentConfigurations, 
     <div className="space-y-6">
       <header>
         <h1 className="text-xl font-semibold">Overview</h1>
-        <p className="mt-1 text-sm text-stone-500">
-          <ScopePrefix label={scopeLabel} />
-          {scopeLabel ? "Where this group stands, and what to fix first." : "Where the tenant stands, and what to fix first."}
-        </p>
+        <PageSubtitle scopeLabel={scopeLabel} />
       </header>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -60,11 +57,7 @@ function Overview({ settingIndex, compliancePolicies, enrollmentConfigurations, 
             </button>
           </div>
           {recs.length === 0 ? (
-            <div className="px-4 py-10 text-center">
-              <CheckCircle className="mx-auto h-6 w-6 text-teal-500" />
-              <p className="mt-2 text-sm font-medium">Nothing outstanding</p>
-              <p className="mt-1 text-xs text-stone-500">Every scanned setting matches the baseline.</p>
-            </div>
+            <Empty bare>Nothing outstanding</Empty>
           ) : (
             <ul className="divide-y divide-stone-100">
               {recs.slice(0, 5).map(({ entry: e, rec }) => (
@@ -89,18 +82,9 @@ function Overview({ settingIndex, compliancePolicies, enrollmentConfigurations, 
 
         <section className="space-y-4 lg:col-span-2">
           <div className="rounded-lg border border-stone-200 bg-white p-4">
-            <h2 className="text-sm font-semibold">Compliance by platform</h2>
-            <div className="mt-3">
-              <NotAvailableYet title="Needs device sync">Per-device compliance percentages aren't scanned yet.</NotAvailableYet>
-            </div>
-          </div>
-
-          <div className="rounded-lg border border-stone-200 bg-white p-4">
             <h2 className="text-sm font-semibold">Recent changes</h2>
             {changeList.length === 0 ? (
-              <p className="mt-2 text-xs text-stone-500">
-                No changes yet. Staging a recommendation lands it here before anything reaches the tenant.
-              </p>
+              <Empty bare>Nothing staged</Empty>
             ) : (
               <ul className="mt-3 space-y-2">
                 {changeList.slice(0, 4).map((c) => (

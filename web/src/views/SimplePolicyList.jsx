@@ -1,5 +1,5 @@
 import { MagnifyingGlass } from "@phosphor-icons/react";
-import { Chip, ScopePrefix } from "../components/bits.jsx";
+import { Chip, PageSubtitle, Empty } from "../components/bits.jsx";
 import { platformLabel } from "../lib/format.js";
 
 function SimplePolicyList({ kindLabel, items, query, setQuery, onOpen, scopeLabel }) {
@@ -11,10 +11,9 @@ function SimplePolicyList({ kindLabel, items, query, setQuery, onOpen, scopeLabe
     <div className="space-y-5">
       <header>
         <h1 className="text-xl font-semibold">{kindLabel}</h1>
-        <p className="mt-1 text-sm text-stone-500">
-          <ScopePrefix label={scopeLabel} />
-          {items.length} {kindLabel.toLowerCase()} found · {deployedCount} assigned.
-        </p>
+        <PageSubtitle scopeLabel={scopeLabel}>
+          {items.length} found · {deployedCount} assigned
+        </PageSubtitle>
       </header>
 
       <div className="relative">
@@ -63,9 +62,7 @@ function SimplePolicyList({ kindLabel, items, query, setQuery, onOpen, scopeLabe
           </tbody>
         </table>
         {shown.length === 0 && (
-          <div className="px-4 py-12 text-center">
-            <p className="text-sm font-medium">No {kindLabel.toLowerCase()} match that search</p>
-          </div>
+          <Empty bare>{items.length === 0 ? "No " + kindLabel.toLowerCase() + " policies" : "No " + kindLabel.toLowerCase() + " policies match that search"}</Empty>
         )}
       </div>
     </div>

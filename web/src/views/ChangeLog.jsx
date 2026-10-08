@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { ArrowCounterClockwise, Check, Clock, PaperPlaneTilt, PencilSimple } from "@phosphor-icons/react";
-import { Chip, Diff } from "../components/bits.jsx";
+import { ArrowCounterClockwise, Check, PencilSimple } from "@phosphor-icons/react";
+import { Chip, Diff, PageSubtitle, Empty } from "../components/bits.jsx";
 
 function ChangeCard({ change, onUpdateField, onRevert, viewer, inGroup = false, onOpen }) {
   const [reason, setReason] = useState(change.reason);
@@ -61,7 +61,7 @@ function ChangeCard({ change, onUpdateField, onRevert, viewer, inGroup = false, 
             onBlur={() => reason !== change.reason && onUpdateField(change.id, "reason", reason)}
             rows={2}
             disabled={!canEdit}
-            placeholder="Why is this change needed?"
+            placeholder="Reason"
             className="mt-1 w-full resize-none rounded-md border border-stone-300 bg-white p-2 text-xs placeholder-stone-400 focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600 disabled:bg-stone-50 disabled:text-stone-400"
           />
         </label>
@@ -197,33 +197,13 @@ function ChangeLog({ changes, onUpdateField, onRevert, viewer, onOpen, canOpen }
 
   return (
     <div className="space-y-5">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold">Change log</h1>
-          <p className="mt-1 text-sm text-stone-500">
-            {list.length === 0
-              ? "Nothing staged yet. Change a setting's value and it lands here for review."
-              : ready + " of " + list.length + " ready. Reason and a reviewer are required before deploying."}
-          </p>
-        </div>
-        <button
-          disabled
-          title="Deploying to the tenant needs write-back, which isn't built yet."
-          className="inline-flex items-center gap-2 rounded-md bg-stone-200 px-3.5 py-2 text-sm font-medium text-stone-400"
-        >
-          <PaperPlaneTilt className="h-4 w-4" />
-          Deploy
-        </button>
+      <header>
+        <h1 className="text-xl font-semibold">Change log</h1>
+        <PageSubtitle>{list.length > 0 && ready + " of " + list.length + " ready"}</PageSubtitle>
       </header>
 
       {list.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-stone-300 bg-white px-4 py-16 text-center">
-          <Clock className="mx-auto h-6 w-6 text-stone-400" />
-          <p className="mt-3 text-sm font-medium">Nothing staged</p>
-          <p className="mx-auto mt-1 max-w-sm text-xs text-stone-500">
-            Open a setting and click "Stage this change" — it'll show up here for review.
-          </p>
-        </div>
+        <Empty>Nothing staged</Empty>
       ) : (
         <div className="space-y-6">
           {newPolicies.map(([name, changes]) => (

@@ -21,9 +21,6 @@ function SimplePolicyDrawer({ item, kindLabel, notes, onAddNote, onDeleteNote, o
         </>
       }
     >
-      <p className="rounded-md border border-stone-200 bg-stone-50 p-3 text-xs leading-relaxed text-stone-600">
-        Per-setting detail for {kindLabel.toLowerCase()} policies isn't scanned yet — this shows identity and assignment status only.
-      </p>
       <HistorySection notes={notes} onAdd={onAddNote} onDelete={onDeleteNote} readOnly={!canNote} viewer={viewer} />
     </DrawerShell>
   );

@@ -1,6 +1,5 @@
 import { useState } from "react";
-import { CheckCircle } from "@phosphor-icons/react";
-import { Differences, ScopePrefix, SeverityChip } from "../components/bits.jsx";
+import { Differences, PageSubtitle, SeverityChip, Empty } from "../components/bits.jsx";
 import { SEVERITY_STYLE, severityRank } from "../lib/styles.js";
 import { platformLabel } from "../lib/format.js";
 
@@ -36,12 +35,7 @@ function Recommendations({ settingIndex, onOpen, scopeLabel }) {
     <div className="space-y-5">
       <header>
         <h1 className="text-xl font-semibold">Recommendations</h1>
-        <p className="mt-1 text-sm text-stone-500">
-          <ScopePrefix label={scopeLabel} />
-          Settings that differ from a baseline, ranked by what they expose. A setting can show up more than once here if
-          several baselines have an opinion on it. Write-back doesn't exist yet, so these are for review — nothing here
-          changes the tenant.
-        </p>
+        <PageSubtitle scopeLabel={scopeLabel} />
       </header>
 
       {sources.length > 2 && (
@@ -111,11 +105,7 @@ function Recommendations({ settingIndex, onOpen, scopeLabel }) {
         ))}
 
         {shown.length === 0 && (
-          <div className="rounded-lg border border-dashed border-stone-300 bg-white px-4 py-16 text-center">
-            <CheckCircle className="mx-auto h-7 w-7 text-teal-500" />
-            <p className="mt-3 text-sm font-medium">No recommendations at this level</p>
-            <p className="mt-1 text-xs text-stone-500">Switch filters to review the rest.</p>
-          </div>
+          <Empty>{all.length === 0 ? "No recommendations" : "No recommendations match that filter"}</Empty>
         )}
       </div>
     </div>

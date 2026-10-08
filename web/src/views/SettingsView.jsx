@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { Sliders, WarningCircle, Warning, Prohibit, Question, MagnifyingGlass, ChatCircle, ListChecks } from "@phosphor-icons/react";
-import { Chip, ScopePrefix, Stat } from "../components/bits.jsx";
+import { Chip, PageSubtitle, Stat, Empty } from "../components/bits.jsx";
 import { STATE_STYLE } from "../lib/styles.js";
 import { platformLabel } from "../lib/format.js";
 
@@ -79,12 +79,7 @@ function SettingsView({
       <div className="sticky top-0 z-10 -mt-6 space-y-5 bg-stone-50 pb-4 pt-6 lg:-mt-8 lg:pt-8">
         <header>
           <h1 className="text-xl font-semibold">Settings</h1>
-          <p className="mt-1 text-sm text-stone-500">
-            <ScopePrefix label={scopeLabel} />
-            {scopeLabel
-              ? "Every setting the policies reaching this group configure, merged across them."
-              : "Every configuration setting in the tenant, merged across policies. Where two policies set the same thing differently, it shows up here as a conflict."}
-          </p>
+          <PageSubtitle scopeLabel={scopeLabel} />
         </header>
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
@@ -139,10 +134,7 @@ function SettingsView({
       </div>
 
       {shown.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-stone-300 bg-white px-4 py-16 text-center">
-          <p className="text-sm font-medium">No settings match that filter</p>
-          <p className="mt-1 text-xs text-stone-500">Clear the search or pick a different state.</p>
-        </div>
+        <Empty>No settings match that filter</Empty>
       ) : (
         <div ref={listRef} style={{ position: "relative", height: virtualizer.getTotalSize(), width: "100%" }}>
           {virtualizer.getVirtualItems().map((vi) => {

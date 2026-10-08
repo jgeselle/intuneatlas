@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { WarningCircle, CheckCircle, MinusCircle } from "@phosphor-icons/react";
 import { DrawerShell } from "./DrawerShell.jsx";
-import { Chip, SeverityChip, Differences, RefPath, HistorySection, ValueDisplay } from "./bits.jsx";
+import { Chip, SeverityChip, Differences, RefPath, HistorySection, ValueDisplay, Empty } from "./bits.jsx";
 import { STATE_STYLE } from "../lib/styles.js";
 import { platformLabel, refLabel } from "../lib/format.js";
 import { rangeLabel } from "../lib/schema.js";
@@ -385,9 +385,9 @@ function SettingDrawer({ entry, notes, onAddNote, onDeleteNote, onClose, changes
           Policies {entry.sources.length ? <span className="tabular-nums text-stone-400">· {entry.sources.length}</span> : null}
         </h3>
         {entry.sources.length === 0 && newPolicyChanges.length === 0 && pendingNew.length === 0 ? (
-          <p className="mt-2 rounded-md border border-dashed border-stone-300 bg-stone-50 p-3 text-xs leading-relaxed text-stone-500">
-            No policy in this tenant configures this setting.
-          </p>
+          <div className="mt-2">
+            <Empty compact>No policy sets this</Empty>
+          </div>
         ) : (
           <ul className="mt-2 space-y-2">
             {entry.sources.map((source, n) => {
@@ -457,9 +457,9 @@ function SettingDrawer({ entry, notes, onAddNote, onDeleteNote, onClose, changes
           Baselines {checks.length ? <span className="tabular-nums text-stone-400">· {checks.length}</span> : null}
         </h3>
         {checks.length === 0 ? (
-          <p className="mt-2 rounded-md border border-dashed border-stone-300 bg-stone-50 p-3 text-xs leading-relaxed text-stone-500">
-            No active baseline has a rule for this setting.
-          </p>
+          <div className="mt-2">
+            <Empty compact>No active baseline covers this</Empty>
+          </div>
         ) : (
           <ul className="mt-2 space-y-2">
             {checks.map((check) => {
