@@ -442,7 +442,7 @@
 
   <span class="ok">✓</span> signed in <span class="dim">— admin@contoso.onmicrosoft.com (read-only)</span>
   <span class="ok">✓</span> 41 policies <span class="dim">→</span> 1,847 settings indexed <span class="dim">in 3m 41s</span>
-  <span class="ok">✓</span> 11 findings <span class="dim">·</span> <span class="crit">3 critical</span>
+  <span class="ok">✓</span> <span class="crit">6 conflicts</span> <span class="dim">·</span> <span class="warnk">23 below baseline</span> <span class="dim">·</span> 9 missing
 
   <span class="dim">→</span> <span class="path">http://localhost:7878</span>
 </pre>
@@ -450,39 +450,47 @@
 
       <div class="idx">
         <div class="idx-bar">
-          <span class="idx-url">localhost:7878/settings</span>
-          <span class="idx-count">1,847 indexed · 11 findings</span>
+          <span class="idx-url">localhost:7878</span>
+          <span class="idx-count">1,847 settings · Pilot ring</span>
         </div>
         <div class="idx-row">
           <span class="idx-main">
-            <b>Quality update deferral</b>
-            <span>Windows · 2 policies · 412 devices</span>
+            <b>Quality update deferral period (days)</b>
+            <span>Windows 10 · 2 policies</span>
           </span>
-          <span class="idx-val">14 days&nbsp;&nbsp;/&nbsp;&nbsp;2 days</span>
+          <span class="idx-val">14&nbsp;&nbsp;/&nbsp;&nbsp;2</span>
           <span class="chip chip-conflict">Conflict</span>
         </div>
         <div class="idx-row">
           <span class="idx-main">
             <b>Tamper protection <span class="idx-note">· 2 notes</span></b>
-            <span>Windows · Defender &amp; ASR Rules · 1,312 devices</span>
+            <span>Windows 10 · Defender Antivirus – Baseline</span>
           </span>
-          <span class="idx-val">Off</span>
+          <span class="idx-val">Disabled</span>
           <span class="chip chip-below">Below baseline</span>
         </div>
         <div class="idx-row">
           <span class="idx-main">
-            <b>Download mode</b>
-            <span>Windows · Delivery Optimization · no groups assigned</span>
+            <b>Require Device Encryption</b>
+            <span>Windows 10 · No policy</span>
+          </span>
+          <span class="idx-val">Not configured</span>
+          <span class="chip chip-missing">Missing</span>
+        </div>
+        <div class="idx-row">
+          <span class="idx-main">
+            <b>Download Mode</b>
+            <span>Windows 10 · Delivery Optimization (draft)</span>
           </span>
           <span class="idx-val">HTTP only</span>
           <span class="chip chip-stone">Not assigned</span>
         </div>
         <div class="idx-row">
           <span class="idx-main">
-            <b>Escrow recovery key to Intune</b>
-            <span>macOS · FileVault · 342 devices</span>
+            <b>Enable FileVault</b>
+            <span>macOS · FileVault – All Macs</span>
           </span>
-          <span class="idx-val">Enabled</span>
+          <span class="idx-val">On</span>
           <span class="chip chip-green">Meets baseline</span>
         </div>
       </div>
