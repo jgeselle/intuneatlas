@@ -1,0 +1,225 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.48.1.52935",
+      "templateHash": "17614353201651970701"
+    }
+  },
+  "parameters": {
+    "name": {
+      "type": "string",
+      "defaultValue": "intuneatlas",
+      "minLength": 2,
+      "maxLength": 32,
+      "metadata": {
+        "description": "Name of the container app. It becomes the first part of the address."
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Azure region. Defaults to the resource group's."
+      }
+    },
+    "tenantId": {
+      "type": "string",
+      "defaultValue": "[subscription().tenantId]",
+      "metadata": {
+        "description": "The Entra tenant people sign in to — a tenant ID or domain. Defaults to the tenant this subscription belongs to."
+      }
+    },
+    "clientId": {
+      "type": "string",
+      "minLength": 36,
+      "maxLength": 36,
+      "metadata": {
+        "description": "Application (client) ID of the Entra app registration IntuneAtlas signs in with."
+      }
+    },
+    "alwaysOn": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Keep one instance running at all times. Turned off, the app stops after a few idle minutes and costs next to nothing, but the first visit afterwards waits for it to start and everyone signs in again."
+      }
+    },
+    "image": {
+      "type": "string",
+      "defaultValue": "ghcr.io/jgeselle/intuneatlas:latest",
+      "metadata": {
+        "description": "The container image to run."
+      }
+    }
+  },
+  "variables": {
+    "suffix": "[uniqueString(resourceGroup().id, parameters('name'))]",
+    "shareName": "data",
+    "mountName": "data"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Storage/storageAccounts/fileServices/shares",
+      "apiVersion": "2023-05-01",
+      "name": "[format('{0}/{1}/{2}', format('atlas{0}', variables('suffix')), 'default', variables('shareName'))]",
+      "properties": {
+        "shareQuota": 5
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts/fileServices', format('atlas{0}', variables('suffix')), 'default')]"
+      ]
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/fileServices",
+      "apiVersion": "2023-05-01",
+      "name": "[format('{0}/{1}', format('atlas{0}', variables('suffix')), 'default')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', format('atlas{0}', variables('suffix')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.App/managedEnvironments/storages",
+      "apiVersion": "2024-03-01",
+      "name": "[format('{0}/{1}', format('{0}-env', parameters('name')), variables('mountName'))]",
+      "properties": {
+        "azureFile": {
+          "accountName": "[format('atlas{0}', variables('suffix'))]",
+          "accountKey": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', format('atlas{0}', variables('suffix'))), '2023-05-01').keys[0].value]",
+          "shareName": "[variables('shareName')]",
+          "accessMode": "ReadWrite"
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('name')))]",
+        "[resourceId('Microsoft.Storage/storageAccounts', format('atlas{0}', variables('suffix')))]",
+        "[resourceId('Microsoft.Storage/storageAccounts/fileServices/shares', format('atlas{0}', variables('suffix')), 'default', variables('shareName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2023-09-01",
+      "name": "[format('{0}-logs', parameters('name'))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "sku": {
+          "name": "PerGB2018"
+        },
+        "retentionInDays": 30
+      }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2023-05-01",
+      "name": "[format('atlas{0}', variables('suffix'))]",
+      "location": "[parameters('location')]",
+      "kind": "StorageV2",
+      "sku": {
+        "name": "Standard_LRS"
+      },
+      "properties": {
+        "minimumTlsVersion": "TLS1_2",
+        "supportsHttpsTrafficOnly": true,
+        "allowBlobPublicAccess": false
+      }
+    },
+    {
+      "type": "Microsoft.App/managedEnvironments",
+      "apiVersion": "2024-03-01",
+      "name": "[format('{0}-env', parameters('name'))]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "appLogsConfiguration": {
+          "destination": "log-analytics",
+          "logAnalyticsConfiguration": {
+            "customerId": "[reference(resourceId('Microsoft.OperationalInsights/workspaces', format('{0}-logs', parameters('name'))), '2023-09-01').customerId]",
+            "sharedKey": "[listKeys(resourceId('Microsoft.OperationalInsights/workspaces', format('{0}-logs', parameters('name'))), '2023-09-01').primarySharedKey]"
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.OperationalInsights/workspaces', format('{0}-logs', parameters('name')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.App/containerApps",
+      "apiVersion": "2024-03-01",
+      "name": "[parameters('name')]",
+      "location": "[parameters('location')]",
+      "properties": {
+        "managedEnvironmentId": "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('name')))]",
+        "configuration": {
+          "activeRevisionsMode": "Single",
+          "ingress": {
+            "external": true,
+            "targetPort": 7878,
+            "transport": "auto",
+            "allowInsecure": false
+          }
+        },
+        "template": {
+          "containers": [
+            {
+              "name": "intuneatlas",
+              "image": "[parameters('image')]",
+              "resources": {
+                "cpu": "[json('0.5')]",
+                "memory": "1Gi"
+              },
+              "env": [
+                {
+                  "name": "INTUNEATLAS_TENANT_ID",
+                  "value": "[parameters('tenantId')]"
+                },
+                {
+                  "name": "INTUNEATLAS_CLIENT_ID",
+                  "value": "[parameters('clientId')]"
+                }
+              ],
+              "volumeMounts": [
+                {
+                  "volumeName": "[variables('mountName')]",
+                  "mountPath": "/data"
+                }
+              ]
+            }
+          ],
+          "scale": {
+            "minReplicas": "[if(parameters('alwaysOn'), 1, 0)]",
+            "maxReplicas": 1
+          },
+          "volumes": [
+            {
+              "name": "[variables('mountName')]",
+              "storageType": "AzureFile",
+              "storageName": "[variables('mountName')]",
+              "mountOptions": "nobrl,uid=1000,gid=1000,dir_mode=0700,file_mode=0600"
+            }
+          ]
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.App/managedEnvironments', format('{0}-env', parameters('name')))]",
+        "[resourceId('Microsoft.App/managedEnvironments/storages', format('{0}-env', parameters('name')), variables('mountName'))]"
+      ]
+    }
+  ],
+  "outputs": {
+    "url": {
+      "type": "string",
+      "metadata": {
+        "description": "Where the app is running."
+      },
+      "value": "[format('https://{0}', reference(resourceId('Microsoft.App/containerApps', parameters('name')), '2024-03-01').configuration.ingress.fqdn)]"
+    },
+    "redirectUri": {
+      "type": "string",
+      "metadata": {
+        "description": "Add this to the app registration: Authentication → Mobile and desktop applications → custom redirect URI."
+      },
+      "value": "[format('https://{0}/auth/callback', reference(resourceId('Microsoft.App/containerApps', parameters('name')), '2024-03-01').configuration.ingress.fqdn)]"
+    }
+  }
+}

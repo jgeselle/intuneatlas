@@ -197,6 +197,17 @@
 
         <div class="ex-label">Stop and remove it</div>
         <pre><span class="p">$</span> intuneatlas ui --stop</pre>
+        <p class="desc" style="margin-top:22px">
+          Where there is no command line to pass flags on, such as a container, the same settings can come
+          from the environment:
+        </p>
+        <table class="flags">
+          <tr><th>Variable</th><th>Stands in for</th></tr>
+          <tr><td>INTUNEATLAS_TENANT_ID</td><td><code>--tenant</code></td></tr>
+          <tr><td>INTUNEATLAS_CLIENT_ID</td><td><code>--client-id</code></td></tr>
+          <tr><td>INTUNEATLAS_HOST</td><td><code>--host</code></td></tr>
+          <tr><td>INTUNEATLAS_PORT</td><td>The port to listen on (default <code>7878</code>)</td></tr>
+        </table>
       </section>
 
       <section id="export">

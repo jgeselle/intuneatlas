@@ -31,3 +31,46 @@ jobs:
 
       - name: Test
         run: npm test
+
+  # The container image and the Azure template aren't exercised by the tests
+  # above, and neither can be built in every dev environment — so both are
+  # checked here, before anything is tagged for release.
+  container:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the image
+        run: docker build -t intuneatlas:ci .
+
+      - name: Start it and wait for it to answer
+        run: |
+          docker run -d --name atlas -p 7878:7878 \
+            -e INTUNEATLAS_TENANT_ID=contoso.onmicrosoft.com \
+            -e INTUNEATLAS_CLIENT_ID=00000000-0000-0000-0000-000000000000 \
+            intuneatlas:ci
+          for i in $(seq 1 30); do
+            # Nobody is signed in, so the answer to expect is the redirect to sign-in.
+            code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:7878/ || true)
+            if [ "$code" = "302" ]; then exit 0; fi
+            sleep 1
+          done
+          docker logs atlas
+          exit 1
+
+  azure-template:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The "Deploy to Azure" button reads azuredeploy.json; main.bicep is its
+      # source. Compared without the compiler's own stamp (its version and a
+      # hash), which changes whenever the runner's Bicep does.
+      - name: azuredeploy.json is main.bicep, compiled
+        run: |
+          az bicep build --file infra/azure/main.bicep --stdout | jq -S 'del(.metadata._generator)' > compiled.json
+          jq -S 'del(.metadata._generator)' infra/azure/azuredeploy.json > committed.json
+          diff compiled.json committed.json || {
+            echo "::error::infra/azure/azuredeploy.json is out of date — run: bicep build infra/azure/main.bicep --outfile infra/azure/azuredeploy.json"
+            exit 1
+          }

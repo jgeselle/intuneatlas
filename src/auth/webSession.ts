@@ -87,9 +87,10 @@ export interface WebSessionManager {
    */
   signOut(cookieHeader: string | undefined): Promise<void>;
   /** `Set-Cookie` value that pins a browser to the given session id. */
-  sessionCookie(sessionId: string): string;
+  /** `secure`: the browser reached this over HTTPS, so the cookie can be kept off plain HTTP altogether. */
+  sessionCookie(sessionId: string, secure?: boolean): string;
   /** `Set-Cookie` value that clears a previously-set session cookie. */
-  clearSessionCookie(): string;
+  clearSessionCookie(secure?: boolean): string;
 }
 
 /**
@@ -238,12 +239,14 @@ export async function createWebSessionManager(tenantId: string, clientId: string
       }
     },
 
-    sessionCookie(sessionId) {
-      return `${SESSION_COOKIE}=${sessionId}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${SESSION_MAX_AGE_SECONDS}`;
+    // Never Secure on plain HTTP (the solo run on localhost): a browser silently drops such a
+    // cookie. Secure whenever the request came in over HTTPS, which is every shared deployment.
+    sessionCookie(sessionId, secure = false) {
+      return `${SESSION_COOKIE}=${sessionId}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${SESSION_MAX_AGE_SECONDS}${secure ? "; Secure" : ""}`;
     },
 
-    clearSessionCookie() {
-      return `${SESSION_COOKIE}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0`;
+    clearSessionCookie(secure = false) {
+      return `${SESSION_COOKIE}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${secure ? "; Secure" : ""}`;
     },
   };
 }

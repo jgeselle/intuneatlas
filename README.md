@@ -43,6 +43,10 @@ it with a team and assigning roles, and has the full
 [CLI reference](https://intuneatlas.com/docs/cli.html). Building from a
 clone instead: `npm install && npm run build && node dist/cli.js ui`.
 
+To host a shared instance on Azure instead of a machine of your own, see
+[`infra/azure`](./infra/azure) — one template, deployed from a button, onto
+Azure Container Apps.
+
 ## What's in this repo
 
 | Path | What it is |
@@ -52,6 +56,7 @@ clone instead: `npm install && npm run build && node dist/cli.js ui`.
 | [`src/`](./src) | The CLI — auth, Graph scanning, settings index, local server |
 | [`web/`](./web) | The local web UI (Vite + React), served by `intuneatlas ui` |
 | [`test/`](./test) | Fixture-driven regression tests for the merge/conflict/baseline logic and the auth/authorization layer |
+| [`Dockerfile`](./Dockerfile), [`infra/azure/`](./infra/azure) | The app as a container image, and a template that deploys it to Azure Container Apps |
 | [`baselines/`](./baselines) | How a baseline folder is laid out — no baselines ship with the app |
 | [`scripts/seed-tenant/`](./scripts/seed-tenant) | Dev-only tooling that seeds a dedicated test tenant — see [`TESTING.md`](./TESTING.md) |
 | [`_headers`](./_headers) | Cloudflare Pages response headers (CSP, etc.) for the landing page |
@@ -155,7 +160,8 @@ than opening a public issue.
 - [ ] Enrollment configurations as settings — they are listed by name and assignment only
 - [ ] Legacy (template-based) device configuration profiles beyond a handful of Windows Device Restrictions settings
 - [ ] `intuneatlas get <path>` headless command
-- [ ] Azure-hosted deployment (Bicep, scheduled scans) — the auth this needs is now built, the infra-as-code isn't
+- [x] Container image and an Azure Container Apps template with a "Deploy to Azure" button — see [`infra/azure`](./infra/azure)
+- [ ] Scheduled scans for a hosted instance — today a signed-in Admin starts each scan
 - [ ] GitHub Action for scheduled drift scanning
 
 ## License

@@ -148,6 +148,7 @@
       <a href="#groups">Looking at one group</a>
       <a href="#baselines">Adding a baseline</a>
       <a href="#sharing">Sharing it with a team</a>
+      <a href="#azure">Hosting it on Azure</a>
       <a href="#next">Next</a>
     </div>
 
@@ -389,6 +390,35 @@ settings:
           <code>--persist</code> registers that exact command to keep running across
           reboots — a Scheduled Task on Windows, a systemd service on Linux. See the
           <a href="/docs/cli.html#ui">CLI reference</a> for the full flag list.
+        </p>
+      </section>
+
+      <section id="azure">
+        <h2>Hosting it on Azure</h2>
+        <p>
+          Instead of running a shared instance on a machine of your own, you can deploy it as an Azure
+          Container App. It gets its own HTTPS address, so no reverse proxy or certificate is needed, and
+          its data is kept on a file share.
+        </p>
+        <ol>
+          <li>Register the Entra app as <a href="#register-app">above</a>. You need its Application (client) ID.</li>
+          <li>
+            <a href="https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fjgeselle%2Fintuneatlas%2Fmain%2Finfra%2Fazure%2Fazuredeploy.json" target="_blank" rel="noopener noreferrer">Deploy to Azure</a>
+            opens the Azure portal with the template loaded. Pick a resource group and paste the client ID.
+          </li>
+          <li>
+            When it finishes, open the deployment's <b>Outputs</b>, copy <code>redirectUri</code>, and add it
+            to the app registration as another <b>Custom redirect URI</b> under <b>Mobile and desktop
+            applications</b>.
+          </li>
+          <li>Open <code>url</code> from the same outputs, sign in, and click <b>Scan now</b>.</li>
+        </ol>
+        <p>
+          The template creates a container app limited to one instance, a storage account for the data, and
+          a log workspace. What it costs, its parameters and how to update or remove it are in
+          <a href="https://github.com/jgeselle/intuneatlas/tree/main/infra/azure" target="_blank" rel="noopener noreferrer">infra/azure</a>.
+          The same image, <code>ghcr.io/jgeselle/intuneatlas</code>, runs anywhere a container does; it keeps
+          its data under <code>/data</code>.
         </p>
       </section>
 

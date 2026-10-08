@@ -45,18 +45,25 @@ type RawEnrichedReport = ScanReport & { notes: Record<string, Note[]>; changes: 
 type ViewerReport = RawEnrichedReport & { baselinePacks: BaselinePack[]; activeBaselinePacks: string[] | null; baselineFolder?: string };
 
 export async function runUi(options: UiOptions): Promise<void> {
-  const host = options.host ?? "127.0.0.1";
+  // The environment variables are for where there is no command line to speak of — a container:
+  // INTUNEATLAS_HOST and INTUNEATLAS_TENANT_ID stand in for --host and --tenant (and
+  // INTUNEATLAS_CLIENT_ID, read by resolveClientId, for --client-id); INTUNEATLAS_PORT moves it off 7878.
+  const host = options.host ?? process.env.INTUNEATLAS_HOST ?? "127.0.0.1";
   const staticReport = await resolveStaticReport(options);
+
+  // As a container's main process nothing ends this on SIGTERM unless it says so itself —
+  // without it every restart or scale-down waits out the platform's kill timeout.
+  process.once("SIGTERM", () => process.exit(0));
 
   // Every launch — solo laptop or a `--host`-exposed team instance — signs
   // in the same way (see src/auth/webSession.ts), and that sign-in needs a
   // tenant to scope itself to. Fall back to whatever a stored/loaded report
   // already names so returning to a tenant you've scanned before doesn't
   // require retyping it.
-  const tenantId = options.tenant ?? staticReport?.tenant;
+  const tenantId = options.tenant ?? process.env.INTUNEATLAS_TENANT_ID ?? staticReport?.tenant;
   if (!tenantId) {
     throw new Error(
-      "Missing tenant. Pass --tenant <id-or-domain> — needed to sign in — or run `intuneatlas scan` first.",
+      "Missing tenant. Pass --tenant <id-or-domain> (or set INTUNEATLAS_TENANT_ID) — needed to sign in — or run `intuneatlas scan` first.",
     );
   }
   const clientId = await resolveClientId(options.clientId);
@@ -69,6 +76,8 @@ export async function runUi(options: UiOptions): Promise<void> {
     // never stale relative to whatever that viewer's own selection is.
     report: staticReport ? enrichReport(staticReport) : null,
     host,
+    // 7878 unless told otherwise — for a platform that dictates the port its containers listen on.
+    ...(Number(process.env.INTUNEATLAS_PORT) > 0 ? { startPort: Number(process.env.INTUNEATLAS_PORT) } : {}),
     session,
     onScanRequest: async (graphToken) => enrichReport(await runViewerTriggeredScan(tenantId, graphToken, baselinePath)),
     onEvaluateForViewer: (report, viewer) => evaluateForViewer(report as RawEnrichedReport, viewer, baselinePath),
@@ -110,14 +119,13 @@ export async function runUi(options: UiOptions): Promise<void> {
     await open(url);
   } else {
     console.log("Share that URL with your team — everyone signs in with their own Microsoft account.");
-    // The app itself only ever speaks plain HTTP — no built-in TLS — and
-    // session cookies are deliberately not marked Secure to match (a Secure
-    // cookie over plain HTTP just gets silently dropped by the browser).
-    // Entra's own redirect-URI rule (https:// or exactly localhost) means
-    // sign-in can't complete at all without a real TLS-terminating proxy in
-    // front of this, but there's nothing here to catch a misconfigured one
-    // — say so explicitly rather than relying on someone having already
-    // read the docs.
+    // The app itself only ever speaks plain HTTP — no built-in TLS. Entra's own
+    // redirect-URI rule (https:// or exactly localhost) means sign-in can't
+    // complete at all without something terminating TLS in front of this
+    // (a reverse proxy, or a platform's ingress — which is also what makes
+    // the session cookie Secure, see staticServer.ts), but there's nothing
+    // here to catch a missing one — say so explicitly rather than relying on
+    // someone having already read the docs.
     console.log("This must sit behind a real HTTPS reverse proxy (see intuneatlas.com/docs) — never expose it directly.");
   }
 }

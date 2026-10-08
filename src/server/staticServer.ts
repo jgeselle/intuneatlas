@@ -129,6 +129,11 @@ export async function startServer(options: StartServerOptions): Promise<{ url: s
     return `${proto}://${req.headers.host}`;
   }
 
+  /** Whether the browser's own connection is HTTPS — this server only ever sees what the proxy in front of it reports. */
+  function isHttps(req: IncomingMessage): boolean {
+    return requestOrigin(req).startsWith("https://");
+  }
+
   function setNotes(targetKey: string, notes: unknown[]): void {
     if (!currentReport || typeof currentReport !== "object") return;
     const existing = currentReport as Record<string, unknown>;
@@ -165,7 +170,7 @@ export async function startServer(options: StartServerOptions): Promise<{ url: s
       }
       if (req.method === "GET" && req.url === "/auth/logout") {
         await session.signOut(req.headers.cookie);
-        res.writeHead(302, { Location: "/", "Set-Cookie": session.clearSessionCookie() });
+        res.writeHead(302, { Location: "/", "Set-Cookie": session.clearSessionCookie(isHttps(req)) });
         res.end();
         return;
       }
@@ -183,7 +188,7 @@ export async function startServer(options: StartServerOptions): Promise<{ url: s
         // signs in individually" guarantee shared mode is supposed to give.
         const silent = await session.trySilentLogin();
         if (silent) {
-          res.writeHead(302, { Location: req.url ?? "/", "Set-Cookie": session.sessionCookie(silent.sessionId) });
+          res.writeHead(302, { Location: req.url ?? "/", "Set-Cookie": session.sessionCookie(silent.sessionId, isHttps(req)) });
           res.end();
           return;
         }
@@ -309,7 +314,7 @@ async function handleCallback(
 
   try {
     const { sessionId } = await session.completeLogin({ code, state, redirectUri: `${requestOrigin(req)}/auth/callback` });
-    res.writeHead(302, { Location: "/", "Set-Cookie": session.sessionCookie(sessionId) });
+    res.writeHead(302, { Location: "/", "Set-Cookie": session.sessionCookie(sessionId, requestOrigin(req).startsWith("https://")) });
     res.end();
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

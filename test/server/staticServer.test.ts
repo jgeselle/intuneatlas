@@ -92,6 +92,21 @@ test("silent login does NOT fire on a non-loopback host — an unauthenticated G
   }
 });
 
+test("the session cookie is marked Secure exactly when the browser's own connection is HTTPS", async () => {
+  // What a TLS-terminating proxy (Azure Container Apps' ingress, Caddy, ...) reports is all this plain-HTTP server has to go on.
+  const session = mockSession({ clearSessionCookie: (secure?: boolean) => `intuneatlas_session=${secure ? "; Secure" : ""}` });
+  const server = await startTestServer("127.0.0.1", 17893, session);
+  try {
+    const behindProxy = await fetch("http://127.0.0.1:17893/auth/logout", { redirect: "manual", headers: { "x-forwarded-proto": "https" } });
+    assert.match(behindProxy.headers.get("set-cookie") ?? "", /; Secure$/);
+    // On plain HTTP — the solo run on localhost — a Secure cookie would be dropped by the browser.
+    const direct = await fetch("http://127.0.0.1:17893/auth/logout", { redirect: "manual" });
+    assert.doesNotMatch(direct.headers.get("set-cookie") ?? "", /Secure/);
+  } finally {
+    server.close();
+  }
+});
+
 test("silent login DOES fire on a loopback host — an unauthenticated GET is silently signed in", async () => {
   const session = mockSession();
   const server = await startTestServer("127.0.0.1", 18782, session);

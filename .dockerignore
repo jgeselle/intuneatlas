@@ -1,0 +1,11 @@
+# Only what the image is built from goes to the builder. Everything else stays
+# out — most importantly local state and anything that must never leave this machine.
+*
+!package.json
+!package-lock.json
+!tsconfig.json
+!src
+!web
+web/node_modules
+web/dist
+!baselines
