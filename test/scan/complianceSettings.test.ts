@@ -106,9 +106,13 @@ test("complianceSettingsOf", async (t) => {
 
     assert.deepEqual(script(null), []);
     assert.deepEqual(script({ deviceComplianceScriptId: null, rulesContent: null }), []);
-    const [setting] = script({ deviceComplianceScriptId: "5f1c", rulesContent: "eyJydWxlcyI6W119" });
+    // The script's id is a tenant's own; without rules that decode there is nothing to show.
+    assert.deepEqual(script({ deviceComplianceScriptId: "5f1c", rulesContent: "eyJydWxlcyI6W119" }), []);
+    assert.deepEqual(script({ deviceComplianceScriptId: "5f1c", rulesContent: "not base64 json" }), []);
+    const rules = Buffer.from(JSON.stringify({ Rules: [{ SettingName: "TPMVersion", Operator: "IsEquals", DataType: "String", Operand: "2.0" }] })).toString("base64");
+    const [setting] = script({ deviceComplianceScriptId: "5f1c", rulesContent: rules, runIntervalInMinutes: 480 });
     assert.equal(setting.structured?.kind, "group");
-    assert.equal(setting.value, "Device compliance script id: 5f1c"); // the rules themselves (binary content) aren't a value to show
+    assert.equal(setting.value, "Run interval in minutes: 480\nRules: Setting name: TPMVersion\nRules: Operator: IsEquals\nRules: Data type: String\nRules: Operand: 2.0");
   });
 
   await t.test("reads the actions for noncompliance as one setting, soonest first, without the tenant's own template ids", () => {
@@ -134,7 +138,7 @@ test("complianceSettingsOf", async (t) => {
       actions.value,
       ["[1] Action: Block", "[1] Grace period hours: 0", "[2] Action: Notification", "[2] Grace period hours: 24", "[3] Action: Retire", "[3] Grace period hours: 720"].join("\n"),
     );
-    assert.deepEqual(actions.schemas?.[id].childIds, [`${id}.actionType`, `${id}.gracePeriodHours`]);
+    assert.deepEqual(actions.schemas?.[id].childIds, [`${id}.actionType`, `${id}.gracePeriodHours`, `${id}.notificationTemplateName`]);
     assert.deepEqual(
       actions.schemas?.[`${id}.actionType`].options?.map((o) => o.label),
       ["No action", "Notification", "Block", "Retire", "Wipe", "Remove resource access profiles", "Push notification", "Remote lock"],

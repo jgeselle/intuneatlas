@@ -37,8 +37,8 @@ function rule(definitionId: string, properties: Record<string, unknown>, compare
   return { id: `b::${definitionId}`, pack: "b/v1", source: "Baseline", policyName: "Compliance", definitionId, platform: "windows10", expected, compare };
 }
 
-/** The second place compliance policies live (Linux, Settings Catalog format) — empty in the tests about the first. */
-const isCatalogList = (url: string | URL) => String(url).includes("/deviceManagement/compliancePolicies?");
+/** Everything read besides the typed policies (the Linux collection, the tenant-wide settings) — empty in the tests about those. */
+const isCatalogList = (url: string | URL) => String(url).includes("/deviceManagement/compliancePolicies?") || String(url).endsWith("/deviceManagement/settings");
 const emptyList = () => new Response(JSON.stringify({ value: [] }), { status: 200, headers: { "content-type": "application/json" } });
 
 test("fetchCompliancePolicies: keeps each policy's identity, and its configured settings alongside", async (t) => {
@@ -264,6 +264,10 @@ test("fetchCompliancePolicies: reads Linux compliance policies too — Settings 
     const url = decodeURIComponent(String(input));
     asked.push(url);
     if (url.includes("/deviceManagement/deviceCompliancePolicies?")) return respond(200, { value: [] });
+    // Only the policy's own route returns its actions (as a live tenant does).
+    if (url.includes("/deviceManagement/compliancePolicies/lx1/scheduledActionsForRule?$expand=scheduledActionConfigurations")) {
+      return respond(200, { value: [{ id: "lx1", ruleName: null, scheduledActionConfigurations: [{ actionType: "block", gracePeriodHours: 48, notificationTemplateId: "00000000-0000-0000-0000-000000000000" }] }] });
+    }
     if (url.includes("/deviceManagement/compliancePolicies?")) {
       return respond(200, {
         value: [{ id: "lx1", name: "Linux compliance", platforms: "linux", technologies: "linuxMdm", assignments: [{ target: { "@odata.type": "#microsoft.graph.allDevicesAssignmentTarget" } }] }],
@@ -300,7 +304,11 @@ test("fetchCompliancePolicies: reads Linux compliance policies too — Settings 
 
   assert.deepEqual(policies, [{ id: "lx1", name: "Linux compliance", platform: "linux", deployed: true, targets: [{ kind: "allDevices" }] }]);
   assert.equal(settings.length, 1);
-  const [length, distros] = settings[0].settings;
+  const [length, distros, actions] = settings[0].settings;
+
+  // Its actions for noncompliance are read like a typed policy's.
+  assert.equal(actions.settingDefinitionId, "compliance.linux.scheduledActionsForRule");
+  assert.equal(actions.value, "Action: Block\nGrace period hours: 48");
 
   // Never asked of the configuration catalog — a live tenant answers 404 there.
   assert.equal(asked.some((url) => url.includes("/configurationSettings")), false);
@@ -339,4 +347,90 @@ test("fetchCompliancePolicies: a tenant where the Linux collection can't be list
     isCatalogList(url) ? respond(404, { error: { message: "Resource not found for the segment 'compliancePolicies'" } }) : respond(200, { value: [] })) as typeof fetch;
 
   assert.deepEqual(await fetchCompliancePolicies("token"), { policies: [], settings: [] });
+});
+
+test("fetchCompliancePolicies: the tenant-wide compliance settings are settings of a stand-in policy that reaches everyone", async (t) => {
+  const originalFetch = global.fetch;
+  t.after(() => {
+    global.fetch = originalFetch;
+  });
+  const respond = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+  // As a live tenant that never touched them returns it.
+  let tenant: Record<string, unknown> = { deviceComplianceCheckinThresholdDays: 0, isScheduledActionEnabled: true, secureByDefault: false, enhancedJailBreak: false, derivedCredentialProvider: "notConfigured" };
+  global.fetch = (async (url: string | URL) => (String(url).endsWith("/deviceManagement/settings") ? respond(200, tenant) : respond(200, { value: [] }))) as typeof fetch;
+
+  const untouched = await fetchCompliancePolicies("token");
+  assert.deepEqual(untouched.policies, []); // not counted among the compliance policies
+  assert.deepEqual(
+    untouched.settings.map((p) => [p.id, p.name, p.platform, p.assignments]),
+    [["tenant-compliance-settings", "Compliance policy settings", "allPlatforms", [{ kind: "allDevices" }]]],
+  );
+  // Both switches always show — "compliant without a policy" is a choice. The validity period doesn't while Graph reports 0.
+  assert.deepEqual(
+    untouched.settings[0].settings.map((s) => [s.settingDefinitionId, s.name, s.value]),
+    [
+      ["compliance.tenant.secureByDefault", "Mark devices with no compliance policy assigned as", "Compliant"],
+      ["compliance.tenant.enhancedJailBreak", "Enhanced jailbreak detection", "Disabled"],
+    ],
+  );
+
+  tenant = { ...tenant, secureByDefault: true, deviceComplianceCheckinThresholdDays: 30 };
+  const hardened = await fetchCompliancePolicies("token");
+  assert.deepEqual(
+    hardened.settings[0].settings.map((s) => s.value),
+    ["Not compliant", "Disabled", "30"],
+  );
+
+  // Judged like any setting, for every group.
+  const index = buildSettingIndex(untouched.settings, undefined, { conflicts: false });
+  const scanned: ScanReport = { ...report([]), settings: index };
+  const expectSecure: BaselineRule = {
+    id: "b::secure",
+    pack: "b/v1",
+    source: "Baseline",
+    policyName: "Compliance policy settings",
+    definitionId: "compliance.tenant.secureByDefault",
+    platform: "allPlatforms",
+    expected: hardened.settings[0].settings[0].structured!,
+    compare: "exact",
+  };
+  const judged = applyBaselinesToReport(scopeToGroup(scanned, "any-group"), [expectSecure]).settings.find((e) => e.definitionId === "compliance.tenant.secureByDefault");
+  assert.equal(judged?.state, "Below baseline");
+  assert.equal(judged?.recs[0].recommended, "Not compliant");
+});
+
+test("fetchCompliancePolicies: shows notification templates and compliance scripts by name where it can read them", async (t) => {
+  const originalFetch = global.fetch;
+  t.after(() => {
+    global.fetch = originalFetch;
+  });
+  const respond = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+  const rules = { Rules: [{ SettingName: "BiosVersion", Operator: "GreaterEquals", DataType: "Version", Operand: "2.3", MoreInfoUrl: "https://example.com", RemediationStrings: [{ Language: "en_US", Title: "t", Description: "d" }] }] };
+  const policy = {
+    "@odata.type": WINDOWS,
+    id: "c1",
+    displayName: "Windows compliance",
+    deviceCompliancePolicyScript: { deviceComplianceScriptId: "script-1", rulesContent: Buffer.from(JSON.stringify(rules)).toString("base64") },
+    scheduledActionsForRule: [{ ruleName: null, scheduledActionConfigurations: [{ actionType: "notification", gracePeriodHours: 24, notificationTemplateId: "tpl-1", notificationMessageCCList: [] }] }],
+    assignments: [],
+  };
+  let scriptsAllowed = true;
+  global.fetch = (async (input: string | URL) => {
+    const url = String(input);
+    if (url.includes("/deviceCompliancePolicies?")) return respond(200, { value: [structuredClone(policy)] });
+    if (url.includes("/notificationMessageTemplates")) return respond(200, { value: [{ id: "tpl-1", displayName: "Fix your device" }] });
+    if (url.includes("/deviceComplianceScripts")) return scriptsAllowed ? respond(200, { value: [{ id: "script-1", displayName: "BIOS check" }] }) : respond(403, { error: { message: "needs DeviceManagementScripts.Read.All" } });
+    return respond(404, {});
+  }) as typeof fetch;
+
+  const values = async () => Object.fromEntries((await fetchCompliancePolicies("token")).settings[0].settings.map((s) => [s.name, s.value]));
+
+  assert.deepEqual(await values(), {
+    "Device compliance policy script": "Script name: BIOS check\nRules: Setting name: BiosVersion\nRules: Operator: GreaterEquals\nRules: Data type: Version\nRules: Operand: 2.3",
+    "Actions for noncompliance": "Action: Notification\nGrace period hours: 24\nNotification template name: Fix your device",
+  });
+
+  // Without the extra permission the script's name is missing; its rules, which sit on the policy, are still there.
+  scriptsAllowed = false;
+  assert.equal((await values())["Device compliance policy script"], "Rules: Setting name: BiosVersion\nRules: Operator: GreaterEquals\nRules: Data type: Version\nRules: Operand: 2.3");
 });

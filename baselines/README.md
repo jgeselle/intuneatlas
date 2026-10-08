@@ -31,6 +31,10 @@ are made of the policy type and the property name, for example
 Linux compliance policies are in the Settings Catalog format; their
 definition ids are Intune's own with `compliance.catalog.` in front, for
 example `compliance.catalog.linux_passwordpolicy_minimumlength`.
+The tenant-wide compliance settings can be part of a baseline too: save what
+`GET deviceManagement/settings` returns as a JSON file in the pack. Their ids
+are `compliance.tenant.secureByDefault`, `compliance.tenant.enhancedJailBreak`
+and `compliance.tenant.deviceComplianceCheckinThresholdDays`.
 A policy's actions for noncompliance are one setting,
 `compliance.<type>.scheduledActionsForRule`, when the export includes them.
 

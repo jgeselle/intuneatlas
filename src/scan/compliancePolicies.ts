@@ -1,7 +1,7 @@
 import { GRAPH_BETA_BASE } from "../config.js";
-import { graphGetAll } from "../graph.js";
+import { graphGet, graphGetAll } from "../graph.js";
 import { isDeployed, mapAssignmentTargets } from "./assignments.js";
-import { complianceSettingsOf } from "./complianceSettings.js";
+import { complianceActionsSetting, complianceSettingsOf, TENANT_COMPLIANCE_PLATFORM, tenantComplianceSettingsOf } from "./complianceSettings.js";
 import { fetchCatalogPolicies } from "./configurationPolicies.js";
 import { mapSimplePolicy } from "./simplePolicy.js";
 import type { RawPolicy, RawSimplePolicy } from "./types.js";
@@ -13,6 +13,17 @@ interface GraphCompliancePolicy {
   assignments?: Array<{ target: { "@odata.type": string; groupId?: string } }>;
   [property: string]: unknown;
 }
+
+const NO_TEMPLATE = "00000000-0000-0000-0000-000000000000";
+
+/** Optional reads: what a refusal or a missing route looks like. The scan goes on without the detail. */
+const unavailable = (...statuses: number[]) => (error: unknown) => {
+  if (error instanceof Error && new RegExp(`failed: (${statuses.join("|")})\\b`).test(error.message)) return undefined;
+  throw error;
+};
+
+type Rules = Array<{ scheduledActionConfigurations?: Array<Record<string, unknown>> }>;
+const actionConfigurations = (rules: unknown) => (Array.isArray(rules) ? (rules as Rules).flatMap((rule) => rule?.scheduledActionConfigurations ?? []) : []);
 
 /**
  * Compliance policies, twice over: `policies` is each one's identity and
@@ -26,20 +37,61 @@ interface GraphCompliancePolicy {
  *
  * There are two kinds, in two places: the typed, one-per-platform
  * policies, and — for Linux — policies in the Settings Catalog format
- * (see complianceCatalog.ts). Both end up in the same two lists. A
- * tenant where the second collection can't be listed is scanned without
- * it.
+ * (see complianceCatalog.ts). Both end up in the same two lists, and
+ * with them, as the settings of one stand-in policy, the tenant-wide
+ * compliance settings.
  *
- * The actions for noncompliance are asked for along with the policies.
- * Should Graph refuse that nested expansion, the scan goes on without
- * them rather than failing: every other setting is still there.
+ * Everything beyond the typed policies themselves is optional: the
+ * actions for noncompliance (asked for along with the policies), the
+ * Linux collection and its actions, the tenant-wide settings, and the
+ * names of the notification templates and compliance scripts policies
+ * refer to (script names need DeviceManagementScripts.Read.All, which
+ * the tool doesn't otherwise ask for). Where Graph refuses one, the scan
+ * goes on without it.
  */
 export async function fetchCompliancePolicies(token: string): Promise<{ policies: RawSimplePolicy[]; settings: RawPolicy[] }> {
+  const ACTIONS = "scheduledActionsForRule($expand=scheduledActionConfigurations)";
   const list = (expand: string) => graphGetAll<GraphCompliancePolicy>(token, `/deviceManagement/deviceCompliancePolicies?$expand=${expand}`, GRAPH_BETA_BASE);
-  const found = await list("assignments,scheduledActionsForRule($expand=scheduledActionConfigurations)").catch((error: unknown) => {
+  const found = await list(`assignments,${ACTIONS}`).catch((error: unknown) => {
     if (error instanceof Error && /failed: 400\b/.test(error.message)) return list("assignments");
     throw error;
   });
+
+  const [catalog, tenantSettings] = await Promise.all([
+    fetchCatalogPolicies(token, "compliancePolicies").catch(unavailable(400, 404)),
+    graphGet<Record<string, unknown>>(token, "/deviceManagement/settings", GRAPH_BETA_BASE).catch(unavailable(400, 403, 404)),
+  ]);
+  // A Linux policy's actions have to be asked for policy by policy: confirmed live that expanding them
+  // on the collection — or on the policy itself — comes back empty, while the policy's own
+  // scheduledActionsForRule route returns them.
+  const catalogActions = await Promise.all(
+    (catalog ?? []).map(async (policy) => ({
+      id: policy.id,
+      scheduledActionsForRule: await graphGetAll<unknown>(
+        token,
+        `/deviceManagement/compliancePolicies/${policy.id}/scheduledActionsForRule?$expand=scheduledActionConfigurations`,
+        GRAPH_BETA_BASE,
+      ).catch(unavailable(400, 404)),
+    })),
+  );
+
+  // Names for the tenant's own objects that policies point at by id — looked up only when something points at one.
+  const actions = [...found, ...catalogActions].flatMap((policy) => actionConfigurations(policy.scheduledActionsForRule));
+  if (actions.some((action) => action.notificationTemplateId && action.notificationTemplateId !== NO_TEMPLATE)) {
+    const templates = await graphGetAll<{ id: string; displayName?: string }>(token, "/deviceManagement/notificationMessageTemplates?$select=id,displayName", GRAPH_BETA_BASE).catch(
+      unavailable(400, 403, 404),
+    );
+    const names = new Map((templates ?? []).map((template) => [template.id, template.displayName]));
+    for (const action of actions) action.notificationTemplateName = names.get(String(action.notificationTemplateId));
+  }
+  const scripts = found.map((policy) => policy.deviceCompliancePolicyScript as { deviceComplianceScriptId?: string; scriptName?: string } | null | undefined).filter((script) => script?.deviceComplianceScriptId);
+  if (scripts.length > 0) {
+    const known = await graphGetAll<{ id: string; displayName?: string }>(token, "/deviceManagement/deviceComplianceScripts?$select=id,displayName", GRAPH_BETA_BASE).catch(
+      unavailable(400, 403, 404),
+    );
+    const names = new Map((known ?? []).map((script) => [script.id, script.displayName]));
+    for (const script of scripts) script!.scriptName = names.get(script!.deviceComplianceScriptId!);
+  }
 
   const policies = found.map(mapSimplePolicy);
   const settings = found
@@ -52,12 +104,21 @@ export async function fetchCompliancePolicies(token: string): Promise<{ policies
     }))
     .filter((policy) => policy.settings.length > 0);
 
-  const catalog = await fetchCatalogPolicies(token, "compliancePolicies").catch((error: unknown) => {
-    if (error instanceof Error && /failed: (400|404)\b/.test(error.message)) return [];
-    throw error;
+  const linux = (catalog ?? []).map((policy) => {
+    const actionsSetting = complianceActionsSetting(policy.platform, catalogActions.find((p) => p.id === policy.id)?.scheduledActionsForRule);
+    return actionsSetting ? { ...policy, settings: [...policy.settings, actionsSetting] } : policy;
   });
+
+  const tenantWide = tenantSettings ? tenantComplianceSettingsOf(tenantSettings) : [];
   return {
-    policies: [...policies, ...catalog.map((p) => ({ id: p.id, name: p.name, platform: p.platform, deployed: isDeployed(p.assignments), targets: p.assignments }))],
-    settings: [...settings, ...catalog.filter((p) => p.settings.length > 0)],
+    policies: [...policies, ...linux.map((p) => ({ id: p.id, name: p.name, platform: p.platform, deployed: isDeployed(p.assignments), targets: p.assignments }))],
+    settings: [
+      ...settings,
+      ...linux.filter((p) => p.settings.length > 0),
+      // Not a policy: it reaches every device, has no platform, and isn't counted among the compliance policies.
+      ...(tenantWide.length ? [{ id: TENANT_COMPLIANCE_POLICY_ID, name: "Compliance policy settings", platform: TENANT_COMPLIANCE_PLATFORM, assignments: [{ kind: "allDevices" as const }], settings: tenantWide }] : []),
+    ],
   };
 }
+
+export const TENANT_COMPLIANCE_POLICY_ID = "tenant-compliance-settings";

@@ -5,7 +5,7 @@ import { basename, dirname, join, relative, sep } from "node:path";
 import { load } from "js-yaml";
 import { resolveAppPath } from "../packagedPaths.js";
 import { asComplianceInstance } from "../scan/complianceCatalog.js";
-import { complianceSettingsOf, complianceTypeOf } from "../scan/complianceSettings.js";
+import { complianceSettingsOf, complianceTypeOf, TENANT_COMPLIANCE_PLATFORM, tenantComplianceSettingsOf } from "../scan/complianceSettings.js";
 import { rawNode, type GraphSettingInstance } from "../scan/settingValue.js";
 import { platformFromODataType } from "../scan/simplePolicy.js";
 import type { SettingValueNode } from "../scan/types.js";
@@ -205,7 +205,8 @@ async function readExportedPolicy(file: string): Promise<BaselinePolicy | undefi
  * the Settings Catalog format, as Intune uses for Linux — told from a
  * configuration policy by its type or, in an export that dropped the
  * type, by its Linux technology. A policy with nothing configured in it
- * is not a baseline policy.
+ * is not a baseline policy. One more file counts: the tenant-wide
+ * compliance settings as Graph returns them.
  */
 function parseExportedPolicy(bytes: Buffer): BaselinePolicy | undefined {
   let parsed: unknown;
@@ -225,6 +226,12 @@ function parseExportedPolicy(bytes: Buffer): BaselinePolicy | undefined {
       platform: platformFromODataType(String(policy["@odata.type"])),
       settings,
     };
+  }
+
+  // The tenant-wide compliance settings, saved as Graph returns them (deviceManagement/settings).
+  if (typeof (parsed as Record<string, unknown>).secureByDefault === "boolean" && !Array.isArray((parsed as ExportedPolicy).settings)) {
+    const settings = tenantComplianceSettingsOf(parsed as Record<string, unknown>).map((setting) => ({ definitionId: setting.settingDefinitionId, expected: setting.structured! }));
+    return settings.length ? { name: "Compliance policy settings", platform: TENANT_COMPLIANCE_PLATFORM, settings } : undefined;
   }
 
   const catalog = parsed as ExportedPolicy;

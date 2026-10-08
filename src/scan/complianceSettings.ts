@@ -24,8 +24,10 @@ import type { RawSetting, SettingSchema, SettingValueNode } from "./types.js";
  * noncompliance, which hang off the policy rather than sitting on it,
  * are read the same way, as one setting listing each action.
  *
- * (Linux compliance policies are a different kind altogether — see
- * complianceCatalog.ts. Their ids share the prefix below.)
+ * Two more things are compliance settings without being a typed
+ * policy's property: the tenant-wide compliance settings (below), and
+ * everything in a Linux compliance policy — a different kind altogether,
+ * see complianceCatalog.ts. All share the prefix below.
  */
 
 const PREFIX = "compliance.";
@@ -49,10 +51,26 @@ const NOT_SETTINGS = new Set(["id", "displayName", "description", "createdDateTi
 const ACTIONS = "scheduledActionsForRule";
 const ACTIONS_TYPE = { object: "deviceComplianceActionItem", list: true } as const;
 /**
- * Left out of an action's value: the notification template is a tenant's
- * own object — its id means nothing in a baseline or another tenant.
+ * Left out of a value: ids of a tenant's own objects — a notification
+ * template, a compliance script — mean nothing in a baseline or another
+ * tenant. Where the scan can read the object's name it shows that
+ * instead (see the `…Name` fields below, filled in by the scan).
  */
-const NOT_COMPARED = new Set(["notificationTemplateId"]);
+const NOT_COMPARED = new Set(["notificationTemplateId", "deviceComplianceScriptId"]);
+
+type Field = ComplianceFieldType | { list: Record<string, ComplianceFieldType> };
+
+/**
+ * Fields the metadata doesn't have: the names the scan looks up for the
+ * ids above, and a custom compliance script's rules — which Graph holds
+ * as one encoded JSON document (`rulesContent`) and are read out into a
+ * list, one entry per rule (see withRules).
+ */
+const EXTRA_FIELDS: Record<string, Record<string, Field>> = {
+  deviceComplianceActionItem: { notificationTemplateName: "string" },
+  deviceCompliancePolicyScript: { scriptName: "string", rules: { list: { settingName: "string", operator: "string", dataType: "string", operand: "string" } } },
+};
+const isList = (field: Field): field is { list: Record<string, ComplianceFieldType> } => typeof field === "object" && "list" in field;
 
 /** Abbreviations a plain split on capitals would lower-case. */
 const ABBREVIATIONS = new Set(["os", "tpm", "rtp", "usb", "dma"]);
@@ -128,7 +146,8 @@ function fieldSchema(definitionId: string, property: string, kind: ComplianceFie
 }
 
 const isObject = (kind: CompliancePropertyType): kind is { object: string; list: boolean } => typeof kind === "object" && "object" in kind;
-const fieldsOf = (objectName: string) => Object.entries(COMPLIANCE_OBJECTS[objectName] ?? {}).filter(([field]) => !NOT_COMPARED.has(field));
+const fieldsOf = (objectName: string): Array<[string, Field]> =>
+  Object.entries<Field>({ ...COMPLIANCE_OBJECTS[objectName], ...EXTRA_FIELDS[objectName] }).filter(([field]) => !NOT_COMPARED.has(field));
 
 /**
  * The schema of a property and — for one holding objects — of each field
@@ -139,15 +158,22 @@ function schemasOf(type: string, property: string, kind: CompliancePropertyType)
   const definitionId = complianceDefinitionId(type, property);
   if (!isObject(kind)) return { [definitionId]: fieldSchema(definitionId, property, kind) };
 
-  const fields = fieldsOf(kind.object).map(([field, fieldKind]) => fieldSchema(`${definitionId}.${field}`, field, fieldKind));
+  const schemas: Record<string, SettingSchema> = {};
+  const childIds: string[] = [];
+  for (const [field, fieldKind] of fieldsOf(kind.object)) {
+    const fieldId = `${definitionId}.${field}`;
+    childIds.push(fieldId);
+    if (!isList(fieldKind)) {
+      schemas[fieldId] = fieldSchema(fieldId, field, fieldKind);
+      continue;
+    }
+    const inner = Object.entries(fieldKind.list).map(([name, innerKind]) => fieldSchema(`${fieldId}.${name}`, name, innerKind));
+    schemas[fieldId] = { definitionId: fieldId, name: humanize(field), kind: "groupCollection", childIds: inner.map((i) => i.definitionId) };
+    for (const i of inner) schemas[i.definitionId] = i;
+  }
   return {
-    [definitionId]: {
-      definitionId,
-      name: property === ACTIONS ? "Actions for noncompliance" : humanize(property),
-      kind: kind.list ? "groupCollection" : "group",
-      childIds: fields.map((field) => field.definitionId),
-    },
-    ...Object.fromEntries(fields.map((field) => [field.definitionId, field])),
+    [definitionId]: { definitionId, name: property === ACTIONS ? "Actions for noncompliance" : humanize(property), kind: kind.list ? "groupCollection" : "group", childIds },
+    ...schemas,
   };
 }
 
@@ -180,9 +206,14 @@ function fieldNode(schema: SettingSchema, value: unknown): SettingValueNode {
 function objectNodes(schemas: Record<string, SettingSchema>, parentId: string, value: unknown): SettingValueNode[] {
   if (!value || typeof value !== "object" || Array.isArray(value)) return [];
   const object = value as Record<string, unknown>;
-  return (schemas[parentId].childIds ?? []).flatMap((childId) => {
+  return (schemas[parentId].childIds ?? []).flatMap((childId): SettingValueNode[] => {
     const held = object[childId.slice(parentId.length + 1)];
-    return held === null || held === undefined || held === "" || typeof held === "object" ? [] : [fieldNode(schemas[childId], held)];
+    const schema = schemas[childId];
+    if (schema.kind === "groupCollection") {
+      const groups = (Array.isArray(held) ? held : []).map((item) => objectNodes(schemas, childId, item)).filter((group) => group.length > 0);
+      return groups.length ? [{ kind: "groupCollection", definitionId: childId, name: schema.name, groups }] : [];
+    }
+    return held === null || held === undefined || held === "" || typeof held === "object" ? [] : [fieldNode(schema, held)];
   });
 }
 
@@ -200,6 +231,31 @@ function actionsOf(value: unknown): unknown[] | undefined {
   return configured.sort(
     (a, b) => (Number(a?.gracePeriodHours) || 0) - (Number(b?.gracePeriodHours) || 0) || String(a?.actionType).localeCompare(String(b?.actionType)),
   );
+}
+
+/**
+ * A custom compliance script's rules, read out of `rulesContent`: base64
+ * of the JSON rules file the admin uploaded — `{ "Rules": [{ SettingName,
+ * Operator, DataType, Operand, ... }] }`. Anything that doesn't decode to
+ * that shape yields no rules rather than an error.
+ */
+function withRules(value: unknown): unknown {
+  if (!value || typeof value !== "object" || typeof (value as { rulesContent?: unknown }).rulesContent !== "string") return value;
+  let rules: unknown[] = [];
+  try {
+    const parsed = JSON.parse(Buffer.from((value as { rulesContent: string }).rulesContent, "base64").toString("utf8").replace(/^\uFEFF/, "")) as Record<string, unknown>;
+    const list = parsed.Rules ?? parsed.rules;
+    if (Array.isArray(list)) rules = list;
+  } catch {
+    // not a rules document
+  }
+  const text = (v: unknown) => (v === null || v === undefined || typeof v === "object" ? undefined : String(v));
+  return {
+    ...value,
+    rules: rules
+      .filter((rule): rule is Record<string, unknown> => Boolean(rule) && typeof rule === "object")
+      .map((rule) => ({ settingName: text(rule.SettingName), operator: text(rule.Operator), dataType: text(rule.DataType), operand: text(rule.Operand) })),
+  };
 }
 
 /** The value as a node, or undefined when — an object or list with nothing in it — there is nothing configured after all. */
@@ -227,8 +283,8 @@ export function complianceSettingsOf(policy: Record<string, unknown>): RawSettin
   const settings: RawSetting[] = [];
   for (const [property, raw] of Object.entries(policy)) {
     if (NOT_SETTINGS.has(property) || property.includes("@")) continue;
-    const value = property === ACTIONS ? actionsOf(raw) : raw;
-    const kind = typeOf(type, property, value);
+    const kind = typeOf(type, property, property === ACTIONS ? actionsOf(raw) : raw);
+    const value = property === ACTIONS ? actionsOf(raw) : kind && isObject(kind) && kind.object === "deviceCompliancePolicyScript" ? withRules(raw) : raw;
     if (!kind || !isConfigured(kind, value)) continue;
     const schemas = schemasOf(type, property, kind);
     const definitionId = complianceDefinitionId(type, property);
@@ -248,6 +304,86 @@ export function complianceSettingsOf(policy: Record<string, unknown>): RawSettin
   return settings;
 }
 
+/**
+ * The actions for noncompliance of a policy that isn't a typed one — a
+ * Linux compliance policy keeps them the same way — as the same setting.
+ * `platform` stands where a typed policy's type does.
+ */
+export function complianceActionsSetting(platform: string, scheduledActionsForRule: unknown): RawSetting | undefined {
+  const value = actionsOf(scheduledActionsForRule);
+  if (!value) return undefined;
+  const definitionId = complianceDefinitionId(platform, ACTIONS);
+  const schemas = schemasOf(platform, ACTIONS, ACTIONS_TYPE);
+  const structured = nodeOf(schemas, definitionId, ACTIONS_TYPE, value);
+  if (!structured) return undefined;
+  return { settingDefinitionId: definitionId, name: schemas[definitionId].name, cspPath: `compliancePolicies/${ACTIONS}`, category: categoryOf(ACTIONS), value: renderNode(structured), structured, schemas };
+}
+
+/**
+ * The tenant-wide compliance settings ("Compliance policy settings" in
+ * the portal, `deviceManagement/settings` in Graph — confirmed live).
+ * They belong to no policy and no platform; they are listed as settings
+ * of one stand-in policy that reaches everyone.
+ *
+ * Unlike a policy's properties these are always set one way or the
+ * other — "devices without a compliance policy are compliant" is a
+ * choice, and the one a baseline is most likely to object to — so both
+ * switches always show. The validity period is left out while Graph
+ * reports 0 for it, which is what a tenant that never set it has.
+ */
+const TENANT = "tenant";
+export const TENANT_COMPLIANCE_PLATFORM = "allPlatforms";
+const TENANT_SETTINGS: Array<{ property: string; schema: (id: string) => SettingSchema }> = [
+  {
+    property: "secureByDefault",
+    schema: (id) => ({
+      definitionId: id,
+      name: "Mark devices with no compliance policy assigned as",
+      kind: "choice",
+      options: [
+        { id: `${id}_false`, label: "Compliant" },
+        { id: `${id}_true`, label: "Not compliant" },
+      ],
+    }),
+  },
+  {
+    property: "enhancedJailBreak",
+    schema: (id) => ({
+      definitionId: id,
+      name: "Enhanced jailbreak detection",
+      kind: "choice",
+      options: [
+        { id: `${id}_false`, label: "Disabled" },
+        { id: `${id}_true`, label: "Enabled" },
+      ],
+    }),
+  },
+  {
+    property: "deviceComplianceCheckinThresholdDays",
+    schema: (id) => ({ definitionId: id, name: "Compliance status validity period (days)", kind: "simple", valueType: "integer", min: 1, max: 120 }),
+  },
+];
+
+export function tenantComplianceSettingsOf(settings: Record<string, unknown>): RawSetting[] {
+  return TENANT_SETTINGS.flatMap(({ property, schema: schemaFor }): RawSetting[] => {
+    const value = settings[property];
+    const schema = schemaFor(complianceDefinitionId(TENANT, property));
+    if (schema.kind === "choice" ? typeof value !== "boolean" : typeof value !== "number" || value === 0) return [];
+    const structured = fieldNode(schema, value);
+    return [
+      {
+        settingDefinitionId: schema.definitionId,
+        name: schema.name,
+        cspPath: `deviceManagement/settings/${property}`,
+        category: "Compliance policy settings",
+        value: renderNode(structured),
+        structured,
+        schemas: { [schema.definitionId]: schema },
+      },
+    ];
+  });
+}
+
 let known: { schemas: Record<string, SettingSchema>; info: Record<string, { cspPath: string; category: string }> } | undefined;
 
 /**
@@ -265,6 +401,13 @@ export function complianceDefinitions(): { schemas: Record<string, SettingSchema
       Object.assign(known.schemas, schemasOf(type, property, kind));
       known.info[complianceDefinitionId(type, property)] = { cspPath: `${typeName}/${property}`, category: categoryOf(property) };
     }
+  }
+  Object.assign(known.schemas, schemasOf("linux", ACTIONS, ACTIONS_TYPE));
+  known.info[complianceDefinitionId("linux", ACTIONS)] = { cspPath: `compliancePolicies/${ACTIONS}`, category: categoryOf(ACTIONS) };
+  for (const { property, schema } of TENANT_SETTINGS) {
+    const id = complianceDefinitionId(TENANT, property);
+    known.schemas[id] = schema(id);
+    known.info[id] = { cspPath: `deviceManagement/settings/${property}`, category: "Compliance policy settings" };
   }
   return known;
 }

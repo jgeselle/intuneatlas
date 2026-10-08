@@ -269,3 +269,20 @@ test("loadBaselines: an exported Linux compliance policy keeps its settings apar
     },
   );
 });
+
+test("loadBaselines: the tenant-wide compliance settings, saved as Graph returns them, are part of a baseline", async () => {
+  await withTempDir(
+    { "house/v1/compliance-policy-settings.json": JSON.stringify({ secureByDefault: true, enhancedJailBreak: false, deviceComplianceCheckinThresholdDays: 30, enableLogCollection: true }) },
+    async (dir) => {
+      const rules = await loadBaselines(dir);
+      assert.deepEqual(
+        rules.map((r) => [r.definitionId, r.platform, r.policyName, r.expected.kind === "choice" ? r.expected.label : r.expected.kind === "simple" ? r.expected.value : ""]),
+        [
+          ["compliance.tenant.secureByDefault", "allPlatforms", "Compliance policy settings", "Not compliant"],
+          ["compliance.tenant.enhancedJailBreak", "allPlatforms", "Compliance policy settings", "Disabled"],
+          ["compliance.tenant.deviceComplianceCheckinThresholdDays", "allPlatforms", "Compliance policy settings", 30],
+        ],
+      );
+    },
+  );
+});
