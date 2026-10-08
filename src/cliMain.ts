@@ -53,7 +53,7 @@ withAuthOptions(program.command("login"))
   );
 
 withAuthOptions(program.command("scan"))
-  .description("Pull Windows Settings Catalog policies and build the settings index.")
+  .description("Scan the tenant's configuration, compliance and enrollment policies and build the settings index.")
   .option("--out <path>", "Write JSON to a file instead of stdout")
   .option("--baseline <path>", "Folder of baselines to use instead of your own (~/.intuneatlas/baselines)")
   .action(

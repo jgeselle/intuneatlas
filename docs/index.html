@@ -145,6 +145,7 @@
       <a href="#register-app">Register an Entra app</a>
       <a href="#first-run">Sign in and run your first scan</a>
       <a href="#what-you-get">What you get</a>
+      <a href="#groups">Looking at one group</a>
       <a href="#baselines">Adding a baseline</a>
       <a href="#sharing">Sharing it with a team</a>
       <a href="#next">Next</a>
@@ -214,6 +215,8 @@
             the groups your policies are assigned to and which groups contain other groups, so it can show
             settings per group by name. Everything works without it: groups are then shown by their ID, and a
             policy assigned to a parent group isn't counted for the groups inside it.
+            <br>One more is optional: <code>DeviceManagementScripts.Read.All</code>, used only to show a custom
+            compliance script by its name. Without it the script's rules still show.
           </li>
           <li>
             <b>App roles</b> → <b>Create app role</b>, three times, one for each of:
@@ -253,9 +256,11 @@
             change review from here on.
           </li>
           <li>
-            Once signed in, the scan runs and the web UI opens automatically at
-            <code>http://localhost:7878</code>. Reopening <code>ui</code> later reuses the
-            cached sign-in on Windows and macOS; on Linux it prompts again each time.
+            The web UI opens at <code>http://localhost:7878</code>. The first time there is nothing to
+            show yet: click <b>Scan now</b> (it needs the Admin role) and wait for the scan to finish.
+            After that the UI opens on the last scan, and <b>Sync now</b> in the sidebar runs a new one.
+            Reopening <code>ui</code> later reuses the cached sign-in on Windows and macOS; on Linux it
+            prompts again each time.
           </li>
         </ol>
         <div class="note">
@@ -269,15 +274,35 @@
       <section id="what-you-get">
         <h2>What you get</h2>
         <p>
-          The web UI shows every Windows Settings Catalog, compliance, and enrollment
-          setting from the scan, merged across policies by the real setting — with conflicts
-          between overlapping policies and coverage gaps against a baseline surfaced directly,
-          instead of buried across per-policy views.
+          The web UI turns the tenant's policies into one list of settings. A setting that several policies
+          configure appears once, with every policy that sets it and each one's value.
         </p>
+        <ul>
+          <li>
+            <b>Settings</b> — everything Settings Catalog policies configure, on any platform, grouped by
+            category. Each setting is in one of six states: Conflict, Below baseline, Missing, Not assigned,
+            Meets baseline or Not checked.
+          </li>
+          <li>
+            <b>Compliance</b> — the same for compliance policies: Windows, iOS, macOS, Android and Linux, the
+            actions for noncompliance, and the tenant-wide compliance settings. Compliance policies never
+            conflict; where two ask for different values, the stricter one applies.
+          </li>
+          <li>
+            <b>Enrollment</b> — enrollment configurations by name, with whether each one is assigned.
+          </li>
+          <li>
+            <b>Baselines</b> — the baselines you've added, and which of them are active for you.
+          </li>
+          <li>
+            <b>Change log</b> — changes you've staged, each needing a reason and a reviewer.
+          </li>
+        </ul>
         <p>
-          Open a setting to see each policy that sets it and what the active baselines expect. A value
-          can be edited there with the same options and ranges Intune offers, including lists and
-          sub-settings, and staged for review.
+          Open a setting to see each policy that sets it, who that policy is assigned to, and what the active
+          baselines expect. A value can be edited there with the same options and ranges Intune offers,
+          including lists and sub-settings, and staged for review — in the policy that holds it, or in a new
+          policy you name. Notes can be attached to any setting.
         </p>
         <p>
           It's read-only end to end: staging a change records it locally, and IntuneAtlas never writes
@@ -285,23 +310,47 @@
         </p>
       </section>
 
+      <section id="groups">
+        <h2>Looking at one group</h2>
+        <p>
+          Under each page's title is a chooser that reads <b>All policies</b>. Pick a group there and every
+          page shows only what reaches that group: policies assigned to it, to a group that contains it, or
+          to everyone. Conflicts, baseline results and missing settings are worked out again for just that
+          group, and the choice is remembered.
+        </p>
+        <p>
+          Two policies that set the same setting differently only conflict if they can reach the same
+          group. Different values for different groups, such as update rings, are not a conflict.
+        </p>
+        <p>
+          This is what is aimed at a group, not what one device ends up with: a device can be in several
+          groups. Group names and nesting need the optional <code>Group.Read.All</code> permission
+          (<a href="#register-app">above</a>); without it groups are listed by ID.
+        </p>
+      </section>
+
       <section id="baselines">
         <h2>Adding a baseline</h2>
         <p>
-          Nothing is judged until you add a baseline. A baseline is a folder of Settings Catalog
-          policies exported from Intune as JSON — for example a release of the
+          Nothing is judged until you add a baseline. A baseline is a folder of policies exported from
+          Intune as JSON, Settings Catalog policies and compliance policies alike — for example a release of the
           <a href="https://github.com/SkipToTheEndpoint/OpenIntuneBaseline" target="_blank" rel="noopener noreferrer">Open Intune Baseline</a>,
           or policies you exported from a reference tenant.
         </p>
         <ol>
           <li>Download or export the baseline and unpack it to a folder.</li>
-          <li>In the web UI, open <strong>Baselines</strong> and choose that folder. Files that aren't Settings Catalog policies are ignored.</li>
+          <li>In the web UI, open <strong>Baselines</strong> and choose that folder. Files that aren't Settings Catalog or compliance policies are ignored.</li>
           <li>Give it a source (<code>oib</code>) and a name and version (<code>windows-v4.0</code>), then add it. Adding needs the Admin role.</li>
           <li>Sync the tenant once, so settings the baseline expects but your tenant lacks get their names.</li>
         </ol>
         <p>
           Baselines live in <code>~/.intuneatlas/baselines/&lt;source&gt;/&lt;name-and-version&gt;/</code> and survive
           updates. You can also copy a folder there yourself. Each signed-in user chooses which baselines are active for them.
+        </p>
+        <p>
+          A baseline is a floor: a setting meets it when everything the baseline specifies is there, and
+          anything your tenant configures beyond that is fine. A setting the baseline expects that no policy
+          configures shows as Missing.
         </p>
         <p>
           An optional <code>baseline.yml</code> in the baseline's folder adds what an export can't say, per setting:
