@@ -17,6 +17,7 @@ import {
 } from "../server/staticServer.js";
 import type { ViewerIdentity } from "../auth/webSession.js";
 import { addNote, deleteNote, getAllNotes, getNoteById, type Note } from "../storage/notes.js";
+import { getSettingHistory } from "../storage/history.js";
 import { getLatestScan, recordScan } from "../storage/scans.js";
 import { clearSelectedPacks, getSelectedPacks, setSelectedPacks } from "../storage/baselineSelections.js";
 import {
@@ -85,6 +86,7 @@ export async function runUi(options: UiOptions): Promise<void> {
     onScanRequest: async (graphToken) => enrichReport(await runViewerTriggeredScan(tenantId, graphToken, baselinePath)),
     onEvaluateForViewer: (report, viewer) => evaluateForViewer(report as RawEnrichedReport, viewer, baselinePath),
     onScopeReport: (report, groupId) => scopeToGroup(report as RawEnrichedReport, groupId),
+    onHistoryRequest: (settingKey) => getSettingHistory(tenantId, settingKey),
     // With --baseline the baselines come from a folder of the operator's choosing; that isn't the app's to write to.
     ...(baselinePath
       ? {}

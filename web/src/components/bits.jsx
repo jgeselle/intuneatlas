@@ -266,7 +266,7 @@ function NoteEntry({ note, onDelete, canDelete }) {
  * be mixed into this feed; they now show on the policy they change (see
  * PolicyValueCard in SettingDrawer.jsx), so this is notes only.
  */
-function HistorySection({ notes = [], onAdd, onDelete, readOnly = false, viewer }) {
+function NotesSection({ notes = [], onAdd, onDelete, readOnly = false, viewer }) {
   const [draft, setDraft] = useState("");
   // Whoever wrote a note can delete it themselves; an Admin can delete
   // any — mirrors the same author-or-admin check the server enforces
@@ -318,6 +318,66 @@ function HistorySection({ notes = [], onAdd, onDelete, readOnly = false, viewer 
   );
 }
 
+const HISTORY_TEXT = {
+  added: "Started setting it",
+  removed: "No longer sets it",
+  assigned: "Now assigned",
+  unassigned: "No longer assigned",
+};
+
+/**
+ * What scans have seen happen to a setting, newest first: a policy began
+ * or stopped setting it, changed its value, or gained or lost its
+ * assignment. Each entry is dated by the scan that showed it. `events` is
+ * undefined while loading or where history isn't available — then there is
+ * no section at all.
+ */
+function HistoryList({ events }) {
+  if (!events) return null;
+  return (
+    <section>
+      <h3 className="font-sans text-xs font-semibold uppercase tracking-wide text-stone-500">
+        History{events.length > 0 && <span className="ml-1.5 font-normal tabular-nums text-stone-400">· {events.length}</span>}
+      </h3>
+      {events.length === 0 ? (
+        <div className="mt-2">
+          <Empty compact>No changes recorded</Empty>
+        </div>
+      ) : (
+        <ol className="mt-2 space-y-2">
+          {events.map((event) => (
+            <li key={event.id} className="rounded-md border border-stone-200 bg-white px-3 py-2.5 text-xs">
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="min-w-0 truncate font-medium text-stone-800" title={event.policyName}>
+                  {event.policyName}
+                </span>
+                <time className="shrink-0 tabular-nums text-stone-400" dateTime={event.at} title={event.since ? "Between the scans of " + new Date(event.since).toLocaleString() + " and " + new Date(event.at).toLocaleString() : undefined}>
+                  {new Date(event.at).toLocaleDateString()}
+                </time>
+              </div>
+              {event.kind === "changed" ? (
+                <div className="mt-1.5">
+                  <Diff from={event.from} to={event.to} />
+                </div>
+              ) : (
+                <p className="mt-1 text-stone-600">
+                  {HISTORY_TEXT[event.kind] ?? event.kind}
+                  {(event.to ?? event.from) !== undefined && (
+                    <span className="text-stone-500">
+                      {event.kind === "removed" ? " · was " : " · "}
+                      <span className="text-stone-700">{String(event.to ?? event.from).split("\n").join(", ")}</span>
+                    </span>
+                  )}
+                </p>
+              )}
+            </li>
+          ))}
+        </ol>
+      )}
+    </section>
+  );
+}
+
 function Stat({ label, value, sub, tone = "neutral", icon: Icon }) {
   const iconTone =
     tone === "amber" ? "text-amber-500" : tone === "alert" ? "text-red-500" : tone === "brand" ? "text-teal-600" : "text-stone-400";
@@ -333,4 +393,4 @@ function Stat({ label, value, sub, tone = "neutral", icon: Icon }) {
   );
 }
 
-export { Chip, Empty, PageSubtitle, SeverityChip, Diff, Differences, RefPath, HistorySection, Stat, ValueDisplay };
+export { Chip, Empty, PageSubtitle, SeverityChip, Diff, Differences, RefPath, NotesSection, HistoryList, Stat, ValueDisplay };

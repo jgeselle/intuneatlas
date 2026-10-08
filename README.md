@@ -89,6 +89,9 @@ Around that:
 - **Staged, reviewed changes.** A changed value is staged in the policy that
   holds it or in a new policy you name, and needs a reason and a reviewer.
   Nothing is written to the tenant.
+- **A history per setting.** Every scan is compared with the one before, and
+  what changed — a value, a policy starting or no longer setting it, an
+  assignment — is kept on the setting, whoever made the change and wherever.
 - **Documented.** A note explaining a deliberate deviation is attached to the
   setting itself, so context survives the person who wrote it.
 
@@ -156,6 +159,7 @@ than opening a public issue.
 - [x] `ui --persist` / `--stop` — a shared instance that survives reboots (Scheduled Task on Windows, systemd on Linux)
 - [x] Entra App Roles (Viewer / Contributor / Admin), enforced server-side across the UI and CLI
 - [x] Sigstore build provenance + SBOM attestations on every released binary — see [Trust model](#trust-model)
+- [x] Per-setting history of what changed between scans
 - [ ] Actually deploying a staged change back to the tenant (write-back) — deliberately deferred; the review gate above exists, the write doesn't yet
 - [ ] Enrollment configurations as settings — they are listed by name and assignment only
 - [ ] Legacy (template-based) device configuration profiles beyond a handful of Windows Device Restrictions settings

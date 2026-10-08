@@ -723,6 +723,7 @@ function Dashboard({ initialReport, session }) {
 
       {openSetting && (
         <SettingDrawer
+          scannedAt={report.scannedAt}
           entry={openSetting}
           notes={notes[openSetting.key] || []}
           onAddNote={(text) => addNote(openSetting.key, text)}

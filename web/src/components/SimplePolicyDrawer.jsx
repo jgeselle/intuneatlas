@@ -1,5 +1,5 @@
 import { DrawerShell } from "./DrawerShell.jsx";
-import { Chip, HistorySection } from "./bits.jsx";
+import { Chip, NotesSection } from "./bits.jsx";
 import { platformLabel } from "../lib/format.js";
 
 function SimplePolicyDrawer({ item, kindLabel, notes, onAddNote, onDeleteNote, onClose, viewer }) {
@@ -21,7 +21,7 @@ function SimplePolicyDrawer({ item, kindLabel, notes, onAddNote, onDeleteNote, o
         </>
       }
     >
-      <HistorySection notes={notes} onAdd={onAddNote} onDelete={onDeleteNote} readOnly={!canNote} viewer={viewer} />
+      <NotesSection notes={notes} onAdd={onAddNote} onDelete={onDeleteNote} readOnly={!canNote} viewer={viewer} />
     </DrawerShell>
   );
 }

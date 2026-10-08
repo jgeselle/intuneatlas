@@ -95,6 +95,25 @@ export function getDb(): DatabaseSync {
     );
     CREATE UNIQUE INDEX IF NOT EXISTS idx_staged_changes_target ON staged_changes(target_key);
 
+    -- What happened to each setting, scan to scan (see src/storage/history.ts).
+    -- Small next to the snapshots: one row per change, not per setting per scan.
+    CREATE TABLE IF NOT EXISTS setting_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      tenant TEXT NOT NULL,
+      setting_key TEXT NOT NULL,
+      scan_id INTEGER REFERENCES scans(id),
+      occurred_at TEXT NOT NULL,
+      since TEXT,
+      kind TEXT NOT NULL,
+      policy_id TEXT NOT NULL,
+      policy_name TEXT NOT NULL,
+      from_value TEXT,
+      to_value TEXT,
+      actor_name TEXT,
+      reason TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_setting_history_setting ON setting_history(tenant, setting_key);
+
     CREATE TABLE IF NOT EXISTS config (
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL

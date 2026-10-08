@@ -1,4 +1,5 @@
 import { getDb } from "./db.js";
+import { ensureHistoryBackfilled, recordHistoryForScan } from "./history.js";
 import type { ScanReport } from "../scan/report.js";
 import type { RawSimplePolicy, SettingSchema } from "../scan/types.js";
 import { normalizeState } from "../scan/states.js";
@@ -42,6 +43,8 @@ interface PolicySnapshotRow {
 /** Persists a scan and every row of it — the scan-history record this whole storage layer exists for. */
 export function recordScan(report: ScanReport): void {
   const db = getDb();
+  // Before this scan joins the others: history for the scans already stored must not include it twice.
+  ensureHistoryBackfilled();
 
   db.exec("BEGIN");
   try {
@@ -92,6 +95,13 @@ export function recordScan(report: ScanReport): void {
     for (const p of report.enrollmentConfigurations) {
       insertPolicy.run(scanId, "enrollment", p.id, p.name, p.platform, p.deployed ? 1 : 0, p.priority ?? null, p.targets ? JSON.stringify(p.targets) : null);
     }
+
+    // What this scan shows to have changed since the tenant's last one.
+    recordHistoryForScan(
+      db,
+      { id: scanId, tenant: report.tenant, scannedAt: report.scannedAt },
+      report.settings.filter((e) => e.state !== "Missing"),
+    );
 
     db.exec("COMMIT");
   } catch (err) {

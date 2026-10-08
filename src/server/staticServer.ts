@@ -114,6 +114,8 @@ export interface StartServerOptions {
    * report. Throws BaselineInputError for a group the scan doesn't know.
    */
   onScopeReport?: (report: unknown, groupId: string) => unknown | Promise<unknown>;
+  /** One setting's history — what scans have seen change in it — newest first. Asked for when a setting is opened, not sent with the report. */
+  onHistoryRequest?: (settingKey: string) => unknown[] | Promise<unknown[]>;
   baselines?: {
     add: (input: AddPackInput) => Promise<string>;
     rename: (pack: string, name: string) => Promise<void>;
@@ -235,6 +237,11 @@ export async function startServer(options: StartServerOptions): Promise<{ url: s
 
       if (req.method === "GET" && req.url?.startsWith("/api/scope?")) {
         await handleScope(req, res, options.onScopeReport, options.onEvaluateForViewer, viewer, () => currentReport);
+        return;
+      }
+
+      if (req.method === "GET" && req.url?.startsWith("/api/history?")) {
+        await handleHistory(req, res, options.onHistoryRequest, viewer);
         return;
       }
 
@@ -484,6 +491,28 @@ async function handleSetBaselineSelection(
  * loaded with, for the browser to show in place of the tenant-wide list.
  * Same right as the report itself.
  */
+async function handleHistory(
+  req: IncomingMessage,
+  res: ServerResponse,
+  onHistoryRequest: StartServerOptions["onHistoryRequest"],
+  viewer: ViewerIdentity,
+): Promise<void> {
+  const json = (status: number, body: unknown) => {
+    res.writeHead(status, { "Content-Type": "application/json" });
+    res.end(JSON.stringify(body));
+  };
+  if (!onHistoryRequest) return json(501, { error: "History isn't available from this session." });
+  if (!can(viewer.role, "view")) return json(403, { error: "Your role doesn't include viewing the report." });
+  const key = new URL(req.url ?? "", "http://localhost").searchParams.get("key") ?? "";
+  if (!key) return json(400, { error: "Name a setting." });
+  try {
+    json(200, { events: await onHistoryRequest(key) });
+  } catch (err) {
+    console.error("[history]", err);
+    json(500, { error: "Couldn't read this setting's history." });
+  }
+}
+
 async function handleScope(
   req: IncomingMessage,
   res: ServerResponse,

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { WarningCircle, CheckCircle, MinusCircle } from "@phosphor-icons/react";
 import { DrawerShell } from "./DrawerShell.jsx";
-import { Chip, SeverityChip, Differences, RefPath, HistorySection, ValueDisplay, Empty } from "./bits.jsx";
+import { Chip, SeverityChip, Differences, RefPath, NotesSection, HistoryList, ValueDisplay, Empty } from "./bits.jsx";
 import { STATE_STYLE } from "../lib/styles.js";
 import { platformLabel, refLabel, isComplianceSetting } from "../lib/format.js";
 import { rangeLabel } from "../lib/schema.js";
@@ -334,7 +334,27 @@ function initialDraft(source) {
  * them differs. The state itself is the chip in the header — nothing
  * here restates it in a sentence.
  */
-function SettingDrawer({ entry, notes, onAddNote, onDeleteNote, onClose, changes, groups, onStage, onStageNew, onRevert, viewer }) {
+function SettingDrawer({ entry, notes, onAddNote, onDeleteNote, onClose, changes, groups, onStage, onStageNew, onRevert, viewer, scannedAt }) {
+  // What scans have seen change in this setting — asked for when it is opened, and again after a new
+  // scan. A setting no policy has any more (Missing) is asked for under the key it had while one did:
+  // its history is how it came to be missing. With nothing recorded, a Missing setting shows no section.
+  const [history, setHistory] = useState(undefined);
+  useEffect(() => {
+    setHistory(undefined);
+    const missing = entry.state === "Missing";
+    let stale = false;
+    fetch("/api/history?key=" + encodeURIComponent(entry.key.replace(/^uncovered::/, "")))
+      .then((res) => (res.ok ? res.json() : null))
+      .then((body) => {
+        if (stale || !body) return;
+        const events = body.events ?? [];
+        if (events.length > 0 || !missing) setHistory(events);
+      })
+      .catch(() => {});
+    return () => {
+      stale = true;
+    };
+  }, [entry.key, entry.state, scannedAt]);
   const recs = entry.recs;
   const checks = entry.checks ?? [];
   const schemas = entry.schemas;
@@ -498,7 +518,9 @@ function SettingDrawer({ entry, notes, onAddNote, onDeleteNote, onClose, changes
         )}
       </section>
 
-      <HistorySection notes={notes} onAdd={onAddNote} onDelete={onDeleteNote} readOnly={!canNote} viewer={viewer} />
+      <NotesSection notes={notes} onAdd={onAddNote} onDelete={onDeleteNote} readOnly={!canNote} viewer={viewer} />
+
+      <HistoryList events={history} />
     </DrawerShell>
   );
 }
