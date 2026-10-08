@@ -3,7 +3,7 @@ import { WarningCircle, CheckCircle, MinusCircle } from "@phosphor-icons/react";
 import { DrawerShell } from "./DrawerShell.jsx";
 import { Chip, SeverityChip, Differences, RefPath, HistorySection, ValueDisplay, Empty } from "./bits.jsx";
 import { STATE_STYLE } from "../lib/styles.js";
-import { platformLabel, refLabel } from "../lib/format.js";
+import { platformLabel, refLabel, isComplianceSetting } from "../lib/format.js";
 import { rangeLabel } from "../lib/schema.js";
 import { renderNode, nodeFromText, validateNode, normalizeNode, applyExpected } from "../lib/settingValue.js";
 import { ValueEditor } from "./ValueEditor.jsx";
@@ -378,7 +378,7 @@ function SettingDrawer({ entry, notes, onAddNote, onDeleteNote, onClose, changes
           <Chip className="bg-stone-100 text-stone-600 ring-stone-200">{platformLabel(entry.platform)}</Chip>
         </>
       }
-      detail={entry.cspPath ? <RefPath value={entry.cspPath} label={refLabel(entry.platform)} /> : null}
+      detail={entry.cspPath ? <RefPath value={entry.cspPath} label={isComplianceSetting(entry) ? "Graph property" : refLabel(entry.platform)} /> : null}
     >
       <section>
         <h3 className={SECTION_HEADING}>

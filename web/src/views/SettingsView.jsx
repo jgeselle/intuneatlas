@@ -8,7 +8,16 @@ import { platformLabel } from "../lib/format.js";
 const HEADER_ROW_HEIGHT = 33; // category label, ~= mb-2 + line height
 const SETTING_ROW_HEIGHT = 61; // one list row at its common (non-wrapping) height
 
+/**
+ * The list of settings, used twice: for what configuration policies set
+ * ("Settings") and for what compliance policies demand ("Compliance").
+ * `conflicts` is off for the latter — compliance settings never conflict,
+ * so the state, its filter and its count aren't offered there.
+ */
 function SettingsView({
+  title = "Settings",
+  searchPlaceholder = "Search by name, category, or CSP path",
+  conflicts = true,
   entries,
   notes = {},
   changes = {},
@@ -28,7 +37,7 @@ function SettingsView({
     return counts;
   }, [changes]);
   const platforms = ["All", ...Array.from(new Set(entries.map((e) => e.platform)))];
-  const states = ["All", "Below baseline", "Conflict", "Missing", "Not assigned", "Meets baseline", "Not checked"];
+  const states = ["All", "Below baseline", "Conflict", "Missing", "Not assigned", "Meets baseline", "Not checked"].filter((s) => conflicts || s !== "Conflict");
 
   const shown = entries.filter(
     (e) =>
@@ -78,14 +87,14 @@ function SettingsView({
           effect after scrolling past that gap instead of immediately. */}
       <div className="sticky top-0 z-10 -mt-6 space-y-5 bg-stone-50 pb-4 pt-6 lg:-mt-8 lg:pt-8">
         <header>
-          <h1 className="text-xl font-semibold">Settings</h1>
+          <h1 className="text-xl font-semibold">{title}</h1>
           <PageSubtitle scope={scope} />
         </header>
 
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <div className={"grid grid-cols-2 gap-3 " + (conflicts ? "sm:grid-cols-3 lg:grid-cols-5" : "lg:grid-cols-4")}>
           <Stat label="Managed" value={managedCount} icon={Sliders} />
           <Stat label="Below baseline" value={count("Below baseline")} tone={count("Below baseline") ? "amber" : "neutral"} icon={WarningCircle} />
-          <Stat label="Conflicting" value={count("Conflict")} tone={count("Conflict") ? "alert" : "neutral"} icon={Warning} />
+          {conflicts && <Stat label="Conflicting" value={count("Conflict")} tone={count("Conflict") ? "alert" : "neutral"} icon={Warning} />}
           <Stat label="Not assigned" value={count("Not assigned")} icon={Prohibit} />
           <Stat label="Missing" value={count("Missing")} tone={count("Missing") ? "amber" : "neutral"} icon={Question} />
         </div>
@@ -97,7 +106,7 @@ function SettingsView({
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search by name, category, or CSP path"
+              placeholder={searchPlaceholder}
               className="w-full rounded-md border border-stone-300 bg-white py-2 pl-9 pr-3 text-sm placeholder-stone-400 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
             />
           </div>
@@ -134,7 +143,7 @@ function SettingsView({
       </div>
 
       {shown.length === 0 ? (
-        <Empty>No settings match that filter</Empty>
+        <Empty>{entries.length === 0 ? "No settings" : "No settings match that filter"}</Empty>
       ) : (
         <div ref={listRef} style={{ position: "relative", height: virtualizer.getTotalSize(), width: "100%" }}>
           {virtualizer.getVirtualItems().map((vi) => {

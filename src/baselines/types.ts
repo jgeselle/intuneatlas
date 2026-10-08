@@ -13,11 +13,12 @@ export type CompareMode = "exact" | "atMost" | "atLeast";
 /**
  * One setting a baseline has an opinion on.
  *
- * Every baseline is stored the same way: as Settings Catalog policies
- * exported from Intune (the JSON Graph returns), dropped into a folder.
- * A rule is one setting from one of those policies — its value kept as
- * the same tree a scan produces, matched to a tenant by Intune's own
- * setting definition id.
+ * Every baseline is stored the same way: as policies exported from
+ * Intune (the JSON Graph returns) — Settings Catalog and compliance —
+ * dropped into a folder. A rule is one setting from one of those
+ * policies — its value kept as the same tree a scan produces, matched to
+ * a tenant by Intune's own setting definition id (for a compliance
+ * setting, the policy type and property it lives in).
  *
  * What an export can't say — how severe a deviation is, why the value
  * was chosen, where that's documented, whether "lower is fine too" —

@@ -1,5 +1,6 @@
+import { isComplianceDefinition } from "../scan/complianceSettings.js";
 import { definitionIdsIn, hydrateNode, renderNode } from "../scan/settingValue.js";
-import type { BaselineCheck, SettingIndexEntry, SettingSchema, SettingValueNode } from "../scan/types.js";
+import type { BaselineCheck, SettingIndexEntry, SettingIndexSource, SettingSchema, SettingValueNode } from "../scan/types.js";
 import { compareValues, type Difference } from "./compare.js";
 import type { BaselineRule } from "./types.js";
 
@@ -28,10 +29,25 @@ export interface BaselineDefinitions {
  * effective value to judge yet, or it isn't reaching any device — but
  * still carries what each baseline expects.
  *
+ * Several assigned policies with different values: for a configuration
+ * setting each of them has to meet the baseline — they are for different
+ * groups (or it would be a conflict), and each group gets only its own.
+ * Compliance settings add up instead: a device has to satisfy every
+ * compliance policy it gets, so one policy that meets the baseline makes
+ * up for another, aimed at the same devices, that asks for less. "The
+ * same devices" is known in two cases — the report is narrowed to one
+ * group (`oneAudience`: every policy in it reaches that group), or two
+ * policies have identical assignments.
+ *
  * The verdict is always recomputed from scratch (state, recs and checks),
  * never carried over from whatever the entry came in with.
  */
-export function applyBaselines(entries: SettingIndexEntry[], rules: BaselineRule[], definitions?: BaselineDefinitions): SettingIndexEntry[] {
+export function applyBaselines(
+  entries: SettingIndexEntry[],
+  rules: BaselineRule[],
+  definitions?: BaselineDefinitions,
+  options: { oneAudience?: boolean } = {},
+): SettingIndexEntry[] {
   const byDefinition = groupBy(rules, (rule) => rule.definitionId);
 
   return entries.map((entry) => {
@@ -50,16 +66,20 @@ export function applyBaselines(entries: SettingIndexEntry[], rules: BaselineRule
     // What the assigned policies set. Usually one value; several when policies for different
     // groups differ without conflicting — then the baseline is met only if every one of them meets it.
     const assigned = entry.sources.filter((source) => source.deployed);
-    const distinct = assigned.filter((source, i) => assigned.findIndex((other) => other.value === source.value) === i);
-    const actuals = distinct.length > 0 ? distinct.map((source) => source.structured) : [undefined];
     const current = entry.values[0] ?? "";
+    const addsUp = isComplianceDefinition(entry.definitionId);
+    const sameAudience = (a: SettingIndexSource, b: SettingIndexSource) => options.oneAudience === true || JSON.stringify(a.targets) === JSON.stringify(b.targets);
 
     const judged = perPack.map((alternatives) => {
       const outcomes = alternatives.map((rule) => {
         const expected = hydrateNode(rule.expected, schemas);
-        // Held against the value that falls shortest of it.
-        const differences = actuals.map((actual) => compareValues(expected, actual, rule.compare)).reduce((a, b) => (b.length > a.length ? b : a));
-        return { rule, differences };
+        const perSource = assigned.map((source) => ({ source, differences: compareValues(expected, source.structured, rule.compare) }));
+        const met = perSource.filter((s) => s.differences.length === 0);
+        // A compliance policy asking for less doesn't count against the baseline where another, for the same devices, meets it.
+        const held = addsUp ? perSource.filter((s) => s.differences.length > 0 && !met.some((m) => sameAudience(m.source, s.source))) : perSource;
+        // Held against the value that falls shortest of it. (No assigned source at all can't happen here — that is "Not assigned".)
+        const differences = held.map((s) => s.differences).reduce((a, b) => (b.length > a.length ? b : a), [] as Difference[]);
+        return { rule, differences: perSource.length === 0 ? compareValues(expected, undefined, rule.compare) : differences };
       });
       // Of the values the baseline accepts, the one it comes closest to.
       const best = outcomes.reduce((a, b) => (b.differences.length < a.differences.length ? b : a));

@@ -1,15 +1,18 @@
 import { Sliders, ShieldCheck, DeviceMobile, Warning, Check, Clock } from "@phosphor-icons/react";
 import { PageSubtitle, SeverityChip, Stat, Empty } from "../components/bits.jsx";
 import { severityRank } from "../lib/styles.js";
-import { platformLabel } from "../lib/format.js";
+import { isComplianceSetting, platformLabel } from "../lib/format.js";
 
 function Overview({ settingIndex, compliancePolicies, enrollmentConfigurations, changes, onGo, onOpen, scope }) {
-  const conflicts = settingIndex.filter((e) => e.conflict).length;
-  const unassigned = settingIndex.filter((e) => e.state === "Not assigned").length;
+  // The counts are of configuration settings, as on the Settings page; what compliance policies
+  // demand has its own page. The "fix these first" list below draws on both.
+  const configuration = settingIndex.filter((e) => !isComplianceSetting(e));
+  const conflicts = configuration.filter((e) => e.conflict).length;
+  const unassigned = configuration.filter((e) => e.state === "Not assigned").length;
   // "Missing" entries are synthetic — a baseline rule with no matching
   // setting anywhere in the tenant, not something actually configured —
   // so they're excluded from what "Settings managed" claims to count.
-  const managedCount = settingIndex.filter((e) => e.state !== "Missing").length;
+  const managedCount = configuration.filter((e) => e.state !== "Missing").length;
   // One row per (setting, recommendation) — a setting can have several,
   // from different sources, so this can list the same setting more than
   // once if more than one baseline flags it.

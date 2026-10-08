@@ -71,7 +71,7 @@ test("loadBaselines: each setting of each exported policy becomes a rule, value 
   );
 });
 
-test("loadBaselines: a baseline download can be dropped in whole — everything that isn't a Settings Catalog export is skipped", async () => {
+test("loadBaselines: a baseline download can be dropped in whole — everything that isn't a policy with settings in it is skipped", async () => {
   await withTempDir(
     {
       "oib/windows-v4.0/SettingsCatalog/a.json": exportedPolicy("A", [choiceInstance("s1", "1")]),
@@ -204,4 +204,39 @@ test("loadBaselines: a directory is parsed once and reused until one of its file
     await rm(join(dir, "p/v1/y.json"));
     assert.equal((await loadBaselines(dir)).length, 1);
   });
+});
+
+test("loadBaselines: an exported compliance policy becomes one rule per setting it configures", async () => {
+  await withTempDir(
+    {
+      "oib/windows-v4.0/CompliancePolicies/health.json": JSON.stringify({
+        "@odata.type": "#microsoft.graph.windows10CompliancePolicy",
+        id: "c1",
+        displayName: "Win - Compliance - Device Health",
+        passwordRequired: false,
+        passwordMinimumLength: null,
+        bitLockerEnabled: true,
+        osMinimumVersion: "10.0.22631.0",
+        scheduledActionsForRule: [{ ruleName: "PasswordRequired" }],
+      }),
+      "oib/windows-v4.0/baseline.yml": "settings:\n  compliance.windows10.osMinimumVersion:\n    severity: high\n",
+    },
+    async (dir) => {
+      const rules = await loadBaselines(dir);
+      assert.deepEqual(
+        rules.map((r) => [r.definitionId, r.platform, r.policyName, r.severity]),
+        [
+          ["compliance.windows10.bitLockerEnabled", "windows10", "Win - Compliance - Device Health", undefined],
+          ["compliance.windows10.osMinimumVersion", "windows10", "Win - Compliance - Device Health", "high"],
+        ],
+      );
+      assert.deepEqual(rules[0].expected, {
+        kind: "choice",
+        definitionId: "compliance.windows10.bitLockerEnabled",
+        name: "BitLocker enabled",
+        optionId: "compliance.windows10.bitLockerEnabled_true",
+        label: "Require",
+      });
+    },
+  );
 });

@@ -1,3 +1,4 @@
+import { isComplianceDefinition } from "./complianceSettings.js";
 import { summarizeSources } from "./index.js";
 import type { ScanReport } from "./report.js";
 import { appliesToGroup } from "./targets.js";
@@ -23,7 +24,8 @@ export function scopeToGroup(report: ScanReport, groupId: string): ScanReport {
   const settings = real
     .map((entry) => {
       const sources = entry.sources.filter((source) => source.targets && appliesToGroup(source.targets, groupId, report.groups));
-      return { ...entry, sources, ...summarizeSources(sources, report.groups), recs: [], checks: undefined };
+      const summary = summarizeSources(sources, report.groups, { conflicts: !isComplianceDefinition(entry.definitionId) });
+      return { ...entry, sources, ...summary, recs: [], checks: undefined };
     })
     .filter((entry) => entry.sources.length > 0);
 
@@ -38,7 +40,7 @@ export function scopeToGroup(report: ScanReport, groupId: string): ScanReport {
     definitions.info[entry.definitionId] = { cspPath: entry.cspPath, category: entry.category };
   }
 
-  // Compliance and enrollment policies are whole policies, not merged settings: one either reaches the group or it doesn't.
+  // The policy lists themselves (compliance and enrollment) aren't merged: a policy either reaches the group or it doesn't.
   const reaches = (policy: { targets?: AssignmentTarget[] }) => Boolean(policy.targets) && appliesToGroup(policy.targets!, groupId, report.groups);
 
   return {
@@ -50,5 +52,6 @@ export function scopeToGroup(report: ScanReport, groupId: string): ScanReport {
     conflictCount: settings.filter((e) => e.conflict).length,
     belowBaselineCount: 0,
     baselineDefinitions: definitions,
+    scopedToGroup: groupId,
   };
 }

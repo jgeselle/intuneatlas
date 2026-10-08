@@ -53,4 +53,14 @@ function refLabel(platform) {
   return "Graph property";
 }
 
-export { initialsOf, sinceLabel, platformLabel, refLabel };
+/**
+ * Whether a setting comes from a compliance policy rather than a
+ * configuration policy. Both live in the same list (same states, same
+ * baselines, same editor); the definition id tells them apart — the
+ * server's isComplianceDefinition, src/scan/complianceSettings.ts.
+ */
+function isComplianceSetting(entry) {
+  return Boolean(entry.definitionId?.startsWith("compliance."));
+}
+
+export { initialsOf, sinceLabel, platformLabel, refLabel, isComplianceSetting };

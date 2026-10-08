@@ -38,7 +38,7 @@ interface IndexBucket {
  * live sample, mostly macOS/iOS preference-domain settings, had an
  * empty baseUri). cspPath stays on the index purely for display.
  */
-export function buildSettingIndex(policies: RawPolicy[], groups?: GroupDirectory): SettingIndexEntry[] {
+export function buildSettingIndex(policies: RawPolicy[], groups?: GroupDirectory, options: { conflicts?: boolean } = {}): SettingIndexEntry[] {
   const buckets = new Map<string, IndexBucket>();
 
   for (const policy of policies) {
@@ -74,7 +74,7 @@ export function buildSettingIndex(policies: RawPolicy[], groups?: GroupDirectory
 
   return Array.from(buckets.entries())
     .map(([key, bucket]) => {
-      const { values, conflict, state } = summarizeSources(bucket.sources, groups);
+      const { values, conflict, state } = summarizeSources(bucket.sources, groups, options);
 
       return {
         key,
@@ -107,10 +107,15 @@ export function buildSettingIndex(policies: RawPolicy[], groups?: GroupDirectory
  * and departments are meant to work. Policies whose targets aren't known
  * (a scan stored before targets were kept) are treated as able to
  * overlap, which is what was assumed about every pair before.
+ *
+ * `conflicts: false` is for compliance settings, where differing values
+ * never conflict: Intune checks a device against each compliance policy
+ * on its own, so the strictest simply wins.
  */
 export function summarizeSources(
   sources: SettingIndexSource[],
   groups?: GroupDirectory,
+  options: { conflicts?: boolean } = {},
 ): { values: string[]; conflict: boolean; state: SettingIndexState } {
   const deployedSources = sources.filter((s) => s.deployed);
   const deployedValues = Array.from(new Set(deployedSources.map((s) => s.value)));
@@ -118,7 +123,7 @@ export function summarizeSources(
   // followed by anything only an unassigned policy holds.
   const values = Array.from(new Set([...deployedValues, ...sources.map((s) => s.value)]));
   // Only policies that are assigned can disagree with each other: an unassigned one reaches nothing.
-  const conflict = deployedSources.some((a, i) =>
+  const conflict = options.conflicts !== false && deployedSources.some((a, i) =>
     deployedSources.slice(i + 1).some((b) => a.value !== b.value && (!a.targets || !b.targets || canOverlap(a.targets, b.targets, groups))),
   );
 

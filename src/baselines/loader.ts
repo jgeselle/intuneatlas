@@ -4,7 +4,10 @@ import { homedir } from "node:os";
 import { basename, dirname, join, relative, sep } from "node:path";
 import { load } from "js-yaml";
 import { resolveAppPath } from "../packagedPaths.js";
+import { complianceSettingsOf, complianceTypeOf } from "../scan/complianceSettings.js";
 import { rawNode, type GraphSettingInstance } from "../scan/settingValue.js";
+import { platformFromODataType } from "../scan/simplePolicy.js";
+import type { SettingValueNode } from "../scan/types.js";
 import type { BaselineRule, CompareMode, Severity } from "./types.js";
 
 /** Baselines that ship with the app — replaced wholesale by every update. */
@@ -52,16 +55,24 @@ interface ExportedPolicy {
   settings?: Array<{ settingInstance?: GraphSettingInstance }>;
 }
 
+/** An exported policy of either kind, reduced to what a rule is made of. */
+interface BaselinePolicy {
+  name?: string;
+  platform: string;
+  settings: Array<{ definitionId: string; expected: SettingValueNode }>;
+}
+
 /**
  * Reads every baseline pack under the given directories.
  *
  * A pack is a folder two levels down — `<source>/<name-and-version>/`,
  * e.g. `oib/windows-v4.0/` — holding, at any depth:
  *
- * - Settings Catalog policies exported from Intune as JSON, exactly as
- *   exported. Each setting in each policy becomes one rule. Anything else
- *   in the folder (compliance policies, scripts, a manifest, docs) is
- *   skipped: a real baseline download is dropped in whole, not curated.
+ * - Settings Catalog policies and compliance policies exported from
+ *   Intune as JSON, exactly as exported. Each setting in each policy
+ *   becomes one rule. Anything else in the folder (scripts, a manifest,
+ *   docs, other policy types) is skipped: a real baseline download is
+ *   dropped in whole, not curated.
  * - optionally one `baseline.yml` at the pack's root, with a display
  *   `name` and per-setting annotations under `settings:`, keyed by
  *   definition id — severity, rationale, reference, compare, ignore.
@@ -116,20 +127,19 @@ async function parseDirectory(dir: string, files: string[]): Promise<BaselineRul
     if (!policy) continue;
     const pack = packForFile(dir, file);
     const packAnnotations = annotations.get(pack);
-    const policyName = policy.name ?? policy.displayName ?? basename(file).replace(/\.json$/i, "");
+    const policyName = policy.name ?? basename(file).replace(/\.json$/i, "");
 
-    for (const { settingInstance } of policy.settings ?? []) {
-      if (!settingInstance?.settingDefinitionId) continue;
-      const annotation = packAnnotations?.settings[settingInstance.settingDefinitionId] ?? {};
+    for (const { definitionId, expected } of policy.settings) {
+      const annotation = packAnnotations?.settings[definitionId] ?? {};
       if (annotation.ignore) continue;
       rules.push({
-        id: `${pack}::${policyName}::${settingInstance.settingDefinitionId}`,
+        id: `${pack}::${policyName}::${definitionId}`,
         pack,
         source: packAnnotations?.name ?? prettifyPack(pack),
         policyName,
-        definitionId: settingInstance.settingDefinitionId,
-        platform: policy.platforms ?? "",
-        expected: rawNode(settingInstance),
+        definitionId,
+        platform: policy.platform,
+        expected,
         compare: annotation.compare ?? "exact",
         ...(annotation.severity ? { severity: annotation.severity } : {}),
         ...(annotation.rationale ? { rationale: annotation.rationale } : {}),
@@ -175,17 +185,23 @@ function decode(bytes: Buffer): string {
   return bytes.toString("utf8");
 }
 
-/** Whether these bytes are a Settings Catalog policy export — what an upload is checked with before anything is written. */
+/** Whether these bytes are a policy export a baseline can be made of — what an upload is checked with before anything is written. */
 export function isExportedPolicy(bytes: Buffer): boolean {
   return parseExportedPolicy(bytes) !== undefined;
 }
 
-/** The file as a Settings Catalog policy export, or undefined if it's anything else — including JSON that doesn't parse. */
-async function readExportedPolicy(file: string): Promise<ExportedPolicy | undefined> {
+/** The file as an exported policy, or undefined if it's anything else — including JSON that doesn't parse. */
+async function readExportedPolicy(file: string): Promise<BaselinePolicy | undefined> {
   return parseExportedPolicy(await readFile(file));
 }
 
-function parseExportedPolicy(bytes: Buffer): ExportedPolicy | undefined {
+/**
+ * Two kinds of export are understood: a Settings Catalog policy (a
+ * `settings` list of setting instances) and a compliance policy (a
+ * typed resource with its settings as properties). A policy with
+ * nothing configured in it is not a baseline policy.
+ */
+function parseExportedPolicy(bytes: Buffer): BaselinePolicy | undefined {
   let parsed: unknown;
   try {
     parsed = JSON.parse(decode(bytes));
@@ -193,9 +209,27 @@ function parseExportedPolicy(bytes: Buffer): ExportedPolicy | undefined {
     return undefined;
   }
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return undefined;
-  const settings = (parsed as ExportedPolicy).settings;
-  if (!Array.isArray(settings) || !settings.some((s) => s?.settingInstance?.settingDefinitionId)) return undefined;
-  return parsed as ExportedPolicy;
+
+  if (complianceTypeOf((parsed as Record<string, unknown>)["@odata.type"])) {
+    const policy = parsed as Record<string, unknown>;
+    const settings = complianceSettingsOf(policy).map((setting) => ({ definitionId: setting.settingDefinitionId, expected: setting.structured! }));
+    if (settings.length === 0) return undefined;
+    return {
+      ...(typeof policy.displayName === "string" ? { name: policy.displayName } : {}),
+      platform: platformFromODataType(String(policy["@odata.type"])),
+      settings,
+    };
+  }
+
+  const catalog = parsed as ExportedPolicy;
+  if (!Array.isArray(catalog.settings)) return undefined;
+  const settings = catalog.settings
+    .map((s) => s?.settingInstance)
+    .filter((instance): instance is GraphSettingInstance => Boolean(instance?.settingDefinitionId))
+    .map((instance) => ({ definitionId: instance.settingDefinitionId, expected: rawNode(instance) }));
+  if (settings.length === 0) return undefined;
+  const name = catalog.name ?? catalog.displayName;
+  return { ...(name ? { name } : {}), platform: catalog.platforms ?? "", settings };
 }
 
 async function readAnnotations(file: string): Promise<PackAnnotations> {

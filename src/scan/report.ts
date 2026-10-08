@@ -7,6 +7,7 @@ import type { GroupDirectory } from "./types.js";
 import { normalizeState } from "./states.js";
 import type { BaselineRule } from "../baselines/types.js";
 import { fetchCompliancePolicies } from "./compliancePolicies.js";
+import { complianceDefinitions, isComplianceDefinition } from "./complianceSettings.js";
 import { fetchConfigurationPolicies } from "./configurationPolicies.js";
 import { fetchLegacyDeviceConfigurations } from "./deviceConfigurations.js";
 import { fetchEnrollmentConfigurations } from "./enrollmentConfigurations.js";
@@ -30,8 +31,13 @@ export interface ScanReport {
    * applyBaselinesToReport() has run.
    */
   belowBaselineCount: number;
+  /**
+   * Every setting in the tenant: Settings Catalog (and mapped legacy)
+   * settings, and — told apart by their definition id, see
+   * isComplianceDefinition — what compliance policies configure.
+   */
   settings: ReturnType<typeof buildSettingIndex>;
-  compliancePolicies: Awaited<ReturnType<typeof fetchCompliancePolicies>>;
+  compliancePolicies: Awaited<ReturnType<typeof fetchCompliancePolicies>>["policies"];
   enrollmentConfigurations: Awaited<ReturnType<typeof fetchEnrollmentConfigurations>>;
   /**
    * Definitions the loaded baselines mention that no policy in the tenant
@@ -42,6 +48,8 @@ export interface ScanReport {
   baselineDefinitions?: BaselineDefinitions;
   /** Names and nesting of the groups policies are assigned to — absent on scans stored before this was read. */
   groups?: GroupDirectory;
+  /** Set on a report narrowed to one group (see scopeToGroup): every policy left in it reaches that group. */
+  scopedToGroup?: string;
 }
 
 /**
@@ -56,13 +64,14 @@ export interface ScanReport {
  * facts already on disk.
  */
 export async function buildReport(token: string, flow: string, tenant: string, baselineDefinitionIds: string[] = []): Promise<ScanReport> {
-  const [policies, legacyPolicies, compliancePolicies, enrollmentConfigurations, tenantName] = await Promise.all([
+  const [policies, legacyPolicies, compliance, enrollmentConfigurations, tenantName] = await Promise.all([
     fetchConfigurationPolicies(token),
     fetchLegacyDeviceConfigurations(token),
     fetchCompliancePolicies(token),
     fetchEnrollmentConfigurations(token),
     fetchTenantDisplayName(token),
   ]);
+  const compliancePolicies = compliance.policies;
   // Legacy profiles fold into the same merge — a Settings Catalog policy and
   // a legacy Device Restrictions profile writing the same real setting need
   // to land in the same bucket to be conflict-checked against each other.
@@ -72,9 +81,11 @@ export async function buildReport(token: string, flow: string, tenant: string, b
     ...[...policies, ...legacyPolicies].flatMap((p) => groupIdsIn(p.assignments)),
     ...[...compliancePolicies, ...enrollmentConfigurations].flatMap((p) => groupIdsIn(p.targets ?? [])),
   ]);
-  const settingIndex = buildSettingIndex([...policies, ...legacyPolicies], groups);
+  // Compliance settings are indexed on their own — they can't collide with configuration settings,
+  // and differing values among them aren't conflicts — then listed with the rest.
+  const settingIndex = [...buildSettingIndex([...policies, ...legacyPolicies], groups), ...buildSettingIndex(compliance.settings, groups, { conflicts: false })];
   const known = new Set(settingIndex.flatMap((e) => Object.keys(e.schemas ?? {})));
-  const unknown = baselineDefinitionIds.filter((id) => !known.has(id));
+  const unknown = baselineDefinitionIds.filter((id) => !known.has(id) && !isComplianceDefinition(id));
   const baselineDefinitions = unknown.length > 0 ? await resolveBaselineDefinitions(token, unknown) : undefined;
 
   return {
@@ -125,14 +136,21 @@ export function applyBaselinesToReport(report: ScanReport, baselineRules: Baseli
   const rawSettings = report.settings
     .map((e) => ({ ...e, state: normalizeState(e.state) }))
     .filter((e) => e.state !== "Missing");
-  const evaluated = applyBaselines(rawSettings, activeRules, report.baselineDefinitions);
+  // What a baseline's settings are called when the tenant doesn't have them: looked up by the scan for
+  // catalog settings, known up front for compliance ones.
+  const compliance = complianceDefinitions();
+  const definitions = {
+    schemas: { ...compliance.schemas, ...report.baselineDefinitions?.schemas },
+    info: { ...compliance.info, ...report.baselineDefinitions?.info },
+  };
+  const evaluated = applyBaselines(rawSettings, activeRules, definitions, { oneAudience: Boolean(report.scopedToGroup) });
   // Synthetic "Missing" entries for baseline rules with no matching
   // setting anywhere in the tenant — appended for display only, after
   // belowBaselineCount is computed from the real scanned entries, so that
   // count stays truthful to what was actually found in the tenant rather
   // than what the baseline merely wishes existed.
   // Missing settings carry their real category, so they're sorted in with the rest rather than tacked on the end.
-  const settingsWithGaps = [...evaluated, ...findUncoveredEntries(evaluated, activeRules, report.baselineDefinitions)].sort(
+  const settingsWithGaps = [...evaluated, ...findUncoveredEntries(evaluated, activeRules, definitions)].sort(
     (a, b) => a.category.localeCompare(b.category) || a.name.localeCompare(b.name) || a.key.localeCompare(b.key),
   );
 

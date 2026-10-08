@@ -15,6 +15,7 @@ import { SyncControl } from "./components/SyncControl.jsx";
 import { AccountMenu } from "./components/AccountMenu.jsx";
 import { SettingDrawer } from "./components/SettingDrawer.jsx";
 import { SimplePolicyDrawer } from "./components/SimplePolicyDrawer.jsx";
+import { isComplianceSetting } from "./lib/format.js";
 import { Overview } from "./views/Overview.jsx";
 import { SettingsView } from "./views/SettingsView.jsx";
 import { SimplePolicyList } from "./views/SimplePolicyList.jsx";
@@ -84,6 +85,7 @@ export default function App({ initialReport, session }) {
   const [view, setView] = useState("overview");
   const [query, setQuery] = useState("");
   const [platform, setPlatform] = useState("All");
+  const [compliancePlatform, setCompliancePlatform] = useState("All");
   // Everything can be narrowed to what one group gets, chosen once (in any
   // page's subtitle): `scopeGroup` is that group's id, `scoped` the settings and
   // policies as the group gets them (worked out by the server — conflicts
@@ -304,6 +306,9 @@ export default function App({ initialReport, session }) {
   useEffect(() => {
     if (scopeGroup && !groupOptions.some((g) => g.value === scopeGroup)) setScopeGroup(null);
   }, [scopeGroup, groupOptions]);
+  // One list, two pages: what configuration policies set, and what compliance policies demand.
+  const configurationSettings = useMemo(() => settingIndex.filter((e) => !isComplianceSetting(e)), [settingIndex]);
+  const complianceSettings = useMemo(() => settingIndex.filter(isComplianceSetting), [settingIndex]);
   const compliancePolicies = (inScope ? scoped.compliancePolicies : report.compliancePolicies) ?? [];
   const enrollmentConfigurations = (inScope ? scoped.enrollmentConfigurations : report.enrollmentConfigurations) ?? [];
   const syncedAgo = report.scannedAt ? Math.max(0, Math.round((Date.now() - new Date(report.scannedAt).getTime()) / 60000)) : 0;
@@ -475,8 +480,8 @@ export default function App({ initialReport, session }) {
 
   const nav = [
     { id: "overview", label: "Overview", icon: SquaresFour },
-    { id: "configuration", label: "Settings", icon: Sliders, count: settingIndex.length },
-    { id: "compliance", label: "Compliance", icon: ShieldCheck, count: compliancePolicies.length },
+    { id: "configuration", label: "Settings", icon: Sliders, count: configurationSettings.length },
+    { id: "compliance", label: "Compliance", icon: ShieldCheck, count: complianceSettings.length },
     { id: "enrollment", label: "Enrollment", icon: DeviceMobile, count: enrollmentConfigurations.length },
     {
       id: "recommendations",
@@ -495,7 +500,6 @@ export default function App({ initialReport, session }) {
   // part of the chosen group's view at all (the change log isn't narrowed), so the whole tenant backs it up.
   const findSetting = (key) => settingIndex.find((e) => e.key === key) ?? wholeTenant.find((e) => e.key === key);
   const openSetting = open?.type === "setting" ? findSetting(open.key) : null;
-  const openCompliance = open?.type === "compliance" ? compliancePolicies.find((p) => p.id === open.id) : null;
   const openEnrollment = open?.type === "enrollment" ? enrollmentConfigurations.find((p) => p.id === open.id) : null;
 
   return (
@@ -647,7 +651,7 @@ export default function App({ initialReport, session }) {
 
           {view === "configuration" && (
             <SettingsView
-              entries={settingIndex}
+              entries={configurationSettings}
               changes={changes}
               scope={scope}
               notes={notes}
@@ -660,13 +664,19 @@ export default function App({ initialReport, session }) {
           )}
 
           {view === "compliance" && (
-            <SimplePolicyList
-              kindLabel="Compliance"
-              items={compliancePolicies}
+            <SettingsView
+              title="Compliance"
+              searchPlaceholder="Search by name or category"
+              conflicts={false}
+              entries={complianceSettings}
+              changes={changes}
               scope={scope}
+              notes={notes}
               query={query}
               setQuery={setQuery}
-              onOpen={(id) => setOpen({ type: "compliance", id })}
+              platform={compliancePlatform}
+              setPlatform={setCompliancePlatform}
+              onOpen={(key) => setOpen({ type: "setting", key })}
             />
           )}
 
@@ -726,17 +736,6 @@ export default function App({ initialReport, session }) {
           onStage={(source, change) => stageChange(openSetting, source, change)}
           onStageNew={(change) => stageChange(openSetting, null, change)}
           onRevert={(change) => revertEntryChange(change.id, change.targetKey)}
-          viewer={session}
-        />
-      )}
-      {openCompliance && (
-        <SimplePolicyDrawer
-          item={openCompliance}
-          kindLabel="Compliance"
-          notes={notes[openCompliance.id] || []}
-          onAddNote={(text) => addNote(openCompliance.id, text)}
-          onDeleteNote={(id) => deleteNote(openCompliance.id, id)}
-          onClose={() => setOpen(null)}
           viewer={session}
         />
       )}

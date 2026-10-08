@@ -20,8 +20,14 @@ baselines/
       **/*.json                <- exported policies, at any depth
 ```
 
-Drop a downloaded baseline in whole: files that aren't Settings Catalog policy
-exports (compliance policies, scripts, docs) are skipped.
+Drop a downloaded baseline in whole. Two kinds of exported policy are read:
+Settings Catalog policies and compliance policies. Everything else (scripts,
+docs, other policy types) is skipped.
+
+A compliance policy's settings are its properties, so their definition ids
+are made of the policy type and the property name, for example
+`compliance.windows10.passwordMinimumLength`. Properties left unset (null,
+`false`, or an enum's default) are not part of the baseline.
 
 ## baseline.yml
 
