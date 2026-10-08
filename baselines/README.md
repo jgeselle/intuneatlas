@@ -27,7 +27,9 @@ docs, other policy types) is skipped.
 A compliance policy's settings are its properties, so their definition ids
 are made of the policy type and the property name, for example
 `compliance.windows10.passwordMinimumLength`. Properties left unset (null,
-`false`, or an enum's default) are not part of the baseline.
+`false`, an empty list, or an enum's default) are not part of the baseline.
+A policy's actions for noncompliance are one setting,
+`compliance.<type>.scheduledActionsForRule`, when the export includes them.
 
 ## baseline.yml
 

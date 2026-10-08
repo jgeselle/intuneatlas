@@ -63,7 +63,7 @@ test("complianceSettingsOf", async (t) => {
     assert.deepEqual(settings, []);
   });
 
-  await t.test("skips what describes the policy, and what isn't a single value", () => {
+  await t.test("skips what describes the policy", () => {
     const settings = complianceSettingsOf({
       "@odata.type": WINDOWS,
       id: "p1",
@@ -73,11 +73,77 @@ test("complianceSettingsOf", async (t) => {
       roleScopeTagIds: ["0"],
       "assignments@odata.context": "…",
       assignments: [],
-      scheduledActionsForRule: [{ ruleName: "PasswordRequired" }],
-      validOperatingSystemBuildRanges: [{ lowestVersion: "10.0.1", highestVersion: "10.0.2" }],
-      deviceCompliancePolicyScript: { deviceComplianceScriptId: "s" },
+      conditionStatementId: "abc",
     });
     assert.deepEqual(settings, []);
+  });
+
+  await t.test("reads a list of objects as a list of groups, one sub-setting per field that holds something", () => {
+    const [ranges] = complianceSettingsOf({
+      "@odata.type": WINDOWS,
+      validOperatingSystemBuildRanges: [
+        { "@odata.type": "#microsoft.graph.operatingSystemVersionRange", description: "Windows 11 23H2", lowestVersion: "10.0.22631.0", highestVersion: "10.0.22631.9999" },
+        { description: "Windows 11 24H2", lowestVersion: "10.0.26100.0", highestVersion: null },
+      ],
+      wslDistributions: [],
+    });
+    const id = "compliance.windows10.validOperatingSystemBuildRanges";
+
+    assert.equal(ranges.settingDefinitionId, id);
+    assert.equal(ranges.name, "Valid operating system build ranges");
+    assert.equal(ranges.structured?.kind, "groupCollection");
+    assert.equal(
+      ranges.value,
+      ["[1] Description: Windows 11 23H2", "[1] Highest version: 10.0.22631.9999", "[1] Lowest version: 10.0.22631.0", "[2] Description: Windows 11 24H2", "[2] Lowest version: 10.0.26100.0"].join("\n"),
+    );
+    assert.equal(ranges.schemas?.[id].kind, "groupCollection");
+    assert.deepEqual(ranges.schemas?.[id].childIds, [`${id}.description`, `${id}.highestVersion`, `${id}.lowestVersion`]);
+    assert.equal(ranges.schemas?.[`${id}.lowestVersion`].name, "Lowest version");
+  });
+
+  await t.test("reads a single object as a group, and nothing when it is empty", () => {
+    const script = (value: unknown) => complianceSettingsOf({ "@odata.type": WINDOWS, deviceCompliancePolicyScript: value });
+
+    assert.deepEqual(script(null), []);
+    assert.deepEqual(script({ deviceComplianceScriptId: null, rulesContent: null }), []);
+    const [setting] = script({ deviceComplianceScriptId: "5f1c", rulesContent: "eyJydWxlcyI6W119" });
+    assert.equal(setting.structured?.kind, "group");
+    assert.equal(setting.value, "Device compliance script id: 5f1c"); // the rules themselves (binary content) aren't a value to show
+  });
+
+  await t.test("reads the actions for noncompliance as one setting, soonest first, without the tenant's own template ids", () => {
+    const [actions] = complianceSettingsOf({
+      "@odata.type": WINDOWS,
+      scheduledActionsForRule: [
+        {
+          ruleName: "PasswordRequired",
+          scheduledActionConfigurations: [
+            { actionType: "retire", gracePeriodHours: 720, notificationTemplateId: "00000000-0000-0000-0000-000000000000", notificationMessageCCList: [] },
+            { actionType: "notification", gracePeriodHours: 24, notificationTemplateId: "7a1c", notificationMessageCCList: ["x"] },
+            { actionType: "block", gracePeriodHours: 0, notificationTemplateId: "00000000-0000-0000-0000-000000000000", notificationMessageCCList: [] },
+          ],
+        },
+      ],
+    });
+    const id = "compliance.windows10.scheduledActionsForRule";
+
+    assert.equal(actions.settingDefinitionId, id);
+    assert.equal(actions.name, "Actions for noncompliance");
+    assert.equal(actions.category, "Actions for noncompliance");
+    assert.equal(
+      actions.value,
+      ["[1] Action: Block", "[1] Grace period hours: 0", "[2] Action: Notification", "[2] Grace period hours: 24", "[3] Action: Retire", "[3] Grace period hours: 720"].join("\n"),
+    );
+    assert.deepEqual(actions.schemas?.[id].childIds, [`${id}.actionType`, `${id}.gracePeriodHours`]);
+    assert.deepEqual(
+      actions.schemas?.[`${id}.actionType`].options?.map((o) => o.label),
+      ["No action", "Notification", "Block", "Retire", "Wipe", "Remove resource access profiles", "Push notification", "Remote lock"],
+    );
+  });
+
+  await t.test("has no actions setting when the policy came without them", () => {
+    assert.deepEqual(complianceSettingsOf({ "@odata.type": WINDOWS, scheduledActionsForRule: [{ ruleName: "PasswordRequired" }] }), []);
+    assert.deepEqual(complianceSettingsOf({ "@odata.type": WINDOWS, scheduledActionsForRule: [] }), []);
   });
 
   await t.test("says Block for switches that block, disable or prevent", () => {
@@ -118,6 +184,10 @@ test("complianceDefinitions knows every compliance setting without asking Graph"
   assert.equal(schemas["compliance.ios.passcodeMinimumLength"].name, "Passcode minimum length");
   assert.deepEqual(info["compliance.macOS.firewallEnabled"], { cspPath: "macOSCompliancePolicy/firewallEnabled", category: "Threat protection" });
   assert.ok(Object.keys(schemas).every(isComplianceDefinition));
+  // Lists, and the actions, come with the sub-settings they are made of.
+  assert.deepEqual(schemas["compliance.ios.restrictedApps"].childIds?.map((id) => schemas[id].name), ["App id", "App store url", "Name", "Publisher"]);
+  assert.equal(schemas["compliance.macOS.scheduledActionsForRule"].kind, "groupCollection");
+  assert.equal(info["compliance.macOS.scheduledActionsForRule"].category, "Actions for noncompliance");
   assert.equal(isComplianceDefinition("device_vendor_msft_policy_config_camera_allowcamera"), false);
   assert.equal(isComplianceDefinition(undefined), false);
 });

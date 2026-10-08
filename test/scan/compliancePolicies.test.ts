@@ -157,3 +157,48 @@ test("compliance settings: one a baseline expects and no policy has is Missing, 
   assert.equal(missing.checks?.[0].expected, "Require");
   assert.deepEqual(Object.keys(missing.schemas ?? {}), ["compliance.windows10.secureBootEnabled"]);
 });
+
+test("fetchCompliancePolicies: asks for the actions for noncompliance, and goes on without them if Graph refuses", async (t) => {
+  const originalFetch = global.fetch;
+  t.after(() => {
+    global.fetch = originalFetch;
+  });
+  const requested: string[] = [];
+  const policy = { "@odata.type": WINDOWS, id: "c1", displayName: "Windows compliance", passwordRequired: true, assignments: [] };
+  const withActions = { ...policy, scheduledActionsForRule: [{ ruleName: "PasswordRequired", scheduledActionConfigurations: [{ actionType: "block", gracePeriodHours: 12 }] }] };
+  const respond = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+
+  global.fetch = (async (url: string | URL) => {
+    requested.push(decodeURIComponent(String(url)));
+    return respond(200, { value: [withActions] });
+  }) as typeof fetch;
+  const first = await fetchCompliancePolicies("token");
+  assert.match(requested[0], /\$expand=assignments,scheduledActionsForRule\(\$expand=scheduledActionConfigurations\)/);
+  assert.deepEqual(first.settings[0].settings.map((s) => s.value), ["Require", "Action: Block\nGrace period hours: 12"]);
+
+  requested.length = 0;
+  global.fetch = (async (url: string | URL) => {
+    requested.push(decodeURIComponent(String(url)));
+    return String(url).includes("scheduledActionsForRule") ? respond(400, { error: { message: "nested expand not supported" } }) : respond(200, { value: [policy] });
+  }) as typeof fetch;
+  const second = await fetchCompliancePolicies("token");
+  assert.equal(requested.length, 2);
+  assert.match(requested[1], /\$expand=assignments$/);
+  assert.deepEqual(second.settings[0].settings.map((s) => s.value), ["Require"]);
+
+  // Anything other than a refusal of the request itself still fails the scan.
+  global.fetch = (async () => respond(403, { error: { message: "Forbidden" } })) as typeof fetch;
+  await assert.rejects(fetchCompliancePolicies("token"), /403/);
+});
+
+test("compliance settings: a baseline's actions for noncompliance are a floor — each has to be there, extra ones are fine", () => {
+  const ACTIONS = "compliance.windows10.scheduledActionsForRule";
+  const actions = (...items: Array<[string, number]>) => ({ scheduledActionsForRule: [{ ruleName: "PasswordRequired", scheduledActionConfigurations: items.map(([actionType, gracePeriodHours]) => ({ actionType, gracePeriodHours })) }] });
+  const baseline = [rule(ACTIONS, actions(["block", 0], ["retire", 720]))];
+  const judge = (...items: Array<[string, number]>) => applyBaselinesToReport(report([compliancePolicy("a", [group("g1")], actions(...items))]), baseline).settings[0];
+
+  assert.equal(judge(["block", 0], ["notification", 24], ["retire", 720]).state, "Meets baseline");
+  const late = judge(["block", 24], ["retire", 720]);
+  assert.equal(late.state, "Below baseline");
+  assert.deepEqual(late.checks?.[0].differences, [{ path: ["Grace period hours"], expected: "0", actual: "24" }]);
+});

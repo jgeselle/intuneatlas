@@ -22,9 +22,17 @@ interface GraphCompliancePolicy {
  *
  * Read from beta: several current policy types (Android Enterprise
  * fully managed and AOSP among them) exist only there.
+ *
+ * The actions for noncompliance are asked for along with the policies.
+ * Should Graph refuse that nested expansion, the scan goes on without
+ * them rather than failing: every other setting is still there.
  */
 export async function fetchCompliancePolicies(token: string): Promise<{ policies: RawSimplePolicy[]; settings: RawPolicy[] }> {
-  const found = await graphGetAll<GraphCompliancePolicy>(token, "/deviceManagement/deviceCompliancePolicies?$expand=Assignments", GRAPH_BETA_BASE);
+  const list = (expand: string) => graphGetAll<GraphCompliancePolicy>(token, `/deviceManagement/deviceCompliancePolicies?$expand=${expand}`, GRAPH_BETA_BASE);
+  const found = await list("assignments,scheduledActionsForRule($expand=scheduledActionConfigurations)").catch((error: unknown) => {
+    if (error instanceof Error && /failed: 400\b/.test(error.message)) return list("assignments");
+    throw error;
+  });
 
   const policies = found.map(mapSimplePolicy);
   const settings = found
