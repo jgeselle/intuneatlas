@@ -1,3 +1,4 @@
+import { PushRefused } from "../push/values.js";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { readFile } from "node:fs/promises";
 import { extname, isAbsolute, join, relative, resolve, sep } from "node:path";
@@ -89,6 +90,20 @@ export interface StartServerOptions {
   onUpdateChange?: (id: number, body: UpdateChangeRequestBody, viewer: ViewerIdentity) => WithTargetKey;
   /** Reverts a staged change; returns the targetKey that was removed, or undefined if it didn't exist. */
   onRevertChange?: (id: number) => string | undefined;
+  /**
+   * Writes a staged change to the tenant (see src/push). `writeToken` is
+   * the pushing Admin's own Graph token with the write permission.
+   * Returns the changes this closed — one, or every setting of a new
+   * policy — and, where the report in memory could be brought up to date
+   * without a scan, that report. Throws PushRefused when it declines to
+   * write; that is an answer for the person, not a fault.
+   */
+  onPushChange?: (
+    id: number,
+    writeToken: string,
+    viewer: ViewerIdentity,
+    report: unknown,
+  ) => Promise<{ closed: Array<{ targetKey: string }>; policyName: string; created: boolean; report?: unknown }>;
   /** Looks up who staged a change, for the editChange/revertChange ownership check — undefined if the id doesn't exist. */
   getChangeById?: (id: number) => { stagedBy: string } | undefined;
   /**
@@ -279,6 +294,14 @@ export async function startServer(options: StartServerOptions): Promise<{ url: s
         );
         return;
       }
+      const pushMatch = req.url?.match(/^\/api\/changes\/(\d+)\/push$/);
+      if (pushMatch && req.method === "POST") {
+        await handlePushChange(req, res, Number(pushMatch[1]), options, session, viewer, () => currentReport, removeChange, (report) => {
+          currentReport = report;
+        });
+        return;
+      }
+
       if (changeIdMatch && req.method === "DELETE") {
         await handleRevertChange(res, Number(changeIdMatch[1]), options.onRevertChange, options.getChangeById, viewer, removeChange);
         return;
@@ -817,6 +840,53 @@ async function handleUpdateChange(
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify(change));
   } catch (err) {
+    sendApiError(res, err);
+  }
+}
+
+async function handlePushChange(
+  req: IncomingMessage,
+  res: ServerResponse,
+  id: number,
+  options: StartServerOptions,
+  session: WebSessionManager,
+  viewer: ViewerIdentity,
+  getReport: () => unknown,
+  onClosed: (targetKey: string) => void,
+  setReport: (report: unknown) => void,
+): Promise<void> {
+  const json = (status: number, body: unknown) => {
+    res.writeHead(status, { "Content-Type": "application/json" });
+    res.end(JSON.stringify(body));
+  };
+  if (!options.onPushChange) return json(501, { error: "Pushing changes isn't available from this session." });
+  if (!can(viewer.role, "push")) return json(403, { error: "Only an Admin can push a change to the tenant." });
+  if (!options.getChangeById?.(id)) return json(404, { error: `No staged change with id ${id}.` });
+
+  const writeToken = await session.getWriteToken(req.headers.cookie);
+  if (!writeToken) {
+    return json(403, {
+      error:
+        "This app registration can't write to Intune. Pushing needs the DeviceManagementConfiguration.ReadWrite.All permission (delegated, with admin consent) — see intuneatlas.com/docs. Then sign out and in again.",
+    });
+  }
+
+  try {
+    const result = await options.onPushChange(id, writeToken, viewer, getReport());
+    // The brought-up-to-date report first: it was built from the one that still listed these changes as staged.
+    if (result.report !== undefined) setReport(result.report);
+    for (const change of result.closed) onClosed(change.targetKey);
+    const current = getReport();
+    json(200, {
+      closed: result.closed.map((change) => change.targetKey),
+      policyName: result.policyName,
+      created: result.created,
+      // The report as this viewer sees it, when the push could bring it up to date; otherwise only a scan can.
+      ...(result.report !== undefined && current && options.onEvaluateForViewer ? { report: await options.onEvaluateForViewer(current, viewer) } : {}),
+    });
+  } catch (err) {
+    // Declined before anything was written: say why, as a conflict with the state of things, not a server error.
+    if (err instanceof PushRefused) return json(409, { error: err.message });
     sendApiError(res, err);
   }
 }

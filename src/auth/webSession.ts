@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { type AccountInfo, CryptoProvider, PublicClientApplication } from "@azure/msal-node";
-import { DELEGATED_SCOPES } from "../config.js";
+import { DELEGATED_SCOPES, WRITE_SCOPES } from "../config.js";
 import { createMsalCachePlugin } from "./tokenCache.js";
 import { type Role, effectiveRole } from "./roles.js";
 
@@ -79,6 +79,13 @@ export interface WebSessionManager {
   getSession(cookieHeader: string | undefined): Promise<ViewerIdentity | undefined>;
   /** A live Graph access token for the signed-in viewer, refreshed silently — undefined if there's no valid session. */
   getGraphToken(cookieHeader: string | undefined): Promise<string | undefined>;
+  /**
+   * A Graph token that may write Intune configuration, for pushing a
+   * staged change — asked for only then, never at sign-in. Undefined when
+   * it can't be had: no session, or (the usual reason) the app
+   * registration hasn't been given the write permission.
+   */
+  getWriteToken(cookieHeader: string | undefined): Promise<string | undefined>;
   /**
    * Ends the caller's session and purges the underlying account from the
    * persistent cache — not just dropping the cookie. Otherwise the very
@@ -218,6 +225,20 @@ export async function createWebSessionManager(tenantId: string, clientId: string
       if (!session) return undefined;
       try {
         const result = await msal.acquireTokenSilent({ account: session.account, scopes: DELEGATED_SCOPES });
+        return result?.accessToken;
+      } catch {
+        return undefined;
+      }
+    },
+
+    async getWriteToken(cookieHeader) {
+      const sessionId = readCookie(cookieHeader, SESSION_COOKIE);
+      const session = sessionId ? sessions.get(sessionId) : undefined;
+      if (!session) return undefined;
+      try {
+        // The sign-in's refresh token is good for any permission the app registration has been
+        // consented for — so this succeeds without another prompt exactly when write was granted.
+        const result = await msal.acquireTokenSilent({ account: session.account, scopes: WRITE_SCOPES });
         return result?.accessToken;
       } catch {
         return undefined;

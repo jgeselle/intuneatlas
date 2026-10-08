@@ -474,6 +474,26 @@ function Dashboard({ initialReport, session }) {
     }
   }
 
+  // Writes a staged change to the tenant. Resolves to nothing on success, or to the reason it wasn't
+  // pushed — shown where the button is, since a refusal can take a sentence to explain.
+  async function pushChange(change) {
+    try {
+      const res = await fetch("/api/changes/" + change.id + "/push", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+      const body = await res.json();
+      if (!res.ok) return body.error || "Couldn't push the change";
+      setChanges((current) => {
+        const next = { ...current };
+        for (const key of body.closed ?? []) delete next[key];
+        return next;
+      });
+      if (body.report) setReport(body.report);
+      flash(body.created ? "Created " + body.policyName + " · not assigned" : "Pushed to " + body.policyName);
+      return undefined;
+    } catch (err) {
+      return err.message;
+    }
+  }
+
   async function revertEntryChange(id, targetKey) {
     try {
       const res = await fetch("/api/changes/" + id, { method: "DELETE" });
@@ -713,6 +733,7 @@ function Dashboard({ initialReport, session }) {
               changes={changes}
               onUpdateField={updateChangeField}
               onRevert={revertEntryChange}
+              onPush={pushChange}
               viewer={session}
               onOpen={(key) => setOpen({ type: "setting", key })}
               canOpen={(key) => Boolean(findSetting(key))}

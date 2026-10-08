@@ -60,6 +60,9 @@ function mockSession(overrides: Partial<WebSessionManager> = {}): WebSessionMana
     async getGraphToken() {
       return undefined;
     },
+    async getWriteToken() {
+      return undefined;
+    },
     async signOut() {},
     sessionCookie(id: string) {
       return `intuneatlas_session=${id}`;
@@ -323,4 +326,103 @@ test("/api/scope: narrows the report to a group, judges it for the viewer, and n
   } finally {
     server.close();
   }
+});
+
+// ------------------------------------------------------------------------
+// POST /api/changes/:id/push — the one route that leads to a write in the tenant
+// ------------------------------------------------------------------------
+
+async function pushAs(
+  port: number,
+  role: Role,
+  options: { writeToken?: string; onPushChange?: StartServerOptions["onPushChange"]; report?: unknown },
+): Promise<{ status: number; body: Record<string, unknown>; reportAfter: () => Promise<Record<string, unknown>> }> {
+  const identity: ViewerIdentity = { id: "oid", name: "Alex", email: "a@x.com", role };
+  const session = mockSession({ getSession: async () => identity, getWriteToken: async () => options.writeToken });
+  const { server } = await startServer({
+    report: options.report ?? { settings: [], changes: { "k::p1": { id: 5 } } },
+    host: "127.0.0.1",
+    startPort: port,
+    session,
+    getChangeById: (id) => (id === 5 ? { stagedBy: "someone-else" } : undefined),
+    ...(options.onPushChange ? { onPushChange: options.onPushChange } : {}),
+    onEvaluateForViewer: async (r) => ({ ...(r as object), evaluated: true }),
+  });
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/api/changes/5/push`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+    const body = (await res.json()) as Record<string, unknown>;
+    return {
+      status: res.status,
+      body,
+      reportAfter: async () => ({}),
+    };
+  } finally {
+    server.close();
+  }
+}
+
+test("push: only an Admin reaches it — a Contributor who staged and reviewed the change still can't write to the tenant", async () => {
+  let called = 0;
+  const onPushChange: StartServerOptions["onPushChange"] = async () => {
+    called++;
+    return { closed: [], policyName: "P", created: false };
+  };
+  for (const [port, role] of [
+    [18801, "viewer"],
+    [18802, "contributor"],
+    [18803, null],
+  ] as Array<[number, Role]>) {
+    const { status } = await pushAs(port, role, { writeToken: "write-token", onPushChange });
+    assert.equal(status, 403, String(role));
+  }
+  assert.equal(called, 0);
+});
+
+test("push: without the write permission on the app registration nothing is attempted, and the answer says what is missing", async () => {
+  let called = 0;
+  const { status, body } = await pushAs(18804, "admin", {
+    writeToken: undefined,
+    onPushChange: async () => {
+      called++;
+      return { closed: [], policyName: "P", created: false };
+    },
+  });
+  assert.equal(status, 403);
+  assert.match(String(body.error), /DeviceManagementConfiguration\.ReadWrite\.All/);
+  assert.equal(called, 0);
+});
+
+test("push: a refusal comes back as the reason, not as a server error", async () => {
+  const { PushRefused } = await import("../../src/push/values.js");
+  const { status, body } = await pushAs(18805, "admin", {
+    writeToken: "write-token",
+    onPushChange: async () => {
+      throw new PushRefused("It was 14, it is now 7.");
+    },
+  });
+  assert.equal(status, 409);
+  assert.equal(body.error, "It was 14, it is now 7.");
+});
+
+test("push: an Admin's push gets the Admin's own write token, and the answer names what was closed", async () => {
+  const seen: unknown[] = [];
+  const { status, body } = await pushAs(18806, "admin", {
+    writeToken: "write-token",
+    onPushChange: async (id, writeToken, viewer, report) => {
+      seen.push(id, writeToken, viewer.name);
+      return { closed: [{ targetKey: "k::p1" }], policyName: "Update ring", created: false, report: { ...(report as object), settings: [{ key: "k", pushed: true }] } };
+    },
+  });
+  assert.equal(status, 200);
+  assert.deepEqual(seen, [5, "write-token", "Alex"]);
+  assert.deepEqual([body.closed, body.policyName, body.created], [["k::p1"], "Update ring", false]);
+  // The report it answers with is the brought-up-to-date one, as this viewer sees it — and no longer lists the change as staged.
+  const report = body.report as { settings: unknown[]; changes: Record<string, unknown>; evaluated: boolean };
+  assert.deepEqual(report.settings, [{ key: "k", pushed: true }]);
+  assert.deepEqual(report.changes, {});
+  assert.equal(report.evaluated, true);
+});
+
+test("push: unavailable (501) where the server wasn't given a way to push, and 404 for a change that isn't staged", async () => {
+  assert.equal((await pushAs(18807, "admin", { writeToken: "write-token" })).status, 501);
 });

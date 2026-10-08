@@ -17,6 +17,7 @@ import {
 } from "../server/staticServer.js";
 import type { ViewerIdentity } from "../auth/webSession.js";
 import { addNote, deleteNote, getAllNotes, getNoteById, type Note } from "../storage/notes.js";
+import { applyPush } from "../push/apply.js";
 import { getSettingHistory } from "../storage/history.js";
 import { getLatestScan, recordScan } from "../storage/scans.js";
 import { clearSelectedPacks, getSelectedPacks, setSelectedPacks } from "../storage/baselineSelections.js";
@@ -116,6 +117,7 @@ export async function runUi(options: UiOptions): Promise<void> {
       throw new Error("reason, reviewedBy or policyName is required");
     },
     onRevertChange: (id: number) => revertChange(id),
+    onPushChange: (id, writeToken, viewer, report) => applyPush(id, writeToken, viewer, report, tenantId),
     getChangeById: (id: number) => getChangeById(id),
   });
   console.log(`intuneatlas ui — ${url}`);

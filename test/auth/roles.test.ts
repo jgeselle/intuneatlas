@@ -88,3 +88,11 @@ test("can: managing baselines (writing and deleting files on the server) is Admi
   assert.equal(can("viewer", "manageBaselines"), false);
   assert.equal(can(null, "manageBaselines"), false);
 });
+
+test("roles: pushing a change to the tenant is the Admin's alone", () => {
+  assert.equal(can("admin", "push"), true);
+  assert.equal(can("contributor", "push"), false);
+  assert.equal(can("contributor", "push", { ownerId: "alice", viewerId: "alice" }), false);
+  assert.equal(can("viewer", "push"), false);
+  assert.equal(can(null, "push"), false);
+});

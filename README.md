@@ -22,9 +22,9 @@ the whole tenant or for one group.
   <img src="./screenshots/compliance.png" width="49%" alt="Compliance: what compliance policies demand, setting by setting, checked against a baseline" />
 </p>
 
-**Status: early, but real.** Scanning, baselines, per-group views and a
-review-gated change log are real; writing a staged change back to the tenant
-isn't — see the roadmap below. Backed by a real test suite, not just
+**Status: early, but real.** Scanning, baselines, per-group views, a
+review-gated change log and pushing a reviewed change to Intune are real —
+see the roadmap below for what isn't. Backed by a real test suite, not just
 typechecking — see [`test/`](./test).
 
 ## Getting started
@@ -86,9 +86,11 @@ Around that:
   the actions for noncompliance and the tenant-wide compliance settings.
 - **Values as Intune has them.** A value shows, and can be edited, with the
   same options, ranges, lists and sub-settings the portal offers.
-- **Staged, reviewed changes.** A changed value is staged in the policy that
-  holds it or in a new policy you name, and needs a reason and a reviewer.
-  Nothing is written to the tenant.
+- **Staged, reviewed, then pushed.** A changed value is staged in the policy
+  that holds it or in a new policy you name, and needs a reason and a
+  reviewer. An Admin can then push it to Intune — one change at a time, after
+  a check that the tenant still holds the value the change was staged from.
+  Pushing needs a write permission the app doesn't have unless you add it.
 - **A history per setting.** Every scan is compared with the one before, and
   what changed — a value, a policy starting or no longer setting it, an
   assignment — is kept on the setting, whoever made the change and wherever.
@@ -129,9 +131,15 @@ explicit about what's actually verifiable, rather than asking for trust:
   it yourself: `gh attestation verify <file> --repo jgeselle/intuneatlas`.
   Windows still shows a SmartScreen warning on first run either way — that's
   publisher reputation, a separate thing only a paid cert changes.
-- **Read-only, and testably so.** IntuneAtlas never writes back to your
-  tenant — see [`test/`](./test) for the regression suite covering the merge
-  logic that decides what you see.
+- **Read-only unless you decide otherwise.** Sign-in asks for read
+  permissions only, and a scan only reads. The one thing that writes is
+  pushing a reviewed change from the change log, and that needs
+  `DeviceManagementConfiguration.ReadWrite.All` — a permission you add to
+  your own app registration only if you want push. Without it the app cannot
+  change anything in your tenant. Every write the tool can make lives in
+  [`src/push`](./src/push); nothing else sends anything but a GET to Graph.
+  See [`test/`](./test) for the suite covering both the merge logic that
+  decides what you see and what a push sends.
 - **Access is enforced server-side, not just hidden in the UI.** Entra App
   Roles (Viewer / Contributor / Admin) gate every mutating action, in the
   web UI and the CLI alike — see the
@@ -160,7 +168,8 @@ than opening a public issue.
 - [x] Entra App Roles (Viewer / Contributor / Admin), enforced server-side across the UI and CLI
 - [x] Sigstore build provenance + SBOM attestations on every released binary — see [Trust model](#trust-model)
 - [x] Per-setting history of what changed between scans
-- [ ] Actually deploying a staged change back to the tenant (write-back) — deliberately deferred; the review gate above exists, the write doesn't yet
+- [x] Pushing a reviewed change to Intune from the change log — Settings Catalog policies, compliance policies and the tenant-wide compliance settings; recorded in the setting's history with who and why
+- [ ] Pushing to template-based policies (endpoint security), a compliance policy's actions for noncompliance, and legacy profiles
 - [ ] Enrollment configurations as settings — they are listed by name and assignment only
 - [ ] Legacy (template-based) device configuration profiles beyond a handful of Windows Device Restrictions settings
 - [ ] `intuneatlas get <path>` headless command

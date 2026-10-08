@@ -2,7 +2,71 @@ import { useState } from "react";
 import { ArrowCounterClockwise, Check, PaperPlaneTilt, PencilSimple } from "@phosphor-icons/react";
 import { Chip, Diff, PageSubtitle, Empty } from "../components/bits.jsx";
 
-function ChangeCard({ change, onUpdateField, onRevert, viewer, inGroup = false, onOpen }) {
+/**
+ * The step that writes to the tenant, kept deliberate: the button asks
+ * once more, naming exactly what will happen, before anything is sent.
+ * A refusal — the tenant value changed since staging, the app has no
+ * write permission — is shown right here, in full.
+ */
+function PushButton({ label, confirmText, confirmLabel, onPush }) {
+  const [asking, setAsking] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+
+  async function push() {
+    setBusy(true);
+    setError(null);
+    const problem = await onPush();
+    // On success the change leaves the list, and this with it.
+    if (problem) {
+      setError(problem);
+      setBusy(false);
+      setAsking(false);
+    }
+  }
+
+  return (
+    <div className="mt-3 border-t border-stone-100 pt-3">
+      {asking ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="min-w-0 flex-1 text-xs text-stone-700">{confirmText}</p>
+          <button
+            type="button"
+            onClick={push}
+            disabled={busy}
+            className="inline-flex items-center gap-1.5 rounded-md bg-teal-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-teal-700 focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500 disabled:bg-stone-300"
+          >
+            <PaperPlaneTilt className="h-3.5 w-3.5" />
+            {busy ? "Pushing…" : confirmLabel}
+          </button>
+          <button
+            type="button"
+            onClick={() => setAsking(false)}
+            disabled={busy}
+            className="rounded-md px-2.5 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-100 focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500"
+          >
+            Cancel
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => {
+            setError(null);
+            setAsking(true);
+          }}
+          className="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-teal-800 ring-1 ring-inset ring-teal-600 hover:bg-teal-50 focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500"
+        >
+          <PaperPlaneTilt className="h-3.5 w-3.5" />
+          {label}
+        </button>
+      )}
+      {error && <p className="mt-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs leading-relaxed text-red-800">{error}</p>}
+    </div>
+  );
+}
+
+function ChangeCard({ change, onUpdateField, onRevert, onPush, viewer, inGroup = false, onOpen }) {
   const [reason, setReason] = useState(change.reason);
   // Contributors can only touch changes they staged themselves; Admins can
   // touch any — mirrors the server-side editChange/revertChange check.
@@ -98,6 +162,19 @@ function ChangeCard({ change, onUpdateField, onRevert, viewer, inGroup = false, 
           )}
         </div>
       </div>
+      {/* A change to an existing policy is pushed on its own; one of a new policy's settings goes with the policy (see NewPolicyGroup). */}
+      {!inGroup && change.ready && onPush && viewer.role === "admin" && (
+        <PushButton
+          label="Push to tenant"
+          confirmText={
+            <>
+              Writes <span className="font-medium">{change.to.split("\n").join(", ")}</span> to <span className="font-medium">{change.policyName || "the policy"}</span> in Intune.
+            </>
+          }
+          confirmLabel="Push"
+          onPush={() => onPush(change)}
+        />
+      )}
     </li>
   );
 }
@@ -107,7 +184,7 @@ function ChangeCard({ change, onUpdateField, onRevert, viewer, inGroup = false, 
  * policy's name — together they are the policy to be created. Renaming it
  * renames it for all of them.
  */
-function NewPolicyGroup({ name, changes, onUpdateField, onRevert, viewer, openerFor }) {
+function NewPolicyGroup({ name, changes, onUpdateField, onRevert, onPush, viewer, openerFor }) {
   const [renaming, setRenaming] = useState(false);
   const [draft, setDraft] = useState(name);
   // Same rule as a single change: your own, unless you're an Admin — and a rename touches every change in the group.
@@ -175,11 +252,24 @@ function NewPolicyGroup({ name, changes, onUpdateField, onRevert, viewer, opener
           <ChangeCard key={c.id} change={c} onUpdateField={onUpdateField} onRevert={onRevert} viewer={viewer} inGroup onOpen={openerFor(c)} />
         ))}
       </ul>
+      {/* The policy is created from all of its settings at once, so all of them have to be ready. */}
+      {onPush && viewer.role === "admin" && changes.every((c) => c.ready) && (
+        <PushButton
+          label="Create policy in tenant"
+          confirmText={
+            <>
+              Creates <span className="font-medium">{name}</span> in Intune with {changes.length === 1 ? "this setting" : "these " + changes.length + " settings"}. It won't be assigned to anyone.
+            </>
+          }
+          confirmLabel="Create"
+          onPush={() => onPush(changes[0])}
+        />
+      )}
     </section>
   );
 }
 
-function ChangeLog({ changes, onUpdateField, onRevert, viewer, onOpen, canOpen }) {
+function ChangeLog({ changes, onUpdateField, onRevert, onPush, viewer, onOpen, canOpen }) {
   // A change made before changes recorded their setting is keyed by the setting itself.
   const settingKeyOf = (change) => change.settingKey || change.targetKey;
   // Only where there is a setting to open: one that has since left the tenant has no panel.
@@ -197,16 +287,9 @@ function ChangeLog({ changes, onUpdateField, onRevert, viewer, onOpen, canOpen }
 
   return (
     <div className="space-y-5">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold">Change log</h1>
-          <PageSubtitle>{list.length > 0 && ready + " of " + list.length + " ready"}</PageSubtitle>
-        </div>
-        {/* Where deploying to the tenant will start from. Disabled until write-back exists. */}
-        <button disabled className="inline-flex cursor-not-allowed items-center gap-2 rounded-md bg-stone-200 px-3.5 py-2 text-sm font-medium text-stone-400">
-          <PaperPlaneTilt className="h-4 w-4" />
-          Deploy
-        </button>
+      <header>
+        <h1 className="text-xl font-semibold">Change log</h1>
+        <PageSubtitle>{list.length > 0 && ready + " of " + list.length + " ready"}</PageSubtitle>
       </header>
 
       {list.length === 0 ? (
@@ -214,14 +297,14 @@ function ChangeLog({ changes, onUpdateField, onRevert, viewer, onOpen, canOpen }
       ) : (
         <div className="space-y-6">
           {newPolicies.map(([name, changes]) => (
-            <NewPolicyGroup key={name} name={name} changes={changes} onUpdateField={onUpdateField} onRevert={onRevert} viewer={viewer} openerFor={openerFor} />
+            <NewPolicyGroup key={name} name={name} changes={changes} onUpdateField={onUpdateField} onRevert={onRevert} onPush={onPush} viewer={viewer} openerFor={openerFor} />
           ))}
           {toExisting.length > 0 && (
             <section>
               {newPolicies.length > 0 && <h2 className="font-heading text-sm font-semibold">Changes to existing policies</h2>}
               <ul className={"space-y-3 " + (newPolicies.length > 0 ? "mt-3" : "")}>
                 {toExisting.map((c) => (
-                  <ChangeCard key={c.id} change={c} onUpdateField={onUpdateField} onRevert={onRevert} viewer={viewer} onOpen={openerFor(c)} />
+                  <ChangeCard key={c.id} change={c} onUpdateField={onUpdateField} onRevert={onRevert} onPush={onPush} viewer={viewer} onOpen={openerFor(c)} />
                 ))}
               </ul>
             </section>

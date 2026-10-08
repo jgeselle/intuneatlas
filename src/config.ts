@@ -17,6 +17,15 @@ export const DELEGATED_SCOPES = [
   "https://graph.microsoft.com/DeviceManagementServiceConfig.Read.All",
 ];
 
+/**
+ * What pushing a staged change needs, on top of the above — and nothing
+ * else in the tool does. Never asked for at sign-in: a token with it is
+ * requested only at the moment an Admin pushes, and only succeeds if the
+ * app registration was given the permission. An install that never adds
+ * it cannot write to the tenant at all.
+ */
+export const WRITE_SCOPES = ["https://graph.microsoft.com/DeviceManagementConfiguration.ReadWrite.All"];
+
 // App-only (client-credentials) tokens are scoped by whatever application
 // permissions were granted to the app registration, not by requested scopes.
 export const APPLICATION_SCOPE = "https://graph.microsoft.com/.default";

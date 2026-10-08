@@ -48,7 +48,20 @@ export async function fetchCatalogPolicies(token: string, collection: "configura
 
 async function fetchPolicySettings(token: string, collection: "configurationPolicies" | "compliancePolicies", policyId: string): Promise<RawSetting[]> {
   const graphSettings = await graphGetAll<GraphSetting>(token, `/deviceManagement/${collection}/${policyId}/settings`, GRAPH_BETA_BASE);
+  return resolveSettingInstances(token, collection, graphSettings);
+}
 
+/**
+ * A policy's settings as Graph returned them, resolved into what the rest
+ * of the tool works with — in the same order, one for one. Separate from
+ * the fetch so a caller that already holds the raw list (a push, which
+ * has to send that same list back) reads values exactly the way a scan does.
+ */
+export function resolveSettingInstances(
+  token: string,
+  collection: "configurationPolicies" | "compliancePolicies",
+  graphSettings: Array<{ settingInstance: GraphSettingInstance }>,
+): Promise<RawSetting[]> {
   return Promise.all(
     graphSettings.map(async (graphSetting) => {
       const settingInstance = collection === "compliancePolicies" ? asComplianceInstance(graphSetting.settingInstance) : graphSetting.settingInstance;

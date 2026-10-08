@@ -69,7 +69,7 @@
   article ol li{counter-increment:step}
   article ol li::before{content:counter(step);position:absolute;left:0;top:0;font-family:var(--mono);font-size:.75rem;color:var(--faint)}
 
-  code{font-family:var(--mono);font-size:.85em;background:var(--line);border-radius:4px;padding:.1em .35em}
+  code{font-family:var(--mono);font-size:.85em;background:var(--line);border-radius:4px;padding:.1em .35em;overflow-wrap:anywhere}
   pre{margin:0;border:1px solid var(--line);background:#fff;border-radius:8px;padding:14px 16px;overflow-x:auto;font-family:var(--mono);font-size:.8125rem;line-height:1.7}
   pre code{background:none;padding:0;border-radius:0;font-size:1em}
   pre .p{color:var(--faint);user-select:none}
@@ -146,6 +146,7 @@
       <a href="#first-run">Sign in and run your first scan</a>
       <a href="#what-you-get">What you get</a>
       <a href="#groups">Looking at one group</a>
+      <a href="#push">Pushing a change</a>
       <a href="#baselines">Adding a baseline</a>
       <a href="#sharing">Sharing it with a team</a>
       <a href="#azure">Hosting it on Azure</a>
@@ -218,12 +219,17 @@
             policy assigned to a parent group isn't counted for the groups inside it.
             <br>One more is optional: <code>DeviceManagementScripts.Read.All</code>, used only to show a custom
             compliance script by its name. Without it the script's rules still show.
+            <br><b>Only if you want to push changes to Intune from the app</b>, also add
+            <code>DeviceManagementConfiguration.ReadWrite.All</code> (delegated) and grant admin consent for it.
+            It is the one permission that lets the app write. Sign-in never asks for it; it is used only at the
+            moment an Admin pushes a reviewed change (see <a href="#push">Pushing a change</a>). Leave it out and
+            the app cannot change anything in your tenant.
           </li>
           <li>
             <b>App roles</b> → <b>Create app role</b>, three times, one for each of:
             <code>viewer</code> (browse only), <code>contributor</code> (+ notes, staging and
             managing your own changes), and <code>admin</code> (+ triggering scans, managing
-            everyone's changes, adding and removing baselines). For each: <b>Allowed member types</b> → <b>Users/Groups</b>,
+            everyone's changes, adding and removing baselines, pushing changes to Intune). For each: <b>Allowed member types</b> → <b>Users/Groups</b>,
             <b>Value</b> exactly the lowercase name above.
           </li>
           <li>
@@ -296,7 +302,8 @@
             <b>Baselines</b> — the baselines you've added, and which of them are active for you.
           </li>
           <li>
-            <b>Change log</b> — changes you've staged, each needing a reason and a reviewer.
+            <b>Change log</b> — changes you've staged, each needing a reason and a reviewer, and from where
+            an Admin can push them to Intune.
           </li>
         </ul>
         <p>
@@ -308,8 +315,9 @@
           gained or lost — including changes made directly in the Intune portal.
         </p>
         <p>
-          It's read-only end to end: staging a change records it locally, and IntuneAtlas never writes
-          anything back to the tenant.
+          Everything up to here is read-only: scanning reads the tenant, and staging a change records it
+          in the app, not in Intune. The one thing that writes is <a href="#push">pushing a change</a>, and
+          only if you gave the app the permission for it.
         </p>
       </section>
 
@@ -330,6 +338,42 @@
           groups. Group names and nesting need the optional <code>Group.Read.All</code> permission
           (<a href="#register-app">above</a>); without it groups are listed by ID.
         </p>
+      </section>
+
+      <section id="push">
+        <h2>Pushing a change</h2>
+        <p>
+          A staged change can be written to Intune from the <b>Change log</b>. It needs three things: the
+          optional write permission on the app registration (<a href="#register-app">above</a>), a reason and
+          a reviewer on the change, and the Admin role.
+        </p>
+        <ul>
+          <li>
+            <b>A change to an existing policy</b> gets a <b>Push to tenant</b> button once it is ready. The app
+            asks once more, naming the value and the policy, then writes that one setting. Everything else in
+            the policy, and who it is assigned to, stays as it is.
+          </li>
+          <li>
+            <b>Settings staged into a new policy</b> are created together, as that policy, with
+            <b>Create policy in tenant</b> — once every one of them is ready. The new policy is not assigned to
+            anyone; assigning it is done in Intune.
+          </li>
+        </ul>
+        <p>
+          Just before writing, the app reads the current value from Intune. If it is no longer what it was
+          when the change was staged, someone changed it in the meantime and the push is refused: sync, look
+          again, and stage it again.
+        </p>
+        <p>
+          A pushed change is recorded in the setting's <b>History</b> with who pushed it, who staged and
+          reviewed it, and the reason, and leaves the change log. The next scan confirms it.
+        </p>
+        <div class="note">
+          <b>What can be pushed.</b> Settings Catalog policies, compliance policies (Linux included) and the
+          tenant-wide compliance settings. Not yet: policies created from a template, such as endpoint
+          security policies; a compliance policy's actions for noncompliance and custom script; legacy
+          device configuration profiles.
+        </div>
       </section>
 
       <section id="baselines">
@@ -378,7 +422,7 @@ settings:
           do once signed in follows the App Role you assigned them
           (<a href="#register-app">above</a>): Viewers can browse, Contributors can also add
           notes and manage their own staged changes, and only Admins can trigger a new scan,
-          manage anyone's changes, or add and remove baselines.
+          manage anyone's changes, add and remove baselines, or push a change to Intune.
         </p>
         <div class="note">
           Shared mode needs a real HTTPS hostname reachable by your teammates' browsers — a
