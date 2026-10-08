@@ -4,35 +4,95 @@ import { getDb } from "./db.js";
 
 /**
  * A setting's history, as stored: one row per thing that happened to it.
+ * There are two kinds of row, and the difference matters:
  *
- * Today every row is something a scan observed (see src/scan/history.ts),
- * written when the scan is recorded by comparing it with the one before.
- * `actor_name` and `reason` are empty for those; they are there for the
- * day a change is pushed from the change log, which will be recorded here
- * too — with who and why, which an observation can't know.
+ * - **Observed** (added, removed, changed, assigned, unassigned): a scan
+ *   saw the tenant differ from the scan before (see src/scan/history.ts).
+ *   Nobody told the tool; it knows what, not who or why.
+ * - **Pushed**: the tool itself wrote a staged change to the tenant.
+ *   Recorded by recordPushedChange at the moment of the push, first-hand —
+ *   who pushed it, who staged and reviewed it, and the reason given. It
+ *   doesn't wait for, or depend on, a scan.
+ *
+ * The next scan will of course see what a push did. That observation
+ * confirms the pushed row (`confirmedAt`) instead of becoming a second
+ * entry for the same change.
+ *
+ * Nothing pushes yet — write-back isn't built. recordPushedChange is the
+ * contract for when it is: the write action calls it once Graph has
+ * accepted the change, in the same step that closes the staged change.
  */
 export interface HistoryEntry {
   id: number;
-  /** When it was noticed: the time of the scan that showed it. */
+  /** Observed: the time of the scan that showed it. Pushed: when it was pushed. */
   at: string;
-  /** The scan before that — it happened some time between the two. */
+  /** Observed only: the scan before — it happened some time between the two. */
   since: string | null;
-  kind: SettingEventKind;
+  kind: SettingEventKind | "pushed";
   policyId: string;
   policyName: string;
   from?: string;
   to?: string;
+  /** Pushed only. */
+  pushedBy?: string;
+  stagedBy?: string;
+  reviewedBy?: string;
+  reason?: string;
+  /** Pushed only: when a scan first saw the pushed value in the tenant; absent until one has. */
+  confirmedAt?: string;
+}
+
+/** What a push records. Display names, as they were at the time — history isn't rewritten when someone is renamed. */
+export interface PushedChange {
+  tenant: string;
+  settingKey: string;
+  /** The policy as it is in the tenant after the push — for a setting pushed into a new policy, the id Graph gave it. */
+  policyId: string;
+  policyName: string;
+  from?: string;
+  to: string;
+  pushedBy: string;
+  stagedBy: string;
+  reviewedBy: string;
+  reason: string;
+  /** Defaults to now. */
+  at?: string;
+}
+
+export function recordPushedChange(change: PushedChange): void {
+  getDb()
+    .prepare(
+      `INSERT INTO setting_history (tenant, setting_key, occurred_at, kind, policy_id, policy_name, from_value, to_value, actor_name, staged_by_name, reviewed_by, reason) VALUES (?, ?, ?, 'pushed', ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+    .run(
+      change.tenant,
+      change.settingKey,
+      change.at ?? new Date().toISOString(),
+      change.policyId,
+      change.policyName,
+      change.from ?? null,
+      change.to,
+      change.pushedBy,
+      change.stagedBy,
+      change.reviewedBy,
+      change.reason,
+    );
 }
 
 interface HistoryRow {
   id: number;
   occurred_at: string;
   since: string | null;
-  kind: SettingEventKind;
+  kind: SettingEventKind | "pushed";
   policy_id: string;
   policy_name: string;
   from_value: string | null;
   to_value: string | null;
+  actor_name: string | null;
+  staged_by_name: string | null;
+  reviewed_by: string | null;
+  reason: string | null;
+  confirmed_at: string | null;
 }
 
 const BACKFILLED_KEY = "history_backfilled";
@@ -59,7 +119,19 @@ function insertEvents(
   const insert = db.prepare(
     `INSERT INTO setting_history (tenant, setting_key, scan_id, occurred_at, since, kind, policy_id, policy_name, from_value, to_value) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
+  // A pushed change this scan is the first to see: same setting, same policy, the value that was pushed.
+  const confirm = db.prepare(
+    `UPDATE setting_history SET confirmed_at = ? WHERE id = (
+       SELECT id FROM setting_history
+       WHERE tenant = ? AND setting_key = ? AND policy_id = ? AND kind = 'pushed' AND confirmed_at IS NULL AND to_value = ? AND occurred_at <= ?
+       ORDER BY occurred_at DESC LIMIT 1)`,
+  );
   for (const event of diffScans(previous.settings, current)) {
+    // What a push did is already on record, with who and why. Seeing it in the tenant confirms that entry; it isn't a second change.
+    if ((event.kind === "changed" || event.kind === "added") && event.to !== undefined) {
+      const confirmed = confirm.run(scan.scannedAt, scan.tenant, event.settingKey, event.policyId, event.to, scan.scannedAt);
+      if (Number(confirmed.changes) > 0) continue;
+    }
     insert.run(scan.tenant, event.settingKey, scan.id, scan.scannedAt, previous.scannedAt, event.kind, event.policyId, event.policyName, event.from ?? null, event.to ?? null);
   }
 }
@@ -108,7 +180,7 @@ export function ensureHistoryBackfilled(): void {
 export function getSettingHistory(tenant: string, settingKey: string, limit = 100): HistoryEntry[] {
   ensureHistoryBackfilled();
   const rows = getDb()
-    .prepare(`SELECT id, occurred_at, since, kind, policy_id, policy_name, from_value, to_value FROM setting_history WHERE tenant = ? AND setting_key = ? ORDER BY occurred_at DESC, id DESC LIMIT ?`)
+    .prepare(`SELECT * FROM setting_history WHERE tenant = ? AND setting_key = ? ORDER BY occurred_at DESC, id DESC LIMIT ?`)
     .all(tenant, settingKey, limit) as unknown as HistoryRow[];
   return rows.map((row) => ({
     id: row.id,
@@ -119,5 +191,10 @@ export function getSettingHistory(tenant: string, settingKey: string, limit = 10
     policyName: row.policy_name,
     ...(row.from_value !== null ? { from: row.from_value } : {}),
     ...(row.to_value !== null ? { to: row.to_value } : {}),
+    ...(row.actor_name ? { pushedBy: row.actor_name } : {}),
+    ...(row.staged_by_name ? { stagedBy: row.staged_by_name } : {}),
+    ...(row.reviewed_by ? { reviewedBy: row.reviewed_by } : {}),
+    ...(row.reason ? { reason: row.reason } : {}),
+    ...(row.confirmed_at ? { confirmedAt: row.confirmed_at } : {}),
   }));
 }

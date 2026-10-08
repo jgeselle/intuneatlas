@@ -13,7 +13,7 @@ process.env.HOME = home;
 process.env.USERPROFILE = home;
 const { getDb } = await import("../../src/storage/db.js");
 const { recordScan } = await import("../../src/storage/scans.js");
-const { getSettingHistory } = await import("../../src/storage/history.js");
+const { getSettingHistory, recordPushedChange } = await import("../../src/storage/history.js");
 after(() => {
   getDb().close();
   rmSync(home, { recursive: true, force: true });
@@ -81,4 +81,62 @@ test("history: each new scan adds what changed since the tenant's last one", () 
   recordScan(scan("contoso", "2026-01-09T08:00:00.000Z", [entry("defer", [["p1", "7", false]]), entry("tamper", [["p3", "Enabled"]])]));
   assert.equal(getSettingHistory("contoso", "defer").length, 4);
   assert.equal(getSettingHistory("contoso", "tamper").length, 1);
+});
+
+test("history: a pushed change is recorded first-hand with who and why, and the scan that sees it confirms it instead of repeating it", () => {
+  // As the write action will call it, once Graph has accepted the change.
+  recordPushedChange({
+    tenant: "contoso",
+    settingKey: "tamper",
+    policyId: "p3",
+    policyName: "Policy p3",
+    from: "Enabled",
+    to: "Disabled",
+    pushedBy: "Alex Meyer",
+    stagedBy: "Sam Okafor",
+    reviewedBy: "Alex Meyer",
+    reason: "Imaging project needs it off until Friday.",
+    at: "2026-01-10T09:00:00.000Z",
+  });
+
+  // On record straight away — no scan needed.
+  const [pushed] = getSettingHistory("contoso", "tamper");
+  assert.deepEqual(
+    { ...pushed, id: 0 },
+    {
+      id: 0,
+      at: "2026-01-10T09:00:00.000Z",
+      since: null,
+      kind: "pushed",
+      policyId: "p3",
+      policyName: "Policy p3",
+      from: "Enabled",
+      to: "Disabled",
+      pushedBy: "Alex Meyer",
+      stagedBy: "Sam Okafor",
+      reviewedBy: "Alex Meyer",
+      reason: "Imaging project needs it off until Friday.",
+    },
+  );
+
+  // The next scan sees the pushed value: that confirms the entry, it isn't a second change.
+  recordScan(scan("contoso", "2026-01-10T12:00:00.000Z", [entry("defer", [["p1", "7", false]]), entry("tamper", [["p3", "Disabled"]])]));
+  const afterScan = getSettingHistory("contoso", "tamper");
+  assert.deepEqual(afterScan.map((e) => e.kind), ["pushed", "added"]);
+  assert.equal(afterScan[0].confirmedAt, "2026-01-10T12:00:00.000Z");
+
+  // Someone changing it back by hand afterwards is an observation like any other — no reason, nobody named.
+  recordScan(scan("contoso", "2026-01-11T12:00:00.000Z", [entry("defer", [["p1", "7", false]]), entry("tamper", [["p3", "Enabled"]])]));
+  const [changedBack] = getSettingHistory("contoso", "tamper");
+  assert.deepEqual([changedBack.kind, changedBack.from, changedBack.to, changedBack.reason, changedBack.pushedBy], ["changed", "Disabled", "Enabled", undefined, undefined]);
+});
+
+test("history: a scan showing a different value than the one pushed doesn't confirm the push", () => {
+  recordPushedChange({ tenant: "contoso", settingKey: "defer", policyId: "p1", policyName: "Policy p1", from: "7", to: "3", pushedBy: "Alex Meyer", stagedBy: "Alex Meyer", reviewedBy: "Sam Okafor", reason: "Faster patching.", at: "2026-01-12T09:00:00.000Z" });
+  recordScan(scan("contoso", "2026-01-12T12:00:00.000Z", [entry("defer", [["p1", "5", false]]), entry("tamper", [["p3", "Enabled"]])]));
+
+  const [observed, pushed] = getSettingHistory("contoso", "defer");
+  assert.deepEqual([observed.kind, observed.from, observed.to], ["changed", "7", "5"]);
+  assert.equal(pushed.kind, "pushed");
+  assert.equal(pushed.confirmedAt, undefined);
 });

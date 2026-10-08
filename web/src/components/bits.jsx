@@ -326,11 +326,13 @@ const HISTORY_TEXT = {
 };
 
 /**
- * What scans have seen happen to a setting, newest first: a policy began
- * or stopped setting it, changed its value, or gained or lost its
- * assignment. Each entry is dated by the scan that showed it. `events` is
- * undefined while loading or where history isn't available — then there is
- * no section at all.
+ * What has happened to a setting, newest first. Most entries are what a
+ * scan saw: a policy began or stopped setting it, changed its value, or
+ * gained or lost its assignment — dated by the scan that showed it. A
+ * change pushed from the change log is the other kind, recorded when it
+ * was pushed, with who did it and the reason given. `events` is undefined
+ * while loading or where history isn't available — then there is no
+ * section at all.
  */
 function HistoryList({ events }) {
   if (!events) return null;
@@ -355,7 +357,21 @@ function HistoryList({ events }) {
                   {new Date(event.at).toLocaleDateString()}
                 </time>
               </div>
-              {event.kind === "changed" ? (
+              {event.kind === "pushed" ? (
+                // The one kind the app did itself, so the one that knows who and why.
+                <div className="mt-1.5 space-y-1.5">
+                  {event.from !== undefined ? <Diff from={event.from} to={event.to} /> : <p className="text-stone-700">{String(event.to).split("\n").join(", ")}</p>}
+                  {event.reason && <p className="leading-relaxed text-stone-700">{event.reason}</p>}
+                  <p className="text-stone-500">
+                    {["Pushed by " + event.pushedBy, event.stagedBy && event.stagedBy !== event.pushedBy ? "staged by " + event.stagedBy : null, event.reviewedBy ? "reviewed by " + event.reviewedBy : null]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </p>
+                  <p className="text-stone-400">
+                    {event.confirmedAt ? "Seen in the tenant by the scan of " + new Date(event.confirmedAt).toLocaleDateString() : "Not seen by a scan yet"}
+                  </p>
+                </div>
+              ) : event.kind === "changed" ? (
                 <div className="mt-1.5">
                   <Diff from={event.from} to={event.to} />
                 </div>

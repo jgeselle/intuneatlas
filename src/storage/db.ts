@@ -109,8 +109,13 @@ export function getDb(): DatabaseSync {
       policy_name TEXT NOT NULL,
       from_value TEXT,
       to_value TEXT,
+      -- Only on a change the tool itself pushed (kind 'pushed'): who pushed it, who had staged
+      -- and reviewed it, why — and when a scan first saw it in the tenant.
       actor_name TEXT,
-      reason TEXT
+      staged_by_name TEXT,
+      reviewed_by TEXT,
+      reason TEXT,
+      confirmed_at TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_setting_history_setting ON setting_history(tenant, setting_key);
 
@@ -145,6 +150,12 @@ export function getDb(): DatabaseSync {
  * this graduates into something more formal.
  */
 function migrate(db: DatabaseSync): void {
+  // setting_history's columns for pushed changes — on a database that got the table before they existed.
+  const historyColumns = db.prepare(`PRAGMA table_info(setting_history)`).all() as Array<{ name: string }>;
+  for (const column of ["staged_by_name", "reviewed_by", "confirmed_at"]) {
+    if (!historyColumns.some((c) => c.name === column)) db.exec(`ALTER TABLE setting_history ADD COLUMN ${column} TEXT`);
+  }
+
   const settingsColumns = db.prepare(`PRAGMA table_info(settings_snapshot)`).all() as Array<{ name: string }>;
   if (!settingsColumns.some((c) => c.name === "rec_json")) {
     db.exec(`ALTER TABLE settings_snapshot ADD COLUMN rec_json TEXT`);
