@@ -357,14 +357,16 @@
   .issue .tag.help{border-color:#FCD34D;background:var(--amber-bg);color:var(--amber)}
 
   /* notice */
-  /* a remark that belongs to its section: a soft green panel with an info mark, rounded like the cards */
+  /* a remark that belongs to its section, set like a margin note: a dashed rule, a small mono label,
+     the text beside it. No box. */
   .notice{
-    margin-top:32px;padding:15px 18px;display:flex;gap:13px;align-items:flex-start;
-    border:1px solid rgba(38,112,75,.18);border-radius:12px;background:rgba(38,112,75,.055);
-    font-size:.875rem;color:#44524A;line-height:1.65;
+    margin-top:34px;padding-top:16px;border-top:1px dashed var(--line-2);
+    display:grid;gap:6px 22px;font-size:.875rem;color:var(--muted);line-height:1.65;
   }
-  .notice svg{flex:none;margin-top:3px;color:var(--green)}
-  .notice code{font-family:var(--mono);font-size:.8125rem;background:rgba(38,112,75,.1);border-radius:4px;padding:.05em .35em;color:var(--green-2)}
+  .notice .kicker{color:var(--green-2);padding-top:.3em}
+  .notice p{max-width:44em}
+  .notice code{font-family:var(--mono);font-size:.8125rem;background:var(--line);border-radius:4px;padding:.05em .35em;color:var(--text)}
+  @media(min-width:700px){.notice{grid-template-columns:7rem 1fr}}
 
   footer{background:#fff;border-top:1px solid var(--line);padding:30px 0}
   .foot{display:flex;flex-wrap:wrap;gap:12px 26px;align-items:center;font-size:.8125rem;color:var(--muted)}
@@ -597,7 +599,7 @@
       </div>
 
       <div class="notice">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9.5"></circle><path d="M12 11v5.5"></path><path d="M12 7.6v.1"></path></svg>
+        <span class="kicker">Annotations</span>
         <p>
           An exported policy says what a setting should be, not why. The optional <code>baseline.yml</code> adds
           severity, rationale and references per setting without changing the stored values, and can relax a number to
@@ -732,7 +734,7 @@
       </ul>
 
       <div class="notice">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9.5"></circle><path d="M12 11v5.5"></path><path d="M12 7.6v.1"></path></svg>
+        <span class="kicker">Disclaimer</span>
         <p>
           Not affiliated with, endorsed by, or supported by Microsoft. Intune and Microsoft Graph are Microsoft
           trademarks. This project reads a tenant through the documented Graph API and nothing else. If a scan ever
@@ -778,7 +780,7 @@
       </div>
 
       <div class="notice">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9.5"></circle><path d="M12 11v5.5"></path><path d="M12 7.6v.1"></path></svg>
+        <span class="kicker">Citations</span>
         <p>
           Every rationale needs a citation: a benchmark section, vendor guidance, or a documented tenant
           observation. "It's more secure" isn't reviewable, and an annotation nobody can trace gets removed the first
