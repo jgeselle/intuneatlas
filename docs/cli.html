@@ -30,19 +30,23 @@
   ul{margin:0;padding:0;list-style:none}
   .wrap{max-width:800px;margin:0 auto;padding:0 22px}
 
-  .topbar{border-bottom:1px solid var(--line);background:#fff;position:sticky;top:0;z-index:40}
-  .topbar .wrap{display:flex;align-items:center;gap:18px;height:56px;max-width:960px;flex-wrap:wrap}
-  .repo{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:.875rem;text-decoration:none;color:var(--text);min-width:0}
-  .repo svg{flex:none;color:var(--teal)}
-  .repo .owner{color:var(--muted)}
-  .repo b{font-weight:600}
-  .topnav{display:flex;margin-left:auto;gap:18px;font-size:.8125rem}
-  .topnav a{color:var(--muted);text-decoration:none;padding:4px 0;border-bottom:2px solid transparent}
-  .topnav a:hover{color:var(--text)}
-  .topnav a.active{color:var(--text);border-bottom-color:var(--teal)}
-  .gh{color:var(--muted);flex:none}
-  .gh:hover{color:var(--text)}
-  @media(max-width:600px){.topbar .wrap{height:auto;padding:12px 22px}.topnav{margin-left:0;width:100%}}
+  /* Same header as the landing page: mark left, links centred, GitHub right, on the page's own paper. */
+  .topbar{position:sticky;top:0;z-index:40;background:rgba(250,249,247,.86);-webkit-backdrop-filter:saturate(1.5) blur(12px);backdrop-filter:saturate(1.5) blur(12px)}
+  .topbar .bar{max-width:1500px;margin:0 auto;padding:0 24px;height:68px;display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:18px}
+  .brand{display:inline-flex;align-items:center;gap:9px;justify-self:start;text-decoration:none;font-family:var(--head);font-size:1.1875rem;font-weight:600;letter-spacing:-.02em;color:var(--ink)}
+  .brand svg{flex:none;color:var(--teal)}
+  .topnav{display:flex;gap:30px;font-size:.9375rem;font-weight:500}
+  .topnav a{color:#44403C;text-decoration:none;padding:4px 0;border-bottom:2px solid transparent;transition:color .15s}
+  .topnav a:hover{color:var(--teal-2)}
+  .topnav a.active{color:var(--ink);border-bottom-color:var(--teal)}
+  .top-actions{display:flex;align-items:center;gap:6px;justify-self:end}
+  .gh{display:inline-flex;align-items:center;gap:7px;padding:8px 12px;border-radius:9px;font-size:.9375rem;font-weight:500;color:var(--text);text-decoration:none;transition:background .15s}
+  .gh:hover{background:#EFEDEA}
+  /* On a narrow screen the two doc links drop to a row of their own instead of disappearing. */
+  @media(max-width:700px){
+    .topbar .bar{grid-template-columns:1fr auto;height:auto;padding-top:14px;padding-bottom:8px;row-gap:8px}
+    .topnav{grid-column:1/-1;grid-row:2;gap:22px}
+  }
 
   main{padding:44px 0 60px}
   .kicker{font-family:var(--mono);font-size:.6875rem;letter-spacing:.13em;text-transform:uppercase;color:var(--faint)}
@@ -97,21 +101,24 @@
 <body>
 
 <div class="topbar">
-  <div class="wrap">
-    <a class="repo" href="/">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round" aria-hidden="true">
+  <div class="bar">
+    <a class="brand" href="/">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linejoin="round" aria-hidden="true">
         <circle cx="12" cy="12" r="9.5"></circle>
         <polygon points="15.6 8.4 13.7 13.7 8.4 15.6 10.3 10.3" fill="currentColor" stroke-width="1.5"></polygon>
       </svg>
-      <span class="owner">jgeselle&thinsp;/</span><b>IntuneAtlas</b>
+      IntuneAtlas
     </a>
     <nav class="topnav">
       <a href="/docs/">Getting started</a>
       <a href="/docs/cli.html" class="active">CLI reference</a>
     </nav>
-    <a class="gh" href="https://github.com/jgeselle/intuneatlas" target="_blank" rel="noopener noreferrer" aria-label="GitHub repository">
-      <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8a8 8 0 0 0 5.47 7.59c.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.4 7.4 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
-    </a>
+    <div class="top-actions">
+      <a class="gh" href="https://github.com/jgeselle/intuneatlas" target="_blank" rel="noopener noreferrer" aria-label="IntuneAtlas on GitHub">
+        <svg width="17" height="17" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8a8 8 0 0 0 5.47 7.59c.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.4 7.4 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+        GitHub
+      </a>
+    </div>
   </div>
 </div>
 
