@@ -71,9 +71,15 @@ function Dropdown({ value, options, onChange, placeholder = "Select…", ariaLab
     return () => document.removeEventListener("mousedown", onPointerDown);
   }, [open]);
 
-  // Keeps the highlighted option in view as the keyboard moves through a long list.
+  // Keeps the highlighted option in view as the keyboard moves through a long list. Up and down
+  // only, and by hand: scrollIntoView would also pull a sideways-scrolled list back to its start.
   useLayoutEffect(() => {
-    if (open) listRef.current?.children[active]?.scrollIntoView({ block: "nearest", inline: "start" });
+    const item = open && listRef.current?.children[active];
+    const box = listRef.current?.parentElement;
+    if (!item || !box) return;
+    const top = item.offsetTop - listRef.current.offsetTop;
+    if (top < box.scrollTop) box.scrollTop = top;
+    else if (top + item.offsetHeight > box.scrollTop + box.clientHeight) box.scrollTop = top + item.offsetHeight - box.clientHeight;
   }, [open, active]);
 
   function onKeyDown(e) {
@@ -175,7 +181,7 @@ function Dropdown({ value, options, onChange, placeholder = "Select…", ariaLab
               />
             </div>
           )}
-          <div className="max-h-64 overflow-auto overscroll-contain py-1">
+          <div className="relative max-h-64 overflow-auto overscroll-contain py-1">
             {/* As wide as its longest name when names stay on one line, so every row's highlight spans the full scroll width. */}
             <ul ref={listRef} id={listId} role="listbox" aria-label={ariaLabel} className={searchable ? "w-max min-w-full" : ""}>
               {shown.map((option, i) => (
