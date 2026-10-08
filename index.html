@@ -262,9 +262,13 @@
     background:#fff;border:1px solid var(--line);border-radius:5px;padding:3px 9px;
   }
   .idx-count{font-family:var(--mono);font-size:.6875rem;color:var(--faint);margin-left:auto}
+  /* Columns, as in the app's own list: the value starts at the same place on every row, whatever the tag's width. */
   .idx-row{
-    display:flex;align-items:center;gap:14px;padding:13px 15px;border-top:1px solid var(--line);
+    display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:14px;
+    padding:13px 15px;border-top:1px solid var(--line);
   }
+  .idx-row .chip{justify-self:end}
+  @media(min-width:640px){.idx-row{grid-template-columns:minmax(0,1fr) 112px 108px}}
   .idx-row:first-of-type{border-top:0}
   .idx-main{min-width:0;flex:1}
   .idx-main b{display:block;font-size:.875rem;font-weight:500}
@@ -274,7 +278,7 @@
   }
   .idx-val{
     font-family:var(--mono);font-size:.75rem;color:#57534E;flex:none;
-    display:none;max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+    display:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
   }
   @media(min-width:640px){.idx-val{display:block}}
   .idx-main b .idx-note{display:inline;margin:0;font-family:var(--mono);font-size:.6875rem;font-weight:400;color:var(--faint)}
@@ -353,11 +357,14 @@
   .issue .tag.help{border-color:#FCD34D;background:var(--amber-bg);color:var(--amber)}
 
   /* notice */
+  /* a remark that belongs to its section: a soft green panel with an info mark, rounded like the cards */
   .notice{
-    margin-top:32px;padding:16px 18px;border:1px solid var(--line-2);
-    border-left:2px solid var(--green);border-radius:0 9px 9px 0;background:#fff;
-    font-size:.875rem;color:var(--muted);line-height:1.65;
+    margin-top:32px;padding:15px 18px;display:flex;gap:13px;align-items:flex-start;
+    border:1px solid rgba(38,112,75,.18);border-radius:12px;background:rgba(38,112,75,.055);
+    font-size:.875rem;color:#44524A;line-height:1.65;
   }
+  .notice svg{flex:none;margin-top:3px;color:var(--green)}
+  .notice code{font-family:var(--mono);font-size:.8125rem;background:rgba(38,112,75,.1);border-radius:4px;padding:.05em .35em;color:var(--green-2)}
 
   footer{background:#fff;border-top:1px solid var(--line);padding:30px 0}
   .foot{display:flex;flex-wrap:wrap;gap:12px 26px;align-items:center;font-size:.8125rem;color:var(--muted)}
@@ -590,9 +597,12 @@
       </div>
 
       <div class="notice">
-        An exported policy says what a setting should be, not why. The optional <code>baseline.yml</code> adds
-        severity, rationale and references per setting without changing the stored values, and can relax a number to
-        "or less" or "or more".
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9.5"></circle><path d="M12 11v5.5"></path><path d="M12 7.6v.1"></path></svg>
+        <p>
+          An exported policy says what a setting should be, not why. The optional <code>baseline.yml</code> adds
+          severity, rationale and references per setting without changing the stored values, and can relax a number to
+          "or less" or "or more".
+        </p>
       </div>
     </div>
   </section>
@@ -722,9 +732,12 @@
       </ul>
 
       <div class="notice">
-        Not affiliated with, endorsed by, or supported by Microsoft. Intune and Microsoft Graph are Microsoft
-        trademarks. This project reads a tenant through the documented Graph API and nothing else. If a scan ever
-        surprises you, open an issue and paste the redacted report.
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9.5"></circle><path d="M12 11v5.5"></path><path d="M12 7.6v.1"></path></svg>
+        <p>
+          Not affiliated with, endorsed by, or supported by Microsoft. Intune and Microsoft Graph are Microsoft
+          trademarks. This project reads a tenant through the documented Graph API and nothing else. If a scan ever
+          surprises you, open an issue and paste the redacted report.
+        </p>
       </div>
     </div>
   </section>
@@ -765,9 +778,12 @@
       </div>
 
       <div class="notice">
-        Every rationale needs a citation: a benchmark section, vendor guidance, or a documented tenant
-        observation. "It's more secure" isn't reviewable, and an annotation nobody can trace gets removed the first
-        time it flags something on someone's fleet that turns out to be fine.
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9.5"></circle><path d="M12 11v5.5"></path><path d="M12 7.6v.1"></path></svg>
+        <p>
+          Every rationale needs a citation: a benchmark section, vendor guidance, or a documented tenant
+          observation. "It's more secure" isn't reviewable, and an annotation nobody can trace gets removed the first
+          time it flags something on someone's fleet that turns out to be fine.
+        </p>
       </div>
     </div>
   </section>
