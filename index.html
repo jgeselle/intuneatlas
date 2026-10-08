@@ -141,6 +141,8 @@
   .hero{padding:0 10px 56px}
   .hero-card{
     position:relative;isolation:isolate;overflow:hidden;border-radius:22px;text-align:center;color:#fff;
+    /* as wide as the header's row, no wider */
+    max-width:1180px;margin:0 auto;
     padding:clamp(52px,8vw,96px) 22px clamp(150px,19vw,210px);
     background:
       radial-gradient(90% 70% at 50% 118%,rgba(141,228,178,.38) 0%,rgba(141,228,178,0) 62%),
@@ -216,7 +218,7 @@
 
   /* what you run, and what you then read — side by side where there is room */
   .hero-show{
-    position:relative;max-width:1124px;margin:calc(-1 * clamp(104px,14vw,150px)) auto 0;padding:0 22px;
+    position:relative;max-width:1084px;margin:calc(-1 * clamp(104px,14vw,150px)) auto 0;padding:0 22px;
     display:grid;gap:18px;
   }
   @media(min-width:980px){.hero-show{grid-template-columns:minmax(0,5fr) minmax(0,6fr)}}
