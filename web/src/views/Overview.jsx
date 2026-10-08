@@ -13,6 +13,7 @@ function Overview({ settingIndex, compliancePolicies, enrollmentConfigurations, 
   // setting anywhere in the tenant, not something actually configured —
   // so they're excluded from what "Settings managed" claims to count.
   const managedCount = configuration.filter((e) => e.state !== "Missing").length;
+  const belowBaseline = configuration.filter((e) => e.state === "Below baseline").length;
   // One row per (setting, recommendation) — a setting can have several,
   // from different sources, so this can list the same setting more than
   // once if more than one baseline flags it.
@@ -52,12 +53,14 @@ function Overview({ settingIndex, compliancePolicies, enrollmentConfigurations, 
         <section className="rounded-lg border border-stone-200 bg-white lg:col-span-3">
           <div className="flex items-center justify-between border-b border-stone-200 px-4 py-3">
             <h2 className="text-sm font-semibold">Fix these first</h2>
-            <button
-              onClick={() => onGo("recommendations")}
-              className="rounded text-xs font-medium text-teal-600 hover:text-teal-700 focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500"
-            >
-              {recs.length > 0 ? "See all " + recs.length : "Recommendations"}
-            </button>
+            {belowBaseline > 0 && (
+              <button
+                onClick={() => onGo("configuration", "Below baseline")}
+                className="rounded text-xs font-medium text-teal-600 hover:text-teal-700 focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500"
+              >
+                {belowBaseline} below baseline
+              </button>
+            )}
           </div>
           {recs.length === 0 ? (
             <Empty bare>Nothing outstanding</Empty>

@@ -18,6 +18,7 @@ function SettingsView({
   title = "Settings",
   searchPlaceholder = "Search by name, category, or CSP path",
   conflicts = true,
+  initialState = "All",
   entries,
   notes = {},
   changes = {},
@@ -28,7 +29,7 @@ function SettingsView({
   onOpen,
   scope,
 }) {
-  const [state, setState] = useState("All");
+  const [state, setState] = useState(initialState);
   // How many changes are staged per setting — a setting can have several: one per policy, existing or new.
   const stagedCount = useMemo(() => {
     const counts = {};

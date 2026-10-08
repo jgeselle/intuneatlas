@@ -4,7 +4,6 @@ import {
   Sliders,
   ShieldCheck,
   DeviceMobile,
-  Lightbulb,
   ListChecks,
   Stack,
   CaretDoubleLeft,
@@ -19,7 +18,6 @@ import { isComplianceSetting } from "./lib/format.js";
 import { Overview } from "./views/Overview.jsx";
 import { SettingsView } from "./views/SettingsView.jsx";
 import { SimplePolicyList } from "./views/SimplePolicyList.jsx";
-import { Recommendations } from "./views/Recommendations.jsx";
 import { ChangeLog } from "./views/ChangeLog.jsx";
 import { Baselines } from "./views/Baselines.jsx";
 
@@ -83,6 +81,12 @@ function withBaselineVerdicts(report, patch) {
 export default function App({ initialReport, session }) {
   const [report, setReport] = useState(initialReport);
   const [view, setView] = useState("overview");
+  // A page can be opened already filtered — the Overview's shortcut into the Settings list. Any other way there starts unfiltered.
+  const [arriveWith, setArriveWith] = useState(undefined);
+  function go(page, state) {
+    setArriveWith(state);
+    setView(page);
+  }
   // Each page with a search field keeps its own text: what was typed on Settings means nothing on Enrollment.
   const [queries, setQueries] = useState({});
   const searchOf = (page) => ({ query: queries[page] ?? "", setQuery: (text) => setQueries((all) => ({ ...all, [page]: text })) });
@@ -485,15 +489,6 @@ export default function App({ initialReport, session }) {
     { id: "configuration", label: "Settings", icon: Sliders, count: configurationSettings.length },
     { id: "compliance", label: "Compliance", icon: ShieldCheck, count: complianceSettings.length },
     { id: "enrollment", label: "Enrollment", icon: DeviceMobile, count: enrollmentConfigurations.length },
-    {
-      id: "recommendations",
-      label: "Recommendations",
-      icon: Lightbulb,
-      // Matches Recommendations.jsx's own count exactly — one per
-      // (setting, recommendation) pair, not one per setting, since a
-      // setting can have several from different sources.
-      count: settingIndex.reduce((n, e) => n + e.recs.length, 0),
-    },
     { id: "changes", label: "Change log", icon: ListChecks, count: Object.keys(changes).length },
     { id: "baselines", label: "Baselines", icon: Stack, count: (report.baselinePacks ?? []).length },
   ];
@@ -588,7 +583,7 @@ export default function App({ initialReport, session }) {
             return (
               <button
                 key={n.id}
-                onClick={() => setView(n.id)}
+                onClick={() => go(n.id)}
                 className={
                   "flex shrink-0 items-center gap-2 rounded-md py-2 pl-3 pr-3 text-sm focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-300 lg:w-full " +
                   (active ? "bg-teal-800 font-medium text-white" : "text-teal-100 hover:bg-teal-800")
@@ -645,7 +640,7 @@ export default function App({ initialReport, session }) {
               compliancePolicies={compliancePolicies}
               enrollmentConfigurations={enrollmentConfigurations}
               changes={changes}
-              onGo={setView}
+              onGo={go}
               onOpen={(key) => setOpen({ type: "setting", key })}
               scope={scope}
             />
@@ -654,6 +649,7 @@ export default function App({ initialReport, session }) {
           {view === "configuration" && (
             <SettingsView
               entries={configurationSettings}
+              initialState={arriveWith}
               changes={changes}
               scope={scope}
               notes={notes}
@@ -688,10 +684,6 @@ export default function App({ initialReport, session }) {
               {...searchOf("enrollment")}
               onOpen={(id) => setOpen({ type: "enrollment", id })}
             />
-          )}
-
-          {view === "recommendations" && (
-            <Recommendations settingIndex={settingIndex} onOpen={(key) => setOpen({ type: "setting", key })} scope={scope} />
           )}
 
           {view === "baselines" && (

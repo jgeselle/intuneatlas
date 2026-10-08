@@ -476,7 +476,7 @@ function SettingDrawer({ entry, notes, onAddNote, onDeleteNote, onClose, changes
                   onUse={() => setDrafts((d) => d.map((v, i) => fills.find(({ n }) => n === i)?.next ?? v))}
                   newPolicyPending={pendingNew.some((x) => x.id === check.ruleId)}
                   onStageNew={
-                    canStage && onStageNew
+                    canStage && onStageNew && !entry.definitionId?.startsWith("compliance.tenant.")
                       ? () =>
                           setPendingNew((list) => [
                             ...list,
