@@ -33,6 +33,18 @@ export async function teardown(client: SeedClient): Promise<void> {
     `teardown: deleted ${taggedLegacyConfigs.length} legacy device configuration ${taggedLegacyConfigs.length === 1 ? "profile" : "profiles"}.`,
   );
 
+  const compliancePolicies = (await client.getAll<NamedObject>("/deviceManagement/deviceCompliancePolicies?$select=id,displayName", GRAPH_BETA_BASE)).filter(isTagged);
+  for (const policy of compliancePolicies) {
+    await client.del(`/deviceManagement/deviceCompliancePolicies/${policy.id}`, GRAPH_BETA_BASE);
+  }
+  // The Settings Catalog kind of compliance policy (Linux) lives in its own collection.
+  const catalogCompliancePolicies = (await client.getAll<NamedObject>("/deviceManagement/compliancePolicies", GRAPH_BETA_BASE)).filter(isTagged);
+  for (const policy of catalogCompliancePolicies) {
+    await client.del(`/deviceManagement/compliancePolicies/${policy.id}`, GRAPH_BETA_BASE);
+  }
+  const complianceCount = compliancePolicies.length + catalogCompliancePolicies.length;
+  console.log(`teardown: deleted ${complianceCount} compliance ${complianceCount === 1 ? "policy" : "policies"}.`);
+
   const groups = await client.getAll<NamedObject>("/groups?$select=id,displayName");
   const taggedGroups = groups.filter(isTagged);
   for (const group of taggedGroups) {

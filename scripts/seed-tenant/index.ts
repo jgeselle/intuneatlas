@@ -6,6 +6,7 @@
 // See scripts/seed-tenant/README.md for required environment variables.
 import { createSeedClient } from "./client.js";
 import { seedBelowBaseline } from "./scenarios/belowBaseline.js";
+import { seedCompliance } from "./scenarios/compliance.js";
 import { seedConflict } from "./scenarios/conflict.js";
 import { seedDependentChoice } from "./scenarios/dependentChoice.js";
 import { seedGroupSetting } from "./scenarios/groupSetting.js";
@@ -27,6 +28,7 @@ const SCENARIOS: Record<string, (client: Awaited<ReturnType<typeof createSeedCli
   multiPlatform: (client) => seedMultiPlatform(client),
   legacyConflict: (client) => seedLegacyConflict(client, arg),
   dependentChoice: (client) => seedDependentChoice(client, arg),
+  compliance: (client) => seedCompliance(client),
   teardown: (client) => teardown(client),
 };
 

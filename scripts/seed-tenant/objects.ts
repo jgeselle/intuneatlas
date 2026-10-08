@@ -104,3 +104,81 @@ export async function assignDeviceConfiguration(client: SeedClient, configId: st
     assignments: targets.map((target) => ({ target: toGraphTarget(target) })),
   });
 }
+
+/** One action for noncompliance: what happens, and how many hours after a device falls out of compliance. */
+export interface ComplianceAction {
+  actionType: "block" | "retire" | "remoteLock" | "notification" | "pushNotification";
+  gracePeriodHours: number;
+}
+
+// Graph refuses a compliance policy without its actions (at least "block" — marking the device
+// noncompliant), and wants them wrapped in exactly one rule.
+function toScheduledActions(actions: ComplianceAction[]) {
+  return [
+    {
+      ruleName: "PasswordRequired",
+      scheduledActionConfigurations: actions.map((action) => ({ ...action, notificationTemplateId: "", notificationMessageCCList: [] })),
+    },
+  ];
+}
+
+/**
+ * Creates a typed compliance policy (one Graph type per platform, its
+ * settings as properties) — what src/scan/complianceSettings.ts reads.
+ */
+export async function createCompliancePolicy(
+  client: SeedClient,
+  options: { name: string; odataType: string; properties: Record<string, unknown>; actions: ComplianceAction[] },
+): Promise<CreatedPolicy> {
+  const name = taggedName(options.name);
+  const created = await client.post<{ id: string }>(
+    "/deviceManagement/deviceCompliancePolicies",
+    { "@odata.type": options.odataType, displayName: name, ...options.properties, scheduledActionsForRule: toScheduledActions(options.actions) },
+    GRAPH_BETA_BASE,
+  );
+  return { id: created?.id ?? "dry-run-compliance-id", name };
+}
+
+export async function assignCompliancePolicy(client: SeedClient, policyId: string, targets: AssignmentTarget[]): Promise<void> {
+  await client.post(
+    `/deviceManagement/deviceCompliancePolicies/${policyId}/assign`,
+    { assignments: targets.map((target) => ({ target: toGraphTarget(target) })) },
+    GRAPH_BETA_BASE,
+  );
+}
+
+/**
+ * Creates a compliance policy in the Settings Catalog format — the kind
+ * Intune uses for Linux, read by src/scan/complianceCatalog.ts. Same
+ * shape as a configuration policy, in its own collection.
+ */
+export async function createCatalogCompliancePolicy(
+  client: SeedClient,
+  options: PolicyOptions & { actions: ComplianceAction[] },
+): Promise<CreatedPolicy> {
+  const name = taggedName(options.name);
+  const created = await client.post<{ id: string }>(
+    "/deviceManagement/compliancePolicies",
+    {
+      name,
+      description: options.description ?? "",
+      platforms: options.platforms,
+      technologies: options.technologies ?? "linuxMdm",
+      settings: options.settings.map((settingInstance) => ({
+        "@odata.type": "#microsoft.graph.deviceManagementConfigurationSetting",
+        settingInstance,
+      })),
+      scheduledActionsForRule: toScheduledActions(options.actions),
+    },
+    GRAPH_BETA_BASE,
+  );
+  return { id: created?.id ?? "dry-run-catalog-compliance-id", name };
+}
+
+export async function assignCatalogCompliancePolicy(client: SeedClient, policyId: string, targets: AssignmentTarget[]): Promise<void> {
+  await client.post(
+    `/deviceManagement/compliancePolicies/${policyId}/assign`,
+    { assignments: targets.map((target) => ({ target: toGraphTarget(target) })) },
+    GRAPH_BETA_BASE,
+  );
+}
