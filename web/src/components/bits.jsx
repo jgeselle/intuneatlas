@@ -79,7 +79,7 @@ function PageSubtitle({ scope, children }) {
   if (!scope && !hasFact) return null;
   return (
     <div className="mt-1 flex flex-wrap items-center gap-x-1.5 text-sm text-stone-500">
-      {scope && <Dropdown inline value={scope.value} options={scope.options} onChange={scope.onChange} ariaLabel="Show everything for" />}
+      {scope && <Dropdown inline searchable value={scope.value} options={scope.options} onChange={scope.onChange} ariaLabel="Show everything for" />}
       {scope && hasFact && <span>·</span>}
       {hasFact && <span className="min-w-0">{children}</span>}
     </div>
