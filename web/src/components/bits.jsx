@@ -77,7 +77,7 @@ function PageSubtitle({ scopeLabel, children }) {
   if (!scopeLabel && !hasFact) return null;
   return (
     <p className="mt-1 text-sm text-stone-500">
-      {scopeLabel && <span className="text-stone-700">{scopeLabel}</span>}
+      {scopeLabel}
       {scopeLabel && hasFact ? " · " : ""}
       {hasFact ? children : null}
     </p>
