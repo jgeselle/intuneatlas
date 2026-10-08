@@ -77,9 +77,11 @@ function Dropdown({ value, options, onChange, placeholder = "Select…", ariaLab
     const item = open && listRef.current?.children[active];
     const box = listRef.current?.parentElement;
     if (!item || !box) return;
-    const top = item.offsetTop - listRef.current.offsetTop;
-    if (top < box.scrollTop) box.scrollTop = top;
-    else if (top + item.offsetHeight > box.scrollTop + box.clientHeight) box.scrollTop = top + item.offsetHeight - box.clientHeight;
+    // Measured from the scrolling box itself (it is the rows' offset parent), with its own padding kept clear.
+    const pad = listRef.current.offsetTop;
+    const top = item.offsetTop;
+    if (top - pad < box.scrollTop) box.scrollTop = top - pad;
+    else if (top + item.offsetHeight + pad > box.scrollTop + box.clientHeight) box.scrollTop = top + item.offsetHeight + pad - box.clientHeight;
   }, [open, active]);
 
   function onKeyDown(e) {
