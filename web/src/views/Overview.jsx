@@ -3,7 +3,7 @@ import { PageSubtitle, SeverityChip, Stat, Empty } from "../components/bits.jsx"
 import { severityRank } from "../lib/styles.js";
 import { platformLabel } from "../lib/format.js";
 
-function Overview({ settingIndex, compliancePolicies, enrollmentConfigurations, changes, onGo, onOpen, scopeLabel }) {
+function Overview({ settingIndex, compliancePolicies, enrollmentConfigurations, changes, onGo, onOpen, scope }) {
   const conflicts = settingIndex.filter((e) => e.conflict).length;
   const unassigned = settingIndex.filter((e) => e.state === "Not assigned").length;
   // "Missing" entries are synthetic — a baseline rule with no matching
@@ -24,7 +24,7 @@ function Overview({ settingIndex, compliancePolicies, enrollmentConfigurations, 
     <div className="space-y-6">
       <header>
         <h1 className="text-xl font-semibold">Overview</h1>
-        <PageSubtitle scopeLabel={scopeLabel} />
+        <PageSubtitle scope={scope} />
       </header>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

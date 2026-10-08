@@ -21,7 +21,6 @@ import { SimplePolicyList } from "./views/SimplePolicyList.jsx";
 import { Recommendations } from "./views/Recommendations.jsx";
 import { ChangeLog } from "./views/ChangeLog.jsx";
 import { Baselines } from "./views/Baselines.jsx";
-import { Dropdown } from "./components/Dropdown.jsx";
 
 const RAIL_COLLAPSE_KEY = "intuneatlas.rail-collapsed";
 /** The "no group chosen" entry of the group chooser — a value no group id can be. */
@@ -85,8 +84,8 @@ export default function App({ initialReport, session }) {
   const [view, setView] = useState("overview");
   const [query, setQuery] = useState("");
   const [platform, setPlatform] = useState("All");
-  // Everything can be narrowed to what one group gets, chosen once in the
-  // sidebar: `scopeGroup` is that group's id, `scoped` the settings and
+  // Everything can be narrowed to what one group gets, chosen once (in any
+  // page's subtitle): `scopeGroup` is that group's id, `scoped` the settings and
   // policies as the group gets them (worked out by the server — conflicts
   // and baseline verdicts differ per group, it isn't a filter over the
   // tenant-wide list). Every page reads from it while a group is chosen.
@@ -292,7 +291,15 @@ export default function App({ initialReport, session }) {
   const settingIndex = inScope ? scoped.settings : wholeTenant;
   // Every group a policy names (or that sits inside one that is named), by name where the scan could read names.
   const groupOptions = useMemo(() => groupChoices(report, report.groups), [report.settings, report.compliancePolicies, report.enrollmentConfigurations, report.groups]);
-  const scopeLabel = inScope ? (groupOptions.find((g) => g.value === scopeGroup)?.label ?? scopeGroup) : undefined;
+  // The chooser itself, shown in each page's subtitle. Absent when the tenant has no groups to choose from.
+  const scope =
+    groupOptions.length > 0
+      ? {
+          value: scopeGroup ?? ALL_POLICIES,
+          options: [{ value: ALL_POLICIES, label: "All policies" }, ...groupOptions],
+          onChange: (value) => setScopeGroup(value === ALL_POLICIES ? null : value),
+        }
+      : undefined;
   // A remembered group that the current scan no longer knows (deleted, or no policy names it any more) is dropped.
   useEffect(() => {
     if (scopeGroup && !groupOptions.some((g) => g.value === scopeGroup)) setScopeGroup(null);
@@ -568,23 +575,6 @@ export default function App({ initialReport, session }) {
           </button>
         </div>
 
-        {/* Which group everything is shown for — chosen here, once, for every page. Faded out (but
-            still taking its space, so the nav below doesn't jump) while the rail is an icon strip. */}
-        {groupOptions.length > 0 && (
-          <div className={"px-3 pb-3 transition-opacity duration-150 " + railDim(railCollapsed && !railWide ? "lg:pointer-events-none" : "")}>
-            <Dropdown
-              tone="dark"
-              value={scopeGroup ?? ALL_POLICIES}
-              options={[{ value: ALL_POLICIES, label: "All policies" }, ...groupOptions]}
-              onChange={(value) => setScopeGroup(value === ALL_POLICIES ? null : value)}
-              ariaLabel="Show everything for"
-              // Same as the account menu: while its list is open the collapsed rail must stay
-              // expanded, or moving the pointer onto the list would close the rail under it.
-              onOpenChange={pinRailWhileOpen}
-            />
-          </div>
-        )}
-
         <nav className="flex gap-1 overflow-x-auto px-3 pb-3 lg:flex-col lg:overflow-visible lg:pb-4">
           {nav.map((n) => {
             const Icon = n.icon;
@@ -651,7 +641,7 @@ export default function App({ initialReport, session }) {
               changes={changes}
               onGo={setView}
               onOpen={(key) => setOpen({ type: "setting", key })}
-              scopeLabel={scopeLabel}
+              scope={scope}
             />
           )}
 
@@ -659,7 +649,7 @@ export default function App({ initialReport, session }) {
             <SettingsView
               entries={settingIndex}
               changes={changes}
-              scopeLabel={scopeLabel}
+              scope={scope}
               notes={notes}
               query={query}
               setQuery={setQuery}
@@ -673,7 +663,7 @@ export default function App({ initialReport, session }) {
             <SimplePolicyList
               kindLabel="Compliance"
               items={compliancePolicies}
-              scopeLabel={scopeLabel}
+              scope={scope}
               query={query}
               setQuery={setQuery}
               onOpen={(id) => setOpen({ type: "compliance", id })}
@@ -684,7 +674,7 @@ export default function App({ initialReport, session }) {
             <SimplePolicyList
               kindLabel="Enrollment"
               items={enrollmentConfigurations}
-              scopeLabel={scopeLabel}
+              scope={scope}
               query={query}
               setQuery={setQuery}
               onOpen={(id) => setOpen({ type: "enrollment", id })}
@@ -692,7 +682,7 @@ export default function App({ initialReport, session }) {
           )}
 
           {view === "recommendations" && (
-            <Recommendations settingIndex={settingIndex} onOpen={(key) => setOpen({ type: "setting", key })} scopeLabel={scopeLabel} />
+            <Recommendations settingIndex={settingIndex} onOpen={(key) => setOpen({ type: "setting", key })} scope={scope} />
           )}
 
           {view === "baselines" && (
@@ -701,7 +691,7 @@ export default function App({ initialReport, session }) {
               activePacks={report.activeBaselinePacks ?? null}
               settingIndex={settingIndex}
               folder={report.baselineFolder}
-              scopeLabel={scopeLabel}
+              scope={scope}
               viewer={session}
               onUpdateSelection={updateBaselineSelection}
               // No folder means the server reads baselines from somewhere that isn't the app's to manage.

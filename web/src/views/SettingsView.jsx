@@ -17,7 +17,7 @@ function SettingsView({
   platform,
   setPlatform,
   onOpen,
-  scopeLabel,
+  scope,
 }) {
   const [state, setState] = useState("All");
   // How many changes are staged per setting — a setting can have several: one per policy, existing or new.
@@ -79,7 +79,7 @@ function SettingsView({
       <div className="sticky top-0 z-10 -mt-6 space-y-5 bg-stone-50 pb-4 pt-6 lg:-mt-8 lg:pt-8">
         <header>
           <h1 className="text-xl font-semibold">Settings</h1>
-          <PageSubtitle scopeLabel={scopeLabel} />
+          <PageSubtitle scope={scope} />
         </header>
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">

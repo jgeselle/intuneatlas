@@ -2,7 +2,7 @@ import { MagnifyingGlass } from "@phosphor-icons/react";
 import { Chip, PageSubtitle, Empty } from "../components/bits.jsx";
 import { platformLabel } from "../lib/format.js";
 
-function SimplePolicyList({ kindLabel, items, query, setQuery, onOpen, scopeLabel }) {
+function SimplePolicyList({ kindLabel, items, query, setQuery, onOpen, scope }) {
   const shown = items.filter((i) => i.name.toLowerCase().includes(query.toLowerCase()));
   const hasPriority = items.some((i) => i.priority !== undefined);
   const deployedCount = items.filter((i) => i.deployed).length;
@@ -11,7 +11,7 @@ function SimplePolicyList({ kindLabel, items, query, setQuery, onOpen, scopeLabe
     <div className="space-y-5">
       <header>
         <h1 className="text-xl font-semibold">{kindLabel}</h1>
-        <PageSubtitle scopeLabel={scopeLabel}>
+        <PageSubtitle scope={scope}>
           {items.length} found · {deployedCount} assigned
         </PageSubtitle>
       </header>

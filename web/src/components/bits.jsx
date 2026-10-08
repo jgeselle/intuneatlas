@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Dropdown } from "./Dropdown.jsx";
 import { Check, CaretRight, Copy, Trash } from "@phosphor-icons/react";
 import { SEVERITY_STYLE } from "../lib/styles.js";
 
@@ -67,20 +68,21 @@ function Diff({ from, to }) {
 }
 
 /**
- * A page's subtitle: the group the page is currently showing (chosen once,
- * in the sidebar, for every page), then whatever fact the page has to
- * state about itself — a count, a location. Either may be absent; with
- * neither there is no subtitle at all. Pages don't describe themselves.
+ * A page's subtitle: which group the page is showing — also where that is
+ * chosen, for every page at once — then whatever fact the page has to
+ * state about itself (a count, a location). `scope` is absent on pages a
+ * group doesn't change and in tenants with no groups to choose from; with
+ * neither part there is no subtitle at all. Pages don't describe themselves.
  */
-function PageSubtitle({ scopeLabel, children }) {
+function PageSubtitle({ scope, children }) {
   const hasFact = children !== undefined && children !== null && children !== false && children !== "";
-  if (!scopeLabel && !hasFact) return null;
+  if (!scope && !hasFact) return null;
   return (
-    <p className="mt-1 text-sm text-stone-500">
-      {scopeLabel}
-      {scopeLabel && hasFact ? " · " : ""}
-      {hasFact ? children : null}
-    </p>
+    <div className="mt-1 flex flex-wrap items-center gap-x-1.5 text-sm text-stone-500">
+      {scope && <Dropdown inline value={scope.value} options={scope.options} onChange={scope.onChange} ariaLabel="Show everything for" />}
+      {scope && hasFact && <span>·</span>}
+      {hasFact && <span className="min-w-0">{children}</span>}
+    </div>
   );
 }
 

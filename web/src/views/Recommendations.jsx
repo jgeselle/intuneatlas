@@ -18,7 +18,7 @@ function differencesFor(entry, rec) {
   return check?.differences ?? [{ path: [], expected: rec.recommended, actual: rec.current }];
 }
 
-function Recommendations({ settingIndex, onOpen, scopeLabel }) {
+function Recommendations({ settingIndex, onOpen, scope }) {
   const [severityFilter, setSeverityFilter] = useState("All");
   const [sourceFilter, setSourceFilter] = useState("All");
 
@@ -35,7 +35,7 @@ function Recommendations({ settingIndex, onOpen, scopeLabel }) {
     <div className="space-y-5">
       <header>
         <h1 className="text-xl font-semibold">Recommendations</h1>
-        <PageSubtitle scopeLabel={scopeLabel} />
+        <PageSubtitle scope={scope} />
       </header>
 
       {sources.length > 2 && (

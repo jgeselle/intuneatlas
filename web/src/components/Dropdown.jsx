@@ -5,9 +5,12 @@ import { CaretDown, Check } from "@phosphor-icons/react";
  * A dropdown drawn by the app instead of the browser's own <select>. The
  * native one sizes its list to its longest option and draws it outside the
  * page, so the long option labels Intune uses ran off the edge of the
- * window. This list is exactly as wide as its button, wraps long labels
+ * window. This list is as wide as its button, wraps long labels
  * onto several lines, scrolls when there are many, and opens upward when
  * there isn't room below.
+ *
+ * `inline` draws the button as plain text with a caret, for use inside a
+ * line of text; its list then gets a width of its own.
  *
  * `value` picks the selected option; with no matching option the
  * `placeholder` shows instead, which is also how an "add something" menu
@@ -17,9 +20,7 @@ import { CaretDown, Check } from "@phosphor-icons/react";
  * letter jumps to the next option starting with it; Enter or Space picks;
  * Escape or Tab closes.
  */
-function Dropdown({ value, options, onChange, placeholder = "Select…", ariaLabel, muted = false, tone = "light", onOpenChange }) {
-  // "dark": the button sits on the sidebar's dark green; the list it opens is the same white one either way.
-  const dark = tone === "dark";
+function Dropdown({ value, options, onChange, placeholder = "Select…", ariaLabel, muted = false, inline = false }) {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
   const [above, setAbove] = useState(false);
@@ -44,17 +45,6 @@ function Dropdown({ value, options, onChange, placeholder = "Select…", ariaLab
     buttonRef.current?.focus();
     if (option.value !== value) onChange(option.value);
   }
-
-  // Lets whatever holds the dropdown know it's open — the sidebar uses it to stay expanded
-  // while its list is showing. Skips the first render: nothing has changed yet.
-  const announced = useRef(false);
-  useEffect(() => {
-    if (!announced.current) {
-      announced.current = true;
-      return;
-    }
-    onOpenChange?.(open);
-  }, [open]);
 
   useEffect(() => {
     if (!open) return;
@@ -110,7 +100,7 @@ function Dropdown({ value, options, onChange, placeholder = "Select…", ariaLab
   }
 
   return (
-    <div ref={rootRef} className="relative">
+    <div ref={rootRef} className={inline ? "relative inline-block max-w-full align-bottom" : "relative"}>
       <button
         ref={buttonRef}
         type="button"
@@ -123,16 +113,16 @@ function Dropdown({ value, options, onChange, placeholder = "Select…", ariaLab
         onClick={() => (open ? setOpen(false) : openList())}
         onKeyDown={onKeyDown}
         className={
-          "flex w-full items-center gap-2 rounded-md py-1.5 pl-2.5 pr-2 text-left focus:outline-none " +
-          (dark
-            ? "text-xs text-teal-100 ring-1 ring-inset hover:bg-teal-800 focus-visible:ring-teal-300 " + (open ? "bg-teal-800 ring-teal-300" : "ring-teal-700")
-            : "border bg-white text-sm focus:ring-1 focus:ring-teal-600 " + (open ? "border-teal-600 ring-1 ring-teal-600" : "border-stone-300 focus:border-teal-600"))
+          inline
+            ? "flex max-w-full items-center gap-1 rounded text-left hover:text-stone-900 focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-600 " + (open ? "text-stone-900" : "")
+            : "flex w-full items-center gap-2 rounded-md border bg-white py-1.5 pl-2.5 pr-2 text-left text-sm focus:outline-none focus:ring-1 focus:ring-teal-600 " +
+              (open ? "border-teal-600 ring-1 ring-teal-600" : "border-stone-300 focus:border-teal-600")
         }
       >
-        <span className={"min-w-0 flex-1 truncate " + (dark || (selected && !muted) ? "" : "text-stone-500")} title={selected?.label}>
+        <span className={"min-w-0 truncate " + (inline ? "" : "flex-1 ") + (inline || (selected && !muted) ? "" : "text-stone-500")} title={selected?.label}>
           {selected ? selected.label : placeholder}
         </span>
-        <CaretDown className={"h-3.5 w-3.5 shrink-0 transition-transform duration-150 " + (dark ? "text-teal-300 " : "text-stone-500 ") + (open ? "rotate-180" : "")} />
+        <CaretDown className={(inline ? "h-3 w-3 " : "h-3.5 w-3.5 text-stone-500 ") + "shrink-0 transition-transform duration-150 " + (open ? "rotate-180" : "")} />
       </button>
 
       {open && (
@@ -142,7 +132,7 @@ function Dropdown({ value, options, onChange, placeholder = "Select…", ariaLab
           role="listbox"
           aria-label={ariaLabel}
           className={
-            "absolute left-0 right-0 z-30 max-h-64 animate-fade-in overflow-y-auto overscroll-contain rounded-md border border-stone-200 bg-white py-1 shadow-lg " +
+            "absolute left-0 z-30 max-h-64 " + (inline ? "w-72 max-w-[calc(100vw-2rem)] " : "right-0 ") + "animate-fade-in overflow-y-auto overscroll-contain rounded-md border border-stone-200 bg-white py-1 shadow-lg " +
             (above ? "bottom-full mb-1" : "top-full mt-1")
           }
         >
