@@ -83,7 +83,9 @@ function withBaselineVerdicts(report, patch) {
 export default function App({ initialReport, session }) {
   const [report, setReport] = useState(initialReport);
   const [view, setView] = useState("overview");
-  const [query, setQuery] = useState("");
+  // Each page with a search field keeps its own text: what was typed on Settings means nothing on Enrollment.
+  const [queries, setQueries] = useState({});
+  const searchOf = (page) => ({ query: queries[page] ?? "", setQuery: (text) => setQueries((all) => ({ ...all, [page]: text })) });
   const [platform, setPlatform] = useState("All");
   const [compliancePlatform, setCompliancePlatform] = useState("All");
   // Everything can be narrowed to what one group gets, chosen once (in any
@@ -655,8 +657,7 @@ export default function App({ initialReport, session }) {
               changes={changes}
               scope={scope}
               notes={notes}
-              query={query}
-              setQuery={setQuery}
+              {...searchOf("configuration")}
               platform={platform}
               setPlatform={setPlatform}
               onOpen={(key) => setOpen({ type: "setting", key })}
@@ -672,8 +673,7 @@ export default function App({ initialReport, session }) {
               changes={changes}
               scope={scope}
               notes={notes}
-              query={query}
-              setQuery={setQuery}
+              {...searchOf("compliance")}
               platform={compliancePlatform}
               setPlatform={setCompliancePlatform}
               onOpen={(key) => setOpen({ type: "setting", key })}
@@ -685,8 +685,7 @@ export default function App({ initialReport, session }) {
               kindLabel="Enrollment"
               items={enrollmentConfigurations}
               scope={scope}
-              query={query}
-              setQuery={setQuery}
+              {...searchOf("enrollment")}
               onOpen={(id) => setOpen({ type: "enrollment", id })}
             />
           )}
