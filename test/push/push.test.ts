@@ -50,9 +50,9 @@ const DEFINITIONS = {
 };
 const camera = { "@odata.type": `${T}ChoiceSettingInstance`, settingDefinitionId: "push_camera", settingInstanceTemplateReference: null, choiceSettingValue: { "@odata.type": `${T}ChoiceSettingValue`, value: "push_camera_0", children: [] } };
 const defer = { "@odata.type": `${T}SimpleSettingInstance`, settingDefinitionId: "push_defer", simpleSettingValue: { "@odata.type": `${T}IntegerSettingValue`, value: 14 } };
-const catalogPolicy = (templateId = "") => ({
+const catalogPolicy = () => ({
   "/deviceManagement/configurationPolicies/p1/settings": { value: [{ id: "0", settingInstance: camera }, { id: "1", settingInstance: defer }] },
-  "/deviceManagement/configurationPolicies/p1": { id: "p1", name: "Update ring", description: "Pilot", platforms: "windows10", technologies: "mdm", roleScopeTagIds: ["0", "7"], templateReference: { templateId } },
+  "/deviceManagement/configurationPolicies/p1": { id: "p1", name: "Update ring", description: "Pilot", platforms: "windows10", technologies: "mdm", roleScopeTagIds: ["0", "7"], templateReference: { templateId: "" } },
 });
 const deferTo = (value: number) => ({ kind: "simple" as const, definitionId: "push_defer", name: "Defer", value });
 
@@ -89,10 +89,43 @@ test("push: refused — and nothing written — when the tenant no longer holds 
   assert.deepEqual(calls, []);
 });
 
-test("push: refused for a policy created from a template", async (t) => {
-  const calls = fakeGraph(t, { ...catalogPolicy("d948ff9b-99cb-4ee0-8012-1fbc09685377_1"), ...DEFINITIONS });
-  await assert.rejects(pushToExistingPolicy("token", { policyId: "p1", definitionId: "push_defer", from: "14", node: deferTo(7) }), (err: Error) => err instanceof PushRefused && /template/.test(err.message));
-  assert.deepEqual(calls, []);
+test("push: in a policy created from a template the changed setting gets its template references back", async (t) => {
+  const TEMPLATE = "804339ad-1553-4478-a742-138fb5807418_1";
+  // As a live tenant returns them: the stored instance names its slots, and so does the template.
+  const stored = {
+    ...defer,
+    settingInstanceTemplateReference: { settingInstanceTemplateId: "slot-defer" },
+    simpleSettingValue: { ...defer.simpleSettingValue, settingValueTemplateReference: { settingValueTemplateId: "value-defer", useTemplateDefault: false } },
+  };
+  const reads = {
+    "/deviceManagement/configurationPolicies/p1/settings": { value: [{ id: "0", settingInstance: camera }, { id: "1", settingInstance: stored }] },
+    "/deviceManagement/configurationPolicies/p1": { id: "p1", name: "Antivirus", description: "", platforms: "windows10", technologies: "mdm,microsoftSense", templateReference: { templateId: TEMPLATE, templateFamily: "endpointSecurityAntivirus" } },
+    [`/deviceManagement/configurationPolicyTemplates/${TEMPLATE}/settingTemplates`]: {
+      value: [{ settingInstanceTemplate: { settingInstanceTemplateId: "slot-defer", settingDefinitionId: "push_defer", simpleSettingValueTemplate: { settingValueTemplateId: "value-defer" } } }],
+    },
+    ...DEFINITIONS,
+  };
+  const calls = fakeGraph(t, reads);
+
+  await pushToExistingPolicy("token", { policyId: "p1", definitionId: "push_defer", from: "14", node: deferTo(7) });
+
+  const body = calls[0].body as { templateReference: unknown; technologies: string; settings: Array<{ settingInstance: Record<string, unknown> }> };
+  assert.deepEqual(body.templateReference, { templateId: TEMPLATE });
+  assert.equal(body.technologies, "mdm,microsoftSense");
+  assert.deepEqual(body.settings[1].settingInstance, {
+    "@odata.type": `${T}SimpleSettingInstance`,
+    settingDefinitionId: "push_defer",
+    settingInstanceTemplateReference: { settingInstanceTemplateId: "slot-defer" },
+    simpleSettingValue: { "@odata.type": `${T}IntegerSettingValue`, value: 7, settingValueTemplateReference: { settingValueTemplateId: "value-defer" } },
+  });
+
+  // A template that can no longer be read (retired): what the stored instance names is enough.
+  calls.length = 0;
+  delete (reads as Record<string, unknown>)[`/deviceManagement/configurationPolicyTemplates/${TEMPLATE}/settingTemplates`];
+  await pushToExistingPolicy("token", { policyId: "p1", definitionId: "push_defer", from: "14", node: deferTo(3) });
+  const again = (calls[0].body as typeof body).settings[1].settingInstance;
+  assert.deepEqual(again.settingInstanceTemplateReference, { settingInstanceTemplateId: "slot-defer" });
+  assert.deepEqual((again.simpleSettingValue as Record<string, unknown>).settingValueTemplateReference, { settingValueTemplateId: "value-defer" });
 });
 
 test("push: a typed compliance policy gets only the one property", async (t) => {

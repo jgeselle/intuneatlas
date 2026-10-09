@@ -7,6 +7,7 @@ import { definitionPath } from "../scan/settingDefinitions.js";
 import type { GraphSettingInstance } from "../scan/settingValue.js";
 import type { SettingSchema, SettingValueNode } from "../scan/types.js";
 import { graphWrite } from "./graphWrite.js";
+import { fetchTemplateSlots, slotsOfInstance, withTemplateReferences, type TemplateSlot } from "./templates.js";
 import { complianceValueFromNode, instanceFromNode, PushRefused } from "./values.js";
 
 export { PushRefused } from "./values.js";
@@ -36,11 +37,13 @@ export { PushRefused } from "./values.js";
  * someone changed it in the meantime and the push is refused: the person
  * who reviewed the change reviewed a different one.
  *
- * Refused outright, for now: policies created from a template (endpoint
- * security and friends — their settings carry template references this
- * doesn't reproduce), a compliance policy's actions for noncompliance
- * (the notification templates they point to aren't part of the value
- * here, and would be lost) and its custom script.
+ * A policy created from a template (endpoint security, a security
+ * baseline) is written the same way, with the changed setting's template
+ * references put back — see templates.ts.
+ *
+ * Refused outright, for now: a compliance policy's actions for
+ * noncompliance (the notification templates they point to aren't part of
+ * the value here, and would be lost) and its custom script.
  */
 export interface PushItem {
   definitionId: string;
@@ -111,14 +114,20 @@ async function pushCatalogSetting(token: string, collection: Collection, change:
   const policy = await graphGet<GraphCatalogPolicy>(token, path, GRAPH_BETA_BASE).catch(
     notFound("This policy isn't a Settings Catalog policy, or no longer exists. Only Settings Catalog and compliance policies can be pushed to."),
   );
-  if (policy.templateReference?.templateId) {
-    throw new PushRefused(`"${policy.name}" was created from a template. Pushing to template-based policies isn't supported yet.`);
-  }
-
   const settings = await graphGetAll<{ settingInstance: GraphSettingInstance }>(token, `${path}/settings`, GRAPH_BETA_BASE);
   const resolved = await resolveSettingInstances(token, collection, settings);
   const index = resolved.findIndex((setting) => setting.settingDefinitionId === change.definitionId);
   refuseIfDrifted(change.node.name, resolved[index]?.value, change.from);
+
+  // A policy created from a template (endpoint security, a security baseline): the rebuilt setting has
+  // to name its slots in that template again, or Intune would no longer know where it belongs.
+  const templateId = policy.templateReference?.templateId ?? "";
+  let replacement = instanceFromNode(change.node, change.schemas);
+  if (templateId) {
+    const fromTemplate = await fetchTemplateSlots(token, templateId).catch(() => new Map<string, TemplateSlot>());
+    // The template first — it knows slots this policy hasn't used yet; what the old instance names covers a template that can no longer be read.
+    replacement = withTemplateReferences(replacement, new Map([...slotsOfInstance(settings[index].settingInstance), ...fromTemplate]));
+  }
 
   await graphWrite(token, "PUT", path, {
     name: policy.name,
@@ -126,11 +135,11 @@ async function pushCatalogSetting(token: string, collection: Collection, change:
     platforms: policy.platforms,
     technologies: policy.technologies,
     roleScopeTagIds: policy.roleScopeTagIds ?? ["0"],
-    templateReference: { templateId: "" },
+    templateReference: { templateId },
     // Every setting goes back exactly as it came, but the one being changed.
     settings: settings.map((setting, i) => ({
       "@odata.type": "#microsoft.graph.deviceManagementConfigurationSetting",
-      settingInstance: i === index ? instanceFromNode(change.node, change.schemas) : setting.settingInstance,
+      settingInstance: i === index ? replacement : setting.settingInstance,
     })),
   });
 }
