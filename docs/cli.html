@@ -23,6 +23,9 @@
   }
   *,*::before,*::after{box-sizing:border-box}
   html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+  /* The header stays pinned: a link to a section has to stop short of it, or the section's title lands underneath. */
+  [id]{scroll-margin-top:88px}
+  @media(max-width:700px){[id]{scroll-margin-top:118px}}
   body{margin:0;background:var(--paper);color:var(--text);font-family:var(--sans);font-size:16px;line-height:1.65;-webkit-font-smoothing:antialiased}
   h1,h2,h3{margin:0;line-height:1.25;font-weight:600;letter-spacing:-.02em;font-family:var(--head)}
   p{margin:0}
