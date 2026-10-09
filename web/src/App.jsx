@@ -550,26 +550,21 @@ function Dashboard({ initialReport, session }) {
             : "lg:w-60 lg:sticky lg:top-0 lg:h-screen lg:self-start lg:overflow-y-auto")
         }
       >
-        {/* The icon-strip shows a compass mark where the wordmark sits; the
-            two cross-fade in place as the rail opens. The compass is drawn
-            here rather than taken from Phosphor because its heaviest
-            stroke weight ("bold") wasn't heavy enough. */}
+        {/* The icon-strip shows the logo where the wordmark sits; the
+            two cross-fade in place as the rail opens. */}
         <div className="relative flex items-center gap-2.5 py-4 pl-[20px] pr-4">
           {railCollapsed && (
             <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="3"
-              strokeLinejoin="round"
+              viewBox="0 0 100 100"
+              fill="currentColor"
               aria-hidden="true"
               className={
                 "absolute left-[22px] top-1/2 hidden h-5 w-5 -translate-y-1/2 text-white transition-opacity duration-150 lg:block " +
                 (railWide ? "opacity-0" : "opacity-100")
               }
             >
-              <circle cx="12" cy="12" r="9.5" />
-              <polygon points="15.6 8.4 13.7 13.7 8.4 15.6 10.3 10.3" fill="currentColor" strokeWidth="1.5" />
+              {/* The logo — assets/logo.svg at the repo root is the source. */}
+              <path fillRule="evenodd" d="M10 18A11 11 0 0 1 32 18V86.2A1.5 1.5 0 0 1 29.7 87.5A40 40 0 0 1 10 53ZM39 30A11 11 0 0 1 54.2 19.8L83.2 31.8A11 11 0 0 1 90 42V53A40 40 0 0 1 70.3 87.5A1.5 1.5 0 0 1 68 86.2V68.5A1.5 1.5 0 0 0 66.5 67H62.5A1.5 1.5 0 0 0 61 68.5V90.3A1.5 1.5 0 0 1 59.9 91.8A40 40 0 0 1 40.1 91.8A1.5 1.5 0 0 1 39 90.3ZM63.1 47.3L67.1 49A1.5 1.5 0 0 1 68 50.4V57.5A1.5 1.5 0 0 1 66.5 59H62.5A1.5 1.5 0 0 1 61 57.5V48.7A1.5 1.5 0 0 1 63.1 47.3Z" />
             </svg>
           )}
           <div className={"min-w-0 transition-opacity duration-150 " + railDim()}>
