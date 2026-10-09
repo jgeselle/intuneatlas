@@ -395,40 +395,22 @@ function HistoryList({ events }) {
 }
 
 /**
- * How a tile's corner is tinted. `icon` colours the outline drawn there,
- * `wash` the glow behind it — both faint enough that the tile still reads
- * as white. A plain count has no glow at all.
- */
-const STAT_TONE = {
-  neutral: { icon: "text-stone-400", wash: null },
-  // Nothing wrong here: the count that should be zero is zero.
-  good: { icon: "text-teal-600", wash: "rgba(22, 128, 86, 0.13)" },
-  amber: { icon: "text-amber-500", wash: "rgba(245, 158, 11, 0.18)" },
-  alert: { icon: "text-red-500", wash: "rgba(239, 68, 68, 0.15)" },
-  missing: { icon: "text-purple-500", wash: "rgba(168, 85, 247, 0.14)" },
-};
-
-/**
  * One number at the top of a page. The label is quiet — small, sentence
- * case — so the number is what is read. What kind of number it is, and
- * whether it wants attention, sits in the tile's lower right corner: a
- * large icon drawn as a thin outline, running off the edge and fading out
- * toward the text, over a faint glow of colour. Grey with no glow when it
- * is just a count; tinted when there is something to look at; a green
- * tick when a count that should be zero is.
+ * case — so the number is what is read. What kind of number it is sits
+ * in the tile's lower right corner: a large grey icon, running off the
+ * edge and fading out toward the text. No colour — the shape says it. A
+ * count that should be zero and is (`tone="good"`) shows a tick instead
+ * of its warning sign.
  */
 function Stat({ label, value, sub, icon, tone = "neutral" }) {
-  // A warning sign in green would say two things at once: where there is nothing to warn of, it is a tick.
   const Icon = icon && tone === "good" ? CheckCircle : icon;
-  const { icon: iconTone, wash } = STAT_TONE[tone] ?? STAT_TONE.neutral;
   return (
     <div className="relative overflow-hidden rounded-lg border border-stone-200 bg-white p-4">
-      {wash && <div aria-hidden="true" className="pointer-events-none absolute inset-0" style={{ background: `radial-gradient(85% 130% at 100% 100%, ${wash}, transparent 70%)` }} />}
       {Icon ? (
         <Icon
           weight="regular"
           aria-hidden="true"
-          className={"pointer-events-none absolute -bottom-7 -right-6 h-28 w-28 opacity-[0.42] " + iconTone}
+          className="pointer-events-none absolute -bottom-7 -right-6 h-28 w-28 text-stone-400 opacity-[0.42]"
           // Dissolves toward the upper left, where the label and the number are.
           style={{ maskImage: "linear-gradient(135deg, transparent 8%, black 62%)", WebkitMaskImage: "linear-gradient(135deg, transparent 8%, black 62%)" }}
         />
