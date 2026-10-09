@@ -6,6 +6,8 @@ import { resolveSettingInstances } from "../scan/configurationPolicies.js";
 import { definitionPath } from "../scan/settingDefinitions.js";
 import type { GraphSettingInstance } from "../scan/settingValue.js";
 import type { SettingSchema, SettingValueNode } from "../scan/types.js";
+import { fetchNotificationTemplates } from "../scan/compliancePolicies.js";
+import { actionsToWrite, readActions, writeActions } from "./actions.js";
 import { graphWrite } from "./graphWrite.js";
 import { fetchTemplateSlots, slotsOfInstance, withTemplateReferences, type TemplateSlot } from "./templates.js";
 import { complianceValueFromNode, instanceFromNode, PushRefused } from "./values.js";
@@ -41,9 +43,10 @@ export { PushRefused } from "./values.js";
  * baseline) is written the same way, with the changed setting's template
  * references put back — see templates.ts.
  *
- * Refused outright, for now: a compliance policy's actions for
- * noncompliance (the notification templates they point to aren't part of
- * the value here, and would be lost) and its custom script.
+ * A compliance policy's actions for noncompliance are written as the
+ * whole list, through their own route — see actions.ts.
+ *
+ * Refused outright: a compliance policy's custom script.
  */
 export interface PushItem {
   definitionId: string;
@@ -76,8 +79,9 @@ function typedProperty(definitionId: string): [type: string, property: string] {
   return [type, rest.join(".")];
 }
 
+const ACTIONS = "scheduledActionsForRule";
+
 const NOT_WRITABLE: Record<string, string> = {
-  scheduledActionsForRule: "Actions for noncompliance can't be pushed yet: the notification templates they use aren't part of the value here and would be lost.",
   deviceCompliancePolicyScript: "A custom compliance script can't be pushed: its rules are a file uploaded in Intune.",
 };
 
@@ -96,6 +100,8 @@ const notFound = (what: string) => (error: unknown) => {
 export async function pushToExistingPolicy(token: string, change: ExistingPolicyPush): Promise<void> {
   const target = targetOf(change.definitionId);
   if (target === "tenant") return pushTenantSetting(token, change);
+  // Actions for noncompliance sit beside a compliance policy of either kind, and are written by a route of their own.
+  if (target === "compliance" && typedProperty(change.definitionId)[1] === ACTIONS) return pushActions(token, change);
   if (target === "compliance") return pushComplianceProperty(token, change);
   return pushCatalogSetting(token, target === "complianceCatalog" ? "compliancePolicies" : "configurationPolicies", change);
 }
@@ -157,6 +163,13 @@ async function pushComplianceProperty(token: string, change: ExistingPolicyPush)
   await graphWrite(token, "PATCH", path, { "@odata.type": policy["@odata.type"], [property]: complianceValueFromNode(change.node) });
 }
 
+async function pushActions(token: string, change: ExistingPolicyPush): Promise<void> {
+  const [type] = typedProperty(change.definitionId);
+  const { current, value, templates } = await readActions(token, type, change.policyId).catch(notFound("This compliance policy no longer exists."));
+  refuseIfDrifted(change.node.name, value, change.from);
+  await writeActions(token, type, change.policyId, actionsToWrite(change.node, current, templates));
+}
+
 async function pushTenantSetting(token: string, change: ExistingPolicyPush): Promise<void> {
   const property = change.definitionId.slice(TENANT_PREFIX.length);
   const settings = await graphGet<Record<string, unknown>>(token, "/deviceManagement/settings", GRAPH_BETA_BASE);
@@ -187,16 +200,19 @@ export async function pushNewPolicy(token: string, policy: { name: string; platf
     const types = new Set(policy.settings.map((setting) => typedProperty(setting.definitionId)[0]));
     if (types.size > 1) throw new PushRefused(`"${policy.name}" has compliance settings for more than one platform (${[...types].join(", ")}). A compliance policy is for one.`);
     const properties: Record<string, unknown> = {};
+    let actions: unknown = blockAtOnce;
     for (const setting of policy.settings) {
       const [, property] = typedProperty(setting.definitionId);
       if (NOT_WRITABLE[property]) throw new PushRefused(NOT_WRITABLE[property]);
-      properties[property] = complianceValueFromNode(setting.node);
+      // Staged actions for noncompliance take the place of the default one.
+      if (property === ACTIONS) actions = [{ ruleName: "PasswordRequired", scheduledActionConfigurations: actionsToWrite(setting.node, [], await fetchNotificationTemplates(token)) }];
+      else properties[property] = complianceValueFromNode(setting.node);
     }
     const created = await graphWrite<{ id: string }>(token, "POST", "/deviceManagement/deviceCompliancePolicies", {
       "@odata.type": `#microsoft.graph.${[...types][0]}CompliancePolicy`,
       displayName: policy.name,
       ...properties,
-      scheduledActionsForRule: blockAtOnce,
+      scheduledActionsForRule: actions,
     });
     return { policyId: created!.id };
   }

@@ -14,7 +14,7 @@ interface GraphCompliancePolicy {
   [property: string]: unknown;
 }
 
-const NO_TEMPLATE = "00000000-0000-0000-0000-000000000000";
+export const NO_TEMPLATE = "00000000-0000-0000-0000-000000000000";
 
 /** Optional reads: what a refusal or a missing route looks like. The scan goes on without the detail. */
 const unavailable = (...statuses: number[]) => (error: unknown) => {
@@ -23,7 +23,27 @@ const unavailable = (...statuses: number[]) => (error: unknown) => {
 };
 
 type Rules = Array<{ scheduledActionConfigurations?: Array<Record<string, unknown>> }>;
-const actionConfigurations = (rules: unknown) => (Array.isArray(rules) ? (rules as Rules).flatMap((rule) => rule?.scheduledActionConfigurations ?? []) : []);
+/** The actions for noncompliance of a policy, out of the rules Graph nests them in. */
+export const actionConfigurations = (rules: unknown) => (Array.isArray(rules) ? (rules as Rules).flatMap((rule) => rule?.scheduledActionConfigurations ?? []) : []);
+
+export const usesNotificationTemplate = (action: Record<string, unknown>) => Boolean(action.notificationTemplateId) && action.notificationTemplateId !== NO_TEMPLATE;
+
+/** The tenant's notification message templates, id to name — undefined where they can't be read. */
+export async function fetchNotificationTemplates(token: string): Promise<Map<string, string> | undefined> {
+  const templates = await graphGetAll<{ id: string; displayName?: string }>(token, "/deviceManagement/notificationMessageTemplates?$select=id,displayName", GRAPH_BETA_BASE).catch(
+    unavailable(400, 403, 404),
+  );
+  return templates && new Map(templates.map((template) => [template.id, template.displayName ?? template.id]));
+}
+
+/**
+ * Gives each action that uses a notification template that template's
+ * name, which is what the value shows in place of the id. A push reads a
+ * policy through this too, so it sees an action exactly as a scan does.
+ */
+export function nameNotificationTemplates(actions: Array<Record<string, unknown>>, names: Map<string, string> | undefined): void {
+  for (const action of actions) action.notificationTemplateName = names?.get(String(action.notificationTemplateId));
+}
 
 /**
  * Compliance policies, twice over: `policies` is each one's identity and
@@ -77,13 +97,7 @@ export async function fetchCompliancePolicies(token: string): Promise<{ policies
 
   // Names for the tenant's own objects that policies point at by id — looked up only when something points at one.
   const actions = [...found, ...catalogActions].flatMap((policy) => actionConfigurations(policy.scheduledActionsForRule));
-  if (actions.some((action) => action.notificationTemplateId && action.notificationTemplateId !== NO_TEMPLATE)) {
-    const templates = await graphGetAll<{ id: string; displayName?: string }>(token, "/deviceManagement/notificationMessageTemplates?$select=id,displayName", GRAPH_BETA_BASE).catch(
-      unavailable(400, 403, 404),
-    );
-    const names = new Map((templates ?? []).map((template) => [template.id, template.displayName]));
-    for (const action of actions) action.notificationTemplateName = names.get(String(action.notificationTemplateId));
-  }
+  if (actions.some(usesNotificationTemplate)) nameNotificationTemplates(actions, await fetchNotificationTemplates(token));
   const scripts = found.map((policy) => policy.deviceCompliancePolicyScript as { deviceComplianceScriptId?: string; scriptName?: string } | null | undefined).filter((script) => script?.deviceComplianceScriptId);
   if (scripts.length > 0) {
     const known = await graphGetAll<{ id: string; displayName?: string }>(token, "/deviceManagement/deviceComplianceScripts?$select=id,displayName", GRAPH_BETA_BASE).catch(

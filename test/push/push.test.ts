@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { pushNewPolicy, pushToExistingPolicy, PushRefused } from "../../src/push/index.js";
-import { complianceSettingsOf, tenantComplianceSettingsOf } from "../../src/scan/complianceSettings.js";
+import { complianceActionsSetting, complianceSettingsOf, tenantComplianceSettingsOf } from "../../src/scan/complianceSettings.js";
 
 const T = "#microsoft.graph.deviceManagementConfiguration";
 const respond = (status: number, body: unknown) => new Response(status === 204 ? null : JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -139,9 +139,9 @@ test("push: a typed compliance policy gets only the one property", async (t) => 
 
   calls.length = 0;
   await assert.rejects(pushToExistingPolicy("token", { policyId: "c1", definitionId: LEN, from: "12", node: node(14) }), PushRefused);
-  // The parts of a compliance policy that can't be written faithfully are refused before anything is read.
+  // A custom compliance script is a file uploaded in Intune: refused before anything is read.
   await assert.rejects(
-    pushToExistingPolicy("token", { policyId: "c1", definitionId: "compliance.windows10.scheduledActionsForRule", from: "x", node: { kind: "groupCollection", definitionId: "compliance.windows10.scheduledActionsForRule", name: "Actions", groups: [] } }),
+    pushToExistingPolicy("token", { policyId: "c1", definitionId: "compliance.windows10.deviceCompliancePolicyScript", from: "x", node: { kind: "group", definitionId: "compliance.windows10.deviceCompliancePolicyScript", name: "Script", children: [] } }),
     PushRefused,
   );
   assert.deepEqual(calls, []);
@@ -205,4 +205,81 @@ test("push: a new compliance policy is one type, with the action Intune requires
   await assert.rejects(pushNewPolicy("token", { name: "Mixed kinds", platform: "windows10", settings: [...windows, { definitionId: "push_defer", node: deferTo(7) }] }), (err: Error) => err instanceof PushRefused && /mixes/.test(err.message));
   await assert.rejects(pushNewPolicy("token", { name: "Empty", platform: "windows10", settings: [] }), PushRefused);
   assert.deepEqual(calls, []);
+});
+
+// ---- actions for noncompliance
+
+const NONE = "00000000-0000-0000-0000-000000000000";
+const TEMPLATES = { "/deviceManagement/notificationMessageTemplates": { value: [{ id: "tpl-1", displayName: "Fix your device" }] } };
+/** The actions as the tool shows them, built the way a scan builds them. */
+const actions = (type: string, items: Array<[action: string, hours: number, template?: string]>) =>
+  complianceActionsSetting(type, [{ scheduledActionConfigurations: items.map(([actionType, gracePeriodHours, name]) => ({ actionType, gracePeriodHours, ...(name ? { notificationTemplateName: name } : {}) })) }])!;
+
+test("push: actions for noncompliance are written as the whole list, each notification keeping its template and who is copied", async (t) => {
+  const stored = [
+    { actionType: "block", gracePeriodHours: 0, notificationTemplateId: NONE, notificationMessageCCList: [] },
+    { actionType: "notification", gracePeriodHours: 24, notificationTemplateId: "tpl-1", notificationMessageCCList: ["group-1"] },
+  ];
+  const calls = fakeGraph(t, { "/deviceManagement/deviceCompliancePolicies/c1": { id: "c1", scheduledActionsForRule: [{ ruleName: "PasswordRequired", scheduledActionConfigurations: stored }] }, ...TEMPLATES });
+  const ACT = "compliance.windows10.scheduledActionsForRule";
+  const before = actions("windows10", [["block", 0], ["notification", 24, "Fix your device"]]);
+  const after = actions("windows10", [["block", 0], ["notification", 72, "Fix your device"], ["retire", 720]]);
+
+  await pushToExistingPolicy("token", { policyId: "c1", definitionId: ACT, from: before.value, node: after.structured! });
+
+  assert.deepEqual(calls, [
+    {
+      method: "POST",
+      path: "/deviceManagement/deviceCompliancePolicies/c1/scheduleActionsForRules",
+      body: {
+        deviceComplianceScheduledActionForRules: [
+          {
+            ruleName: "PasswordRequired",
+            scheduledActionConfigurations: [
+              { actionType: "block", gracePeriodHours: 0, notificationTemplateId: "", notificationMessageCCList: [] },
+              // The template's id and the copied group come from what the tenant holds — the value shows neither.
+              { actionType: "notification", gracePeriodHours: 72, notificationTemplateId: "tpl-1", notificationMessageCCList: ["group-1"] },
+              { actionType: "retire", gracePeriodHours: 720, notificationTemplateId: "", notificationMessageCCList: [] },
+            ],
+          },
+        ],
+      },
+    },
+  ]);
+
+  calls.length = 0;
+  // A template named in the value that the tenant doesn't have; and actions staged from a list the tenant no longer has.
+  await assert.rejects(pushToExistingPolicy("token", { policyId: "c1", definitionId: ACT, from: before.value, node: actions("windows10", [["block", 0], ["notification", 24, "Gone"]]).structured! }), (err: Error) => err instanceof PushRefused && /no notification template named "Gone"/.test(err.message));
+  await assert.rejects(pushToExistingPolicy("token", { policyId: "c1", definitionId: ACT, from: after.value, node: before.structured! }), PushRefused);
+  assert.deepEqual(calls, []);
+});
+
+test("push: without sight of the tenant's notification templates, actions that use one aren't touched", async (t) => {
+  const stored = [{ actionType: "notification", gracePeriodHours: 24, notificationTemplateId: "tpl-1", notificationMessageCCList: [] }];
+  // No template list to read (403 becomes "unavailable"): the value shows the action without a name.
+  const calls = fakeGraph(t, { "/deviceManagement/deviceCompliancePolicies/c1": { id: "c1", scheduledActionsForRule: [{ scheduledActionConfigurations: stored }] } });
+  const shown = actions("windows10", [["notification", 24]]);
+  await assert.rejects(pushToExistingPolicy("token", { policyId: "c1", definitionId: "compliance.windows10.scheduledActionsForRule", from: shown.value, node: actions("windows10", [["notification", 48]]).structured! }), (err: Error) => err instanceof PushRefused && /would lose which one/.test(err.message));
+  assert.deepEqual(calls, []);
+});
+
+test("push: a Linux compliance policy's actions go through that kind's own routes", async (t) => {
+  const calls = fakeGraph(t, { "/deviceManagement/compliancePolicies/lx1/scheduledActionsForRule": { value: [{ id: "lx1", scheduledActionConfigurations: [{ actionType: "block", gracePeriodHours: 0, notificationTemplateId: NONE }] }] }, ...TEMPLATES });
+  await pushToExistingPolicy("token", { policyId: "lx1", definitionId: "compliance.linux.scheduledActionsForRule", from: actions("linux", [["block", 0]]).value, node: actions("linux", [["block", 12]]).structured! });
+  assert.deepEqual(calls, [
+    { method: "POST", path: "/deviceManagement/compliancePolicies/lx1/setScheduledActions", body: { scheduledActions: [{ ruleName: "PasswordRequired", scheduledActionConfigurations: [{ actionType: "block", gracePeriodHours: 12, notificationTemplateId: "", notificationMessageCCList: [] }] }] } },
+  ]);
+});
+
+test("push: a new compliance policy takes staged actions in place of the default one", async (t) => {
+  const calls = fakeGraph(t, TEMPLATES);
+  const [bitLocker] = complianceSettingsOf({ "@odata.type": "#microsoft.graph.windows10CompliancePolicy", bitLockerEnabled: true });
+  const staged = actions("windows10", [["block", 24], ["notification", 0, "Fix your device"]]);
+  await pushNewPolicy("token", { name: "New", platform: "windows10", settings: [{ definitionId: bitLocker.settingDefinitionId, node: bitLocker.structured! }, { definitionId: staged.settingDefinitionId, node: staged.structured! }] });
+  const body = calls[0].body!;
+  assert.equal(body.bitLockerEnabled, true);
+  assert.deepEqual((body.scheduledActionsForRule as Array<{ scheduledActionConfigurations: Array<Record<string, unknown>> }>)[0].scheduledActionConfigurations.map((a) => [a.actionType, a.gracePeriodHours, a.notificationTemplateId]), [
+    ["notification", 0, "tpl-1"],
+    ["block", 24, ""],
+  ]);
 });
