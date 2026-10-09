@@ -394,29 +394,45 @@ function HistoryList({ events }) {
   );
 }
 
+/**
+ * How a tile's corner is tinted. `icon` colours the outline drawn there,
+ * `wash` the glow behind it — both faint enough that the tile still reads
+ * as white. A plain count has no glow at all.
+ */
 const STAT_TONE = {
-  neutral: "text-stone-100",
+  neutral: { icon: "text-stone-400", wash: null },
   // Nothing wrong here: the count that should be zero is zero.
-  good: "text-teal-100",
-  amber: "text-amber-100",
-  alert: "text-red-100",
-  missing: "text-purple-100",
+  good: { icon: "text-teal-600", wash: "rgba(22, 128, 86, 0.07)" },
+  amber: { icon: "text-amber-500", wash: "rgba(245, 158, 11, 0.10)" },
+  alert: { icon: "text-red-500", wash: "rgba(239, 68, 68, 0.09)" },
+  missing: { icon: "text-purple-500", wash: "rgba(168, 85, 247, 0.08)" },
 };
 
 /**
  * One number at the top of a page. The label is quiet — small, sentence
  * case — so the number is what is read. What kind of number it is, and
- * whether it wants attention, is said by a large, pale icon set into the
- * tile's lower right corner: grey when it is just a count, tinted when
- * there is something to look at, a green tick when a count that should
- * be zero is.
+ * whether it wants attention, sits in the tile's lower right corner: a
+ * large icon drawn as a thin outline, running off the edge and fading out
+ * toward the text, over a faint glow of colour. Grey with no glow when it
+ * is just a count; tinted when there is something to look at; a green
+ * tick when a count that should be zero is.
  */
 function Stat({ label, value, sub, icon, tone = "neutral" }) {
   // A warning sign in green would say two things at once: where there is nothing to warn of, it is a tick.
   const Icon = icon && tone === "good" ? CheckCircle : icon;
+  const { icon: iconTone, wash } = STAT_TONE[tone] ?? STAT_TONE.neutral;
   return (
     <div className="relative overflow-hidden rounded-lg border border-stone-200 bg-white p-4">
-      {Icon ? <Icon weight="fill" aria-hidden="true" className={"pointer-events-none absolute -bottom-5 -right-4 h-24 w-24 " + (STAT_TONE[tone] ?? STAT_TONE.neutral)} /> : null}
+      {wash && <div aria-hidden="true" className="pointer-events-none absolute inset-0" style={{ background: `radial-gradient(85% 130% at 100% 100%, ${wash}, transparent 70%)` }} />}
+      {Icon ? (
+        <Icon
+          weight="light"
+          aria-hidden="true"
+          className={"pointer-events-none absolute -bottom-7 -right-6 h-28 w-28 opacity-[0.22] " + iconTone}
+          // Dissolves toward the upper left, where the label and the number are.
+          style={{ maskImage: "linear-gradient(135deg, transparent 18%, black 78%)", WebkitMaskImage: "linear-gradient(135deg, transparent 18%, black 78%)" }}
+        />
+      ) : null}
       <div className="relative">
         <div className="text-xs font-semibold text-stone-500">{label}</div>
         <div className="mt-1.5 text-3xl font-semibold tabular-nums text-stone-900">{value}</div>
