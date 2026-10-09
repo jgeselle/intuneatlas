@@ -9,6 +9,7 @@ import type { SettingSchema, SettingValueNode } from "../scan/types.js";
 import { fetchNotificationTemplates } from "../scan/compliancePolicies.js";
 import { actionsToWrite, readActions, writeActions } from "./actions.js";
 import { graphWrite } from "./graphWrite.js";
+import { pushLegacySetting } from "./legacy.js";
 import { fetchTemplateSlots, slotsOfInstance, withTemplateReferences, type TemplateSlot } from "./templates.js";
 import { complianceValueFromNode, instanceFromNode, PushRefused } from "./values.js";
 
@@ -45,6 +46,9 @@ export { PushRefused } from "./values.js";
  *
  * A compliance policy's actions for noncompliance are written as the
  * whole list, through their own route — see actions.ts.
+ *
+ * A legacy device configuration profile is written where the tool reads
+ * it at all — a few Device Restrictions switches; see legacy.ts.
  *
  * Refused outright: a compliance policy's custom script.
  */
@@ -117,9 +121,13 @@ interface GraphCatalogPolicy {
 
 async function pushCatalogSetting(token: string, collection: Collection, change: ExistingPolicyPush): Promise<void> {
   const path = `/deviceManagement/${collection}/${change.policyId}`;
-  const policy = await graphGet<GraphCatalogPolicy>(token, path, GRAPH_BETA_BASE).catch(
-    notFound("This policy isn't a Settings Catalog policy, or no longer exists. Only Settings Catalog and compliance policies can be pushed to."),
-  );
+  const policy = await graphGet<GraphCatalogPolicy>(token, path, GRAPH_BETA_BASE).catch(async (error: unknown) => {
+    if (!(error instanceof Error && /failed: (400|404)\b/.test(error.message))) throw error;
+    // Not a Settings Catalog policy by that id: a legacy profile sets the same settings under its own.
+    if (collection === "configurationPolicies" && (await pushLegacySetting(token, change))) return undefined;
+    throw new PushRefused("This policy no longer exists.");
+  });
+  if (!policy) return;
   const settings = await graphGetAll<{ settingInstance: GraphSettingInstance }>(token, `${path}/settings`, GRAPH_BETA_BASE);
   const resolved = await resolveSettingInstances(token, collection, settings);
   const index = resolved.findIndex((setting) => setting.settingDefinitionId === change.definitionId);

@@ -283,3 +283,23 @@ test("push: a new compliance policy takes staged actions in place of the default
     ["block", 24, ""],
   ]);
 });
+
+// ---- legacy device configuration profiles
+
+test("push: a legacy Device Restrictions profile gets the one switch, turned back from the option it is shown as", async (t) => {
+  const GENERAL = "#microsoft.graph.windows10GeneralConfiguration";
+  const CAMERA = "device_vendor_msft_policy_config_camera_allowcamera";
+  const node = (label: string) => ({ kind: "choice" as const, definitionId: CAMERA, name: "Allow Camera", optionId: label === "Allowed." ? `${CAMERA}_1` : `${CAMERA}_0`, label });
+  // No Settings Catalog policy by that id (404) — a legacy profile has it.
+  const calls = fakeGraph(t, { "/deviceManagement/deviceConfigurations/l1": { "@odata.type": GENERAL, id: "l1", displayName: "Device Restrictions", cameraBlocked: true, bluetoothBlocked: true } });
+
+  await pushToExistingPolicy("token", { policyId: "l1", definitionId: CAMERA, from: "Not allowed.", node: node("Allowed.") });
+  assert.deepEqual(calls, [{ method: "PATCH", path: "/deviceManagement/deviceConfigurations/l1", body: { "@odata.type": GENERAL, cameraBlocked: false } }]);
+
+  calls.length = 0;
+  // Staged when the camera was allowed; the profile blocks it now.
+  await assert.rejects(pushToExistingPolicy("token", { policyId: "l1", definitionId: CAMERA, from: "Allowed.", node: node("Not allowed.") }), PushRefused);
+  // A setting the tool doesn't read from legacy profiles, and a profile type it doesn't read at all.
+  await assert.rejects(pushToExistingPolicy("token", { policyId: "l1", definitionId: "push_defer", from: "14", node: deferTo(7) }), (err: Error) => err instanceof PushRefused && /legacy profile/.test(err.message));
+  assert.deepEqual(calls, []);
+});

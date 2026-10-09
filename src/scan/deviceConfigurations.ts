@@ -22,7 +22,7 @@ import type { RawPolicy, RawSetting } from "./types.js";
  * same way — search the live catalog, confirm the exact option text, don't
  * guess a settingDefinitionId.
  */
-interface LegacyMapping {
+export interface LegacyMapping {
   /** Property name on the windows10GeneralConfiguration Graph resource. */
   property: string;
   /** Confirmed live against a real tenant's Settings Catalog. */
@@ -32,7 +32,7 @@ interface LegacyMapping {
   allowedOptionText: (text: string) => boolean;
 }
 
-const MAPPINGS: LegacyMapping[] = [
+export const LEGACY_MAPPINGS: LegacyMapping[] = [
   {
     property: "cameraBlocked",
     settingDefinitionId: "device_vendor_msft_policy_config_camera_allowcamera",
@@ -65,7 +65,7 @@ const MAPPINGS: LegacyMapping[] = [
   },
 ];
 
-const WINDOWS10_GENERAL_CONFIGURATION = "#microsoft.graph.windows10GeneralConfiguration";
+export const WINDOWS10_GENERAL_CONFIGURATION = "#microsoft.graph.windows10GeneralConfiguration";
 
 interface GraphDeviceConfiguration {
   id: string;
@@ -92,7 +92,7 @@ export async function fetchLegacyDeviceConfigurations(token: string): Promise<Ra
   for (const config of relevant) {
     const settings: RawSetting[] = [];
 
-    for (const mapping of MAPPINGS) {
+    for (const mapping of LEGACY_MAPPINGS) {
       const rawValue = config[mapping.property];
       if (typeof rawValue !== "boolean") continue; // not configured on this profile
 
@@ -100,12 +100,17 @@ export async function fetchLegacyDeviceConfigurations(token: string): Promise<Ra
       const itemId = findOptionItemId(definition.options, rawValue ? mapping.blockedOptionText : mapping.allowedOptionText);
       if (!itemId) continue; // catalog's option text drifted from what MAPPINGS expects — skip rather than crash the scan
 
+      // In the shape a Settings Catalog policy's value has for the same setting — so it is edited with the
+      // same dropdown, held against a baseline the same way, and can be pushed (see src/push/legacy.ts).
+      const label = definition.options!.get(itemId)!;
       settings.push({
         settingDefinitionId: mapping.settingDefinitionId,
         name: definition.name,
         cspPath: definition.cspPath,
         category: definition.category,
-        value: definition.options!.get(itemId)!,
+        value: label,
+        structured: { kind: "choice", definitionId: mapping.settingDefinitionId, name: definition.name, optionId: itemId, label },
+        schemas: { [mapping.settingDefinitionId]: definition.schema },
       });
     }
 
