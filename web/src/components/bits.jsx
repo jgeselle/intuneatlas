@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Dropdown } from "./Dropdown.jsx";
-import { Check, CaretRight, Copy, Trash } from "@phosphor-icons/react";
+import { Check, CaretRight, Copy, Trash, CheckCircle } from "@phosphor-icons/react";
 import { SEVERITY_STYLE } from "../lib/styles.js";
 
 function Chip({ className = "", children }) {
@@ -394,16 +394,34 @@ function HistoryList({ events }) {
   );
 }
 
+const STAT_TONE = {
+  neutral: "text-stone-100",
+  // Nothing wrong here: the count that should be zero is zero.
+  good: "text-teal-100",
+  amber: "text-amber-100",
+  alert: "text-red-100",
+  missing: "text-purple-100",
+};
+
 /**
- * One number at the top of a page. The label is deliberately quiet —
- * small, sentence case, no icon — so the number is what is read.
+ * One number at the top of a page. The label is quiet — small, sentence
+ * case — so the number is what is read. What kind of number it is, and
+ * whether it wants attention, is said by a large, pale icon set into the
+ * tile's lower right corner: grey when it is just a count, tinted when
+ * there is something to look at, a green tick when a count that should
+ * be zero is.
  */
-function Stat({ label, value, sub }) {
+function Stat({ label, value, sub, icon, tone = "neutral" }) {
+  // A warning sign in green would say two things at once: where there is nothing to warn of, it is a tick.
+  const Icon = icon && tone === "good" ? CheckCircle : icon;
   return (
-    <div className="rounded-lg border border-stone-200 bg-white p-4">
-      <div className="text-xs font-semibold text-stone-500">{label}</div>
-      <div className="mt-1.5 text-3xl font-semibold tabular-nums text-stone-900">{value}</div>
-      {sub ? <div className="mt-1 text-xs text-stone-500">{sub}</div> : null}
+    <div className="relative overflow-hidden rounded-lg border border-stone-200 bg-white p-4">
+      {Icon ? <Icon weight="fill" aria-hidden="true" className={"pointer-events-none absolute -bottom-5 -right-4 h-24 w-24 " + (STAT_TONE[tone] ?? STAT_TONE.neutral)} /> : null}
+      <div className="relative">
+        <div className="text-xs font-semibold text-stone-500">{label}</div>
+        <div className="mt-1.5 text-3xl font-semibold tabular-nums text-stone-900">{value}</div>
+        {sub ? <div className="mt-1 text-xs text-stone-500">{sub}</div> : null}
+      </div>
     </div>
   );
 }
