@@ -436,7 +436,7 @@
       <div class="badges">
         <span class="badge">MIT</span>
         <span class="badge">TypeScript</span>
-        <span class="badge">Graph API &middot; read-only</span>
+        <span class="badge">Graph API &middot; read-only by default</span>
       </div>
     </div>
 
@@ -552,9 +552,9 @@
         <p class="kicker">Baselines</p>
         <h2>A baseline is a policy you exported.</h2>
         <p class="lede">
-          Any Settings Catalog policy exported from Intune works as a baseline, exactly as exported: the Open Intune
-          Baseline, a CIS build, or the policies of your own reference tenant. Nothing is converted, and nothing ships
-          with the app.
+          Any Settings Catalog or compliance policy exported from Intune works as a baseline, exactly as exported: the
+          Open Intune Baseline, a CIS build, or the policies of your own reference tenant. Nothing is converted, and
+          nothing ships with the app.
         </p>
       </div>
 
@@ -627,8 +627,10 @@
           <h3>Web UI &mdash; <code style="font-family:var(--mono);font-size:.8125rem;font-weight:400">intuneatlas ui</code></h3>
           <p>
             Every setting grouped by category, searchable by CSP path, with the policies that set it, each value
-            editable with Intune's own options and ranges, note threads, and the review gate for staged changes.
-            Runs on your machine against the report on disk, with no server and no upload.
+            editable with Intune's own options and ranges, note threads, and a history of what changed between
+            scans. Configuration and compliance policies both, for the whole tenant or one group. Staged changes
+            pass a review gate, and an Admin can push them to Intune. Runs on your machine against the report on
+            disk, or hosted for a team as an Azure Container App.
           </p>
         </div>
         <div class="box">
@@ -708,7 +710,7 @@
           <span class="state good">stable</span>
         </li>
         <li>
-          <span class="what">Compliance policies &amp; tenant defaults<em>Including the secureByDefault check that catches unmanaged devices</em></span>
+          <span class="what">Compliance policies &amp; tenant defaults<em>Every platform, Linux included, setting by setting, with actions for noncompliance. Including the secureByDefault check that catches unmanaged devices</em></span>
           <span class="state good">stable</span>
         </li>
         <li>
@@ -724,8 +726,8 @@
           <span class="state part">partial</span>
         </li>
         <li>
-          <span class="what">Write-back / deploy staged changes<em>Behind <code style="font-family:var(--mono);font-size:.75rem">--experimental-write</code>. Review gate works; rollback does not yet</em></span>
-          <span class="state none">experimental</span>
+          <span class="what">Write-back / push staged changes<em>One reviewed change at a time, with a write permission you add yourself. Refused if the tenant value moved on; recorded in the setting's history. Rollback does not exist yet</em></span>
+          <span class="state part">new</span>
         </li>
         <li>
           <span class="what">App protection &amp; Conditional Access policies<em>Out of scope for now. Different object model, would deserve its own index</em></span>
@@ -737,7 +739,8 @@
         <span class="kicker">Disclaimer</span>
         <p>
           Not affiliated with, endorsed by, or supported by Microsoft. Intune and Microsoft Graph are Microsoft
-          trademarks. This project reads a tenant through the documented Graph API and nothing else. If a scan ever
+          trademarks. This project reads a tenant through the documented Graph API, and writes to it only when an
+          Admin pushes a reviewed change. If a scan ever
           surprises you, open an issue and paste the redacted report.
         </p>
       </div>

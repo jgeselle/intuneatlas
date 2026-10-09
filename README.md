@@ -168,6 +168,7 @@ than opening a public issue.
 - [x] Entra App Roles (Viewer / Contributor / Admin), enforced server-side across the UI and CLI
 - [x] Sigstore build provenance + SBOM attestations on every released binary — see [Trust model](#trust-model)
 - [x] Per-setting history of what changed between scans
+- [x] Taking a setting out of a policy, staged and pushed like any change
 - [x] Pushing a reviewed change to Intune from the change log — Settings Catalog policies (template-based ones such as endpoint security included), compliance policies and the tenant-wide compliance settings; recorded in the setting's history with who and why
 - [ ] Enrollment configurations as settings — they are listed by name and assignment only
 - [ ] Legacy (template-based) device configuration profiles beyond a handful of Windows Device Restrictions settings

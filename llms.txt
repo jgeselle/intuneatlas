@@ -1,13 +1,14 @@
 # IntuneAtlas
 
-> Open-source CLI and web UI that flattens every Microsoft Intune profile into one settings index, keyed on Intune's own setting ID. Surfaces conflicts, coverage gaps, and baseline drift instead of burying them in per-policy views. Reads a tenant read-only via Microsoft Graph. MIT licensed.
+> Open-source CLI and web UI that flattens every Microsoft Intune profile into one settings index, keyed on Intune's own setting ID. Surfaces conflicts, coverage gaps, and baseline drift instead of burying them in per-policy views. Reads a tenant via Microsoft Graph, read-only unless an optional write permission is added for pushing reviewed changes. MIT licensed.
 
-Installs as a standalone binary (no Node.js required) on Windows and Linux. Scans Windows Settings Catalog, compliance, and enrollment policies, then serves a local web UI over the result — solo on one machine or shared with a team, everyone signing in with their own Microsoft account. Every install registers its own Entra app registration; there's no bundled shared client.
+Installs as a standalone binary (no Node.js required) on Windows and Linux. Scans Settings Catalog, compliance, and enrollment policies, then serves a web UI over the result — solo on one machine, shared with a team, or hosted as an Azure Container App, everyone signing in with their own Microsoft account. Settings can be viewed for the whole tenant or one group, compared against baselines made of exported Intune policies, and each keeps a history of what changed between scans. Changes are staged, reviewed, and can be pushed to Intune by an Admin. Every install registers its own Entra app registration; there's no bundled shared client.
 
 ## Docs
 
 - [Getting started](https://intuneatlas.com/docs/): install, register an Entra app, run the first scan
 - [CLI reference](https://intuneatlas.com/docs/cli.html): every subcommand and flag — login, scan, ui, export
+- [Hosting on Azure](https://github.com/jgeselle/intuneatlas/tree/main/infra/azure): the Container Apps template and its parameters
 
 ## Source
 
