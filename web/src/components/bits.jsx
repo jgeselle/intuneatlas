@@ -401,7 +401,7 @@ function HistoryList({ events }) {
 function Stat({ label, value, sub }) {
   return (
     <div className="rounded-lg border border-stone-200 bg-white p-4">
-      <div className="text-[11px] leading-4 text-stone-500">{label}</div>
+      <div className="text-xs font-semibold text-stone-500">{label}</div>
       <div className="mt-1.5 text-3xl font-semibold tabular-nums text-stone-900">{value}</div>
       {sub ? <div className="mt-1 text-xs text-stone-500">{sub}</div> : null}
     </div>
