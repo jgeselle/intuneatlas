@@ -394,16 +394,15 @@ function HistoryList({ events }) {
   );
 }
 
-function Stat({ label, value, sub, tone = "neutral", icon: Icon }) {
-  const iconTone =
-    tone === "amber" ? "text-amber-500" : tone === "alert" ? "text-red-500" : tone === "brand" ? "text-teal-600" : "text-stone-400";
+/**
+ * One number at the top of a page. The label is deliberately quiet —
+ * small, sentence case, no icon — so the number is what is read.
+ */
+function Stat({ label, value, sub }) {
   return (
     <div className="rounded-lg border border-stone-200 bg-white p-4">
-      <div className="flex items-center gap-1.5">
-        {Icon ? <Icon className={"h-3.5 w-3.5 shrink-0 " + iconTone} /> : null}
-        <div className="text-xs font-medium uppercase tracking-wide text-stone-500">{label}</div>
-      </div>
-      <div className="mt-2 text-3xl font-semibold tabular-nums text-stone-900">{value}</div>
+      <div className="text-[11px] leading-4 text-stone-500">{label}</div>
+      <div className="mt-1.5 text-3xl font-semibold tabular-nums text-stone-900">{value}</div>
       {sub ? <div className="mt-1 text-xs text-stone-500">{sub}</div> : null}
     </div>
   );

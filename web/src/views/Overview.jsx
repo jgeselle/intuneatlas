@@ -1,4 +1,4 @@
-import { Sliders, ShieldCheck, DeviceMobile, Warning, Check, Clock } from "@phosphor-icons/react";
+import { Check, Clock } from "@phosphor-icons/react";
 import { PageSubtitle, SeverityChip, Stat, Empty } from "../components/bits.jsx";
 import { severityRank } from "../lib/styles.js";
 import { isComplianceSetting, platformLabel } from "../lib/format.js";
@@ -36,17 +36,14 @@ function Overview({ settingIndex, compliancePolicies, enrollmentConfigurations, 
           label="Settings managed"
           value={managedCount}
           sub={conflicts + " conflicting, " + unassigned + " not assigned"}
-          tone={conflicts ? "amber" : "neutral"}
-          icon={Sliders}
         />
-        <Stat label="Compliance policies" value={compliancePolicies.length} sub={complianceDeployed + " assigned"} icon={ShieldCheck} />
+        <Stat label="Compliance policies" value={compliancePolicies.length} sub={complianceDeployed + " assigned"} />
         <Stat
           label="Enrollment configs"
           value={enrollmentConfigurations.length}
           sub={enrollmentDeployed + " assigned"}
-          icon={DeviceMobile}
         />
-        <Stat label="Conflicts" value={conflicts} tone={conflicts ? "alert" : "neutral"} icon={Warning} />
+        <Stat label="Conflicts" value={conflicts} />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-5">

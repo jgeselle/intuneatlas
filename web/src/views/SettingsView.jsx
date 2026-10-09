@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
-import { Sliders, WarningCircle, Warning, Prohibit, Question, MagnifyingGlass, ChatCircle, ListChecks } from "@phosphor-icons/react";
+import { MagnifyingGlass, ChatCircle, ListChecks } from "@phosphor-icons/react";
 import { Chip, PageSubtitle, Stat, Empty } from "../components/bits.jsx";
 import { STATE_STYLE } from "../lib/styles.js";
 import { platformLabel } from "../lib/format.js";
@@ -93,11 +93,11 @@ function SettingsView({
         </header>
 
         <div className={"grid grid-cols-2 gap-3 " + (conflicts ? "sm:grid-cols-3 lg:grid-cols-5" : "lg:grid-cols-4")}>
-          <Stat label="Managed" value={managedCount} icon={Sliders} />
-          <Stat label="Below baseline" value={count("Below baseline")} tone={count("Below baseline") ? "amber" : "neutral"} icon={WarningCircle} />
-          {conflicts && <Stat label="Conflicting" value={count("Conflict")} tone={count("Conflict") ? "alert" : "neutral"} icon={Warning} />}
-          <Stat label="Not assigned" value={count("Not assigned")} icon={Prohibit} />
-          <Stat label="Missing" value={count("Missing")} tone={count("Missing") ? "amber" : "neutral"} icon={Question} />
+          <Stat label="Managed" value={managedCount} />
+          <Stat label="Below baseline" value={count("Below baseline")} />
+          {conflicts && <Stat label="Conflicting" value={count("Conflict")} />}
+          <Stat label="Not assigned" value={count("Not assigned")} />
+          <Stat label="Missing" value={count("Missing")} />
         </div>
 
         <div className="flex flex-col gap-3">
