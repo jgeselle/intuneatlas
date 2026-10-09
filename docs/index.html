@@ -154,6 +154,7 @@
       <a href="#groups">Looking at one group</a>
       <a href="#push">Pushing a change</a>
       <a href="#baselines">Adding a baseline</a>
+      <a href="#terminal">From the terminal</a>
       <a href="#next">Next</a>
     </div>
 
@@ -486,6 +487,26 @@ settings:
     reference: CIS Windows 11 Benchmark 5.0.0, 87.1
   device_vendor_msft_policy_config_experience_allowcortana:
     ignore: true</pre>
+      </section>
+
+      <section id="terminal">
+        <h2>From the terminal</h2>
+        <p>
+          The web UI isn't the only way in. A scan is stored on the machine that ran it, and two commands work
+          on it without opening a browser or asking anything more of the tenant:
+        </p>
+        <ul>
+          <li><code>intuneatlas search</code> finds settings by name, path, policy or value, and shows who sets them, for whom, and to what.</li>
+          <li><code>intuneatlas check</code> holds the scan — or one group in it — against a baseline and lists what needs attention. The baseline can be a folder or a URL, such as a folder of the Open Intune Baseline on GitHub.</li>
+        </ul>
+<pre><span class="p">$</span> intuneatlas scan --tenant contoso.onmicrosoft.com
+<span class="p">$</span> intuneatlas search bitlocker
+<span class="p">$</span> intuneatlas check --group "Pilot ring" --baseline https://github.com/SkipToTheEndpoint/OpenIntuneBaseline/tree/main/WINDOWS</pre>
+        <p>
+          <code>check</code> exits with 1 when something is below baseline, in conflict or missing, so it can
+          gate a scheduled job; <code>check --scan</code> does the scan and the check in one command. See the
+          <a href="/docs/cli.html#check">CLI reference</a>.
+        </p>
       </section>
 
       <section id="next">

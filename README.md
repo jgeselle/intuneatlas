@@ -101,6 +101,10 @@ Around that:
 - **A history per setting.** Every scan is compared with the one before, and
   what changed — a value, a policy starting or no longer setting it, an
   assignment — is kept on the setting, whoever made the change and wherever.
+- **From the terminal too.** `intuneatlas search` finds settings in the last
+  scan; `intuneatlas check --group <group> --baseline <folder-or-url>` holds
+  it against a baseline — a folder of the Open Intune Baseline on GitHub, say
+  — and exits non-zero when something needs attention.
 - **Documented.** A note explaining a deliberate deviation is attached to the
   setting itself, so context survives the person who wrote it.
 
@@ -179,7 +183,7 @@ than opening a public issue.
 - [x] Pushing a reviewed change to Intune from the change log — Settings Catalog policies (template-based ones such as endpoint security included), compliance policies and the tenant-wide compliance settings; recorded in the setting's history with who and why
 - [ ] Enrollment configurations as settings — they are listed by name and assignment only
 - [ ] Legacy (template-based) device configuration profiles beyond a handful of Windows Device Restrictions settings
-- [ ] `intuneatlas get <path>` headless command
+- [x] `intuneatlas search` and `intuneatlas check` — the last scan searched, or checked against a baseline (a folder or a URL) for one group, from the terminal, with an exit code for scheduled jobs
 - [x] Container image and an Azure Container Apps template with a "Deploy to Azure" button — see [`infra/azure`](./infra/azure)
 - [ ] Scheduled scans for a hosted instance — today a signed-in Admin starts each scan
 - [ ] GitHub Action for scheduled drift scanning

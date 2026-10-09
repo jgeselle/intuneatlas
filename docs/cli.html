@@ -137,6 +137,8 @@
       <span class="kicker">On this page</span>
       <a href="#login">login</a>
       <a href="#scan">scan</a>
+      <a href="#search">search</a>
+      <a href="#check">check</a>
       <a href="#ui">ui</a>
       <a href="#export">export</a>
     </div>
@@ -174,6 +176,71 @@
 
         <div class="ex-label">Example</div>
         <pre><span class="p">$</span> intuneatlas scan --tenant contoso.onmicrosoft.com --client-id &lt;application-id&gt; --out report.json</pre>
+      </section>
+
+      <section id="search">
+        <h2>intuneatlas search</h2>
+        <p class="desc">
+          Search the last scan from the terminal: settings by name, path, category, policy or value. Each
+          match comes with its state, the policies that set it, who each of those reaches, and its value.
+          Nothing is asked of the tenant — run <a href="#scan">scan</a> first, and again whenever you want
+          fresh data.
+        </p>
+
+        <table class="flags">
+          <tr><th>Flag</th><th>Description</th></tr>
+          <tr><td>[words...]</td><td>What to look for. A setting matches when every word appears somewhere in it. With no words, everything is listed.</td></tr>
+          <tr><td>--group &lt;name-or-id&gt;</td><td>Only what reaches this group: policies assigned to it, to a group containing it, or to everyone. Names need the scan to have read them (<code>Group.Read.All</code>); otherwise give the group's ID.</td></tr>
+          <tr><td>--state &lt;state&gt;</td><td>Only settings in this state: <code>Conflict</code>, <code>Below baseline</code>, <code>Missing</code>, <code>Not assigned</code>, <code>Meets baseline</code> or <code>Not checked</code></td></tr>
+          <tr><td>--platform &lt;platform&gt;</td><td>Only this platform, e.g. <code>windows10</code>, <code>macOS</code>, <code>ios</code></td></tr>
+          <tr><td>--baseline &lt;folder-or-url&gt;</td><td>Judge states against this baseline instead of the ones added in the web UI. Same forms as for <a href="#check">check</a>.</td></tr>
+          <tr><td>--tenant &lt;id-or-domain&gt;</td><td>Which tenant's scan to search, when scans of several are stored</td></tr>
+          <tr><td>--format &lt;format&gt;</td><td><code>text</code> (default), <code>json</code> or <code>csv</code> (one row per policy)</td></tr>
+          <tr><td>--out &lt;path&gt;</td><td>Write to a file instead of the terminal</td></tr>
+        </table>
+
+        <div class="ex-label">Where is BitLocker set, and for whom?</div>
+        <pre><span class="p">$</span> intuneatlas search bitlocker</pre>
+        <div class="ex-label">Everything in conflict for one group</div>
+        <pre><span class="p">$</span> intuneatlas search --group "Pilot ring" --state conflict</pre>
+      </section>
+
+      <section id="check">
+        <h2>intuneatlas check</h2>
+        <p class="desc">
+          Check the last scan — or one group in it — against a baseline, and list what needs attention:
+          settings below the baseline, in conflict, or missing. The states and verdicts are the web UI's.
+          It works on the stored scan and asks nothing of the tenant unless you pass <code>--scan</code>.
+        </p>
+
+        <table class="flags">
+          <tr><th>Flag</th><th>Description</th></tr>
+          <tr><td>--group &lt;name-or-id&gt;</td><td>Check only what reaches this group. Without it, the whole tenant.</td></tr>
+          <tr><td>--baseline &lt;folder-or-url&gt;</td><td>The baseline, as one of: a folder of exported policies on this machine; a GitHub folder URL, as copied from the browser; a link to a <code>.zip</code> or <code>.tar.gz</code> archive; a link to one exported policy's <code>.json</code>. A URL is downloaded for the run and not kept. Without the flag, the baselines added in the web UI are used.</td></tr>
+          <tr><td>--scan</td><td>Scan the tenant first, then check that. Needs <code>--tenant</code> and a sign-in, with the same flags as <a href="#scan">scan</a> (<code>--client-id</code>, <code>--client-secret</code>, <code>--device-code</code>).</td></tr>
+          <tr><td>--tenant &lt;id-or-domain&gt;</td><td>Which tenant's scan to check — needed with <code>--scan</code>, or when scans of several tenants are stored</td></tr>
+          <tr><td>--all</td><td>Report every setting, not only the ones needing attention</td></tr>
+          <tr><td>--format &lt;format&gt;</td><td><code>text</code> (default), <code>json</code> or <code>csv</code></td></tr>
+          <tr><td>--out &lt;path&gt;</td><td>Write to a file instead of the terminal</td></tr>
+        </table>
+
+        <table class="flags">
+          <tr><th>Exit code</th><th>Meaning</th></tr>
+          <tr><td>0</td><td>Nothing is below baseline, in conflict or missing</td></tr>
+          <tr><td>1</td><td>Something is</td></tr>
+          <tr><td>2</td><td>It couldn't be checked: no scan stored, the baseline couldn't be read, sign-in failed</td></tr>
+        </table>
+
+        <div class="ex-label">One group against the Open Intune Baseline, straight from GitHub</div>
+        <pre><span class="p">$</span> intuneatlas check --group "Pilot ring" --baseline https://github.com/SkipToTheEndpoint/OpenIntuneBaseline/tree/main/WINDOWS</pre>
+        <div class="ex-label">Scan and check in one go, unattended — for a scheduled job</div>
+        <pre><span class="p">$</span> intuneatlas check --scan --tenant contoso.onmicrosoft.com --client-id &lt;application-id&gt; --client-secret &lt;secret&gt; --baseline ./baselines/contoso</pre>
+        <p class="desc" style="margin-top:14px">
+          A URL to a branch follows that branch. To check against a fixed version, use a URL that names a
+          tag or a commit instead of <code>main</code>. A setting the baseline expects and the tenant lacks is
+          shown by name only if a scan has looked it up; run the check once with <code>--scan</code> for a
+          baseline the last scan didn't know.
+        </p>
       </section>
 
       <section id="ui">

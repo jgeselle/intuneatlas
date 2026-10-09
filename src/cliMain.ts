@@ -1,8 +1,10 @@
 import { Command } from "commander";
+import { runCheck } from "./commands/check.js";
 import { runExport } from "./commands/export.js";
 import { runLogin } from "./commands/login.js";
 import { installPersistent, uninstallPersistent } from "./commands/persist.js";
 import { runScan } from "./commands/scan.js";
+import { runSearch } from "./commands/search.js";
 import { runUi } from "./commands/ui.js";
 
 const program = new Command();
@@ -67,6 +69,58 @@ withAuthOptions(program.command("scan"))
         baseline: opts.baseline,
       }),
     ),
+  );
+
+program
+  .command("check")
+  .description("Check the last scan — or one group in it — against a baseline. Exits 1 if anything is below baseline, in conflict or missing.")
+  .option("--group <name-or-id>", "Check only what reaches this group: policies assigned to it, to a group containing it, or to everyone. Without it, the whole tenant.")
+  .option(
+    "--baseline <folder-or-url>",
+    "The baseline: a folder of exported policies, or a URL to one — a GitHub folder, a .zip or .tar.gz archive, or a single policy's .json. Without it, the baselines added in the web UI.",
+  )
+  .option("--scan", "Scan the tenant first instead of using the last stored scan (needs --tenant and a sign-in, like `scan`)", false)
+  .option("--tenant <id-or-domain>", "Which tenant's scan to check — needed with --scan, or when scans of several tenants are stored")
+  .option("--client-id <id>", "With --scan: your Entra app (client) ID")
+  .option("--client-secret <secret>", "With --scan: client secret, for an unattended run")
+  .option("--device-code", "With --scan: use device-code sign-in instead of the browser", false)
+  .option("--format <format>", "text (default), json, or csv", "text")
+  .option("--out <path>", "Write the result to a file instead of the terminal")
+  .option("--all", "Report every setting, not only the ones needing attention", false)
+  .action(async (opts) => {
+    // Its own exit codes, as a check has three outcomes: 0 nothing to do, 1 something needs attention, 2 it couldn't be checked.
+    let failed = false;
+    await withErrorHandling(async () => {
+      ({ failed } = await runCheck({
+        tenant: opts.tenant,
+        clientId: opts.clientId,
+        clientSecret: opts.clientSecret,
+        deviceCode: opts.deviceCode,
+        scan: opts.scan,
+        group: opts.group,
+        baseline: opts.baseline,
+        format: opts.format,
+        out: opts.out,
+        all: opts.all,
+      }));
+    })(opts);
+    process.exitCode = process.exitCode === 1 ? 2 : failed ? 1 : 0;
+  });
+
+program
+  .command("search [words...]")
+  .description("Search the last scan: settings by name, path, category, policy or value — with who sets them, for whom, and to what.")
+  .option("--group <name-or-id>", "Only what reaches this group")
+  .option("--state <state>", "Only settings in this state: Conflict, Below baseline, Missing, Not assigned, Meets baseline, or Not checked")
+  .option("--platform <platform>", "Only this platform, e.g. windows10, macOS, ios")
+  .option("--baseline <folder-or-url>", "Judge states against this baseline instead of the ones added in the web UI")
+  .option("--tenant <id-or-domain>", "Which tenant's scan to search, when scans of several are stored")
+  .option("--format <format>", "text (default), json, or csv", "text")
+  .option("--out <path>", "Write the result to a file instead of the terminal")
+  .action((words: string[], opts) =>
+    withErrorHandling(() =>
+      runSearch({ query: words, tenant: opts.tenant, group: opts.group, state: opts.state, platform: opts.platform, baseline: opts.baseline, format: opts.format, out: opts.out }),
+    )(opts),
   );
 
 program

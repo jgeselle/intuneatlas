@@ -109,26 +109,43 @@ async function loadDirectory(dir: string): Promise<BaselineRule[]> {
   const cached = cache.get(dir);
   if (cached?.signature === signature) return cached.rules;
 
-  const rules = await parseDirectory(dir, files);
+  // Only at a pack's own root — a stray baseline.yml deeper in a download isn't ours.
+  const atPackRoot = (file: string) => relative(dir, dirname(file)).split(sep).filter(Boolean).length === 2;
+  const rules = await parseFiles(files, (file) => packForFile(dir, file), atPackRoot, prettifyPack);
   cache.set(dir, { signature, rules });
   return rules;
 }
 
-async function parseDirectory(dir: string, files: string[]): Promise<BaselineRule[]> {
+/**
+ * One folder as one baseline, whatever is above it: every exported policy
+ * anywhere inside it, and a baseline.yml directly in it. For a baseline
+ * that isn't installed — a folder someone points at, a download —
+ * checked once without becoming part of the app's own.
+ */
+export async function loadBaselinePack(dir: string, name: string): Promise<BaselineRule[]> {
+  if (!existsSync(dir)) throw new Error(`There is no folder at ${dir}.`);
+  const files = (await findFiles(dir)).filter((f) => /\.json$/i.test(f) || basename(f) === ANNOTATIONS_FILE);
+  const pack = `check/${name}`;
+  return parseFiles(files, () => pack, (file) => relative(dir, dirname(file)) === "", () => name);
+}
+
+async function parseFiles(
+  files: string[],
+  packOf: (file: string) => string,
+  atPackRoot: (file: string) => boolean,
+  nameOf: (pack: string) => string,
+): Promise<BaselineRule[]> {
   const rules: BaselineRule[] = [];
   const annotations = new Map<string, PackAnnotations>();
 
   for (const file of files.filter((f) => basename(f) === ANNOTATIONS_FILE)) {
-    // Only at a pack's own root — a stray baseline.yml deeper in a download isn't ours.
-    if (relative(dir, dirname(file)).split(sep).filter(Boolean).length === 2) {
-      annotations.set(packForFile(dir, file), await readAnnotations(file));
-    }
+    if (atPackRoot(file)) annotations.set(packOf(file), await readAnnotations(file));
   }
 
   for (const file of files.filter((f) => /\.json$/i.test(f))) {
     const policy = await readExportedPolicy(file);
     if (!policy) continue;
-    const pack = packForFile(dir, file);
+    const pack = packOf(file);
     const packAnnotations = annotations.get(pack);
     const policyName = policy.name ?? basename(file).replace(/\.json$/i, "");
 
@@ -138,7 +155,7 @@ async function parseDirectory(dir: string, files: string[]): Promise<BaselineRul
       rules.push({
         id: `${pack}::${policyName}::${definitionId}`,
         pack,
-        source: packAnnotations?.name ?? prettifyPack(pack),
+        source: packAnnotations?.name ?? nameOf(pack),
         policyName,
         definitionId,
         platform: policy.platform,
