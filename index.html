@@ -207,6 +207,15 @@
     font-family:var(--sans);font-size:.8125rem;font-weight:500;transition:background .15s;min-width:68px;
   }
   .copy:hover{background:var(--green-2)}
+  /* the second way in, said once and quietly: the install line above stays the thing to do */
+  .hero-team{
+    display:inline-flex;align-items:center;gap:7px;margin-top:16px;
+    font-size:.9375rem;font-weight:500;color:#DCEFE3;text-decoration:none;
+    border-bottom:1px solid rgba(255,255,255,.28);padding-bottom:2px;transition:color .15s,border-color .15s;
+  }
+  .hero-team:hover{color:#fff;border-color:rgba(255,255,255,.7)}
+  .hero-team svg{transition:transform .15s}
+  .hero-team:hover svg{transform:translateX(2px)}
   .alt{margin-top:14px;font-family:var(--mono);font-size:.75rem;color:rgba(255,255,255,.5);line-height:1.8}
   .alt a{color:rgba(255,255,255,.8)}
   .os-pick{
@@ -433,6 +442,10 @@
           <code id="cmd"><span class="p">$</span> irm https://intuneatlas.com/install.ps1 | iex</code>
           <button class="copy" id="copyBtn" type="button">Copy</button>
         </div>
+        <a class="hero-team" href="/docs/#azure">
+          or deploy it to Azure for your team
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"></path></svg>
+        </a>
         <p class="alt">
           indexes read-only, serves on localhost &middot;
           install on <button type="button" class="os-pick" id="osUnix" data-os="unix">Linux</button> or <button type="button" class="os-pick active" id="osWin" data-os="win">Windows</button> &middot;
