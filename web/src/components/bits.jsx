@@ -402,10 +402,10 @@ function HistoryList({ events }) {
 const STAT_TONE = {
   neutral: { icon: "text-stone-400", wash: null },
   // Nothing wrong here: the count that should be zero is zero.
-  good: { icon: "text-teal-600", wash: "rgba(22, 128, 86, 0.07)" },
-  amber: { icon: "text-amber-500", wash: "rgba(245, 158, 11, 0.10)" },
-  alert: { icon: "text-red-500", wash: "rgba(239, 68, 68, 0.09)" },
-  missing: { icon: "text-purple-500", wash: "rgba(168, 85, 247, 0.08)" },
+  good: { icon: "text-teal-600", wash: "rgba(22, 128, 86, 0.13)" },
+  amber: { icon: "text-amber-500", wash: "rgba(245, 158, 11, 0.18)" },
+  alert: { icon: "text-red-500", wash: "rgba(239, 68, 68, 0.15)" },
+  missing: { icon: "text-purple-500", wash: "rgba(168, 85, 247, 0.14)" },
 };
 
 /**
@@ -426,11 +426,11 @@ function Stat({ label, value, sub, icon, tone = "neutral" }) {
       {wash && <div aria-hidden="true" className="pointer-events-none absolute inset-0" style={{ background: `radial-gradient(85% 130% at 100% 100%, ${wash}, transparent 70%)` }} />}
       {Icon ? (
         <Icon
-          weight="light"
+          weight="regular"
           aria-hidden="true"
-          className={"pointer-events-none absolute -bottom-7 -right-6 h-28 w-28 opacity-[0.22] " + iconTone}
+          className={"pointer-events-none absolute -bottom-7 -right-6 h-28 w-28 opacity-[0.42] " + iconTone}
           // Dissolves toward the upper left, where the label and the number are.
-          style={{ maskImage: "linear-gradient(135deg, transparent 18%, black 78%)", WebkitMaskImage: "linear-gradient(135deg, transparent 18%, black 78%)" }}
+          style={{ maskImage: "linear-gradient(135deg, transparent 8%, black 62%)", WebkitMaskImage: "linear-gradient(135deg, transparent 8%, black 62%)" }}
         />
       ) : null}
       <div className="relative">
