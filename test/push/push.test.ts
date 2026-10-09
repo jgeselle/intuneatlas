@@ -139,11 +139,6 @@ test("push: a typed compliance policy gets only the one property", async (t) => 
 
   calls.length = 0;
   await assert.rejects(pushToExistingPolicy("token", { policyId: "c1", definitionId: LEN, from: "12", node: node(14) }), PushRefused);
-  // A custom compliance script is a file uploaded in Intune: refused before anything is read.
-  await assert.rejects(
-    pushToExistingPolicy("token", { policyId: "c1", definitionId: "compliance.windows10.deviceCompliancePolicyScript", from: "x", node: { kind: "group", definitionId: "compliance.windows10.deviceCompliancePolicyScript", name: "Script", children: [] } }),
-    PushRefused,
-  );
   assert.deepEqual(calls, []);
 });
 
@@ -347,4 +342,53 @@ test("push: removing a compliance setting returns the property to what an unset 
   await assert.rejects(pushToExistingPolicy("token", { policyId: "tenant-compliance-settings", definitionId: "compliance.tenant.secureByDefault", from: "Compliant", node: { kind: "unknown", definitionId: "x", name: "x" }, remove: true }), PushRefused);
   await assert.rejects(pushToExistingPolicy("token", { policyId: "c1", definitionId: "compliance.windows10.scheduledActionsForRule", from: "x", node: { kind: "unknown", definitionId: "x", name: "x" }, remove: true }), PushRefused);
   assert.deepEqual(calls, []);
+});
+
+// ---- custom compliance: a script and its rules
+
+test("push: custom compliance rules are laid over the tenant's rules file — what the value doesn't show survives", async (t) => {
+  const WINDOWS = "#microsoft.graph.windows10CompliancePolicy";
+  const SCRIPT = "compliance.windows10.deviceCompliancePolicyScript";
+  const document = {
+    Rules: [
+      { SettingName: "BiosVersion", Operator: "GreaterEquals", DataType: "Version", Operand: "2.3", MoreInfoUrl: "https://example.com/bios", RemediationStrings: [{ Language: "en_US", Title: "BIOS is out of date", Description: "Update it." }] },
+      { SettingName: "TpmVersion", Operator: "IsEquals", DataType: "String", Operand: "2.0", MoreInfoUrl: "https://example.com/tpm", RemediationStrings: [{ Language: "en_US", Title: "TPM", Description: "Needs 2.0." }] },
+    ],
+  };
+  const policy = { "@odata.type": WINDOWS, id: "c1", deviceCompliancePolicyScript: { deviceComplianceScriptId: "script-1", rulesContent: Buffer.from(JSON.stringify(document)).toString("base64") } };
+  const calls = fakeGraph(t, { "/deviceManagement/deviceCompliancePolicies/c1": policy, "/deviceManagement/deviceComplianceScripts": { value: [{ id: "script-1", displayName: "BIOS check" }, { id: "script-2", displayName: "Other check" }] } });
+  // As a scan shows it, script name included.
+  const [shown] = complianceSettingsOf({ ...policy, deviceCompliancePolicyScript: { ...policy.deviceCompliancePolicyScript, scriptName: "BIOS check" } });
+  type Node = NonNullable<typeof shown.structured>;
+  const edit = (change: (rules: Node[][]) => Node[][], scriptName?: string): Node => {
+    const group = shown.structured as Extract<Node, { kind: "group" }>;
+    return {
+      ...group,
+      children: group.children.map((child) =>
+        child.kind === "groupCollection" ? { ...child, groups: change(child.groups) } : scriptName && child.kind === "simple" ? { ...child, value: scriptName } : child,
+      ),
+    };
+  };
+  const operandTo = (value: string) => (rules: Node[][]) => rules.map((rule, i) => (i === 0 ? rule.map((field) => (field.definitionId.endsWith(".operand") && field.kind === "simple" ? { ...field, value } : field)) : rule));
+  const written = () => JSON.parse(Buffer.from((calls[0].body!.deviceCompliancePolicyScript as { rulesContent: string }).rulesContent, "base64").toString("utf8")) as typeof document;
+
+  // One rule's operand changed, the other rule dropped, and a different script chosen by name.
+  await pushToExistingPolicy("token", { policyId: "c1", definitionId: SCRIPT, from: shown.value, node: edit((rules) => operandTo("2.5")(rules).slice(0, 1), "Other check") });
+
+  assert.deepEqual([calls[0].method, calls[0].path, calls[0].body!["@odata.type"]], ["PATCH", "/deviceManagement/deviceCompliancePolicies/c1", WINDOWS]);
+  assert.equal((calls[0].body!.deviceCompliancePolicyScript as { deviceComplianceScriptId: string }).deviceComplianceScriptId, "script-2");
+  assert.deepEqual(written(), { Rules: [{ ...document.Rules[0], Operand: "2.5" }] });
+
+  calls.length = 0;
+  const addRule = (rules: Node[][]) => [...rules, rules[0].map((field) => (field.definitionId.endsWith(".settingName") && field.kind === "simple" ? { ...field, value: "DiskFreeGb" } : field))];
+  await assert.rejects(pushToExistingPolicy("token", { policyId: "c1", definitionId: SCRIPT, from: shown.value, node: edit(addRule) }), (err: Error) => err instanceof PushRefused && /isn't a rule this policy has/.test(err.message));
+  await assert.rejects(pushToExistingPolicy("token", { policyId: "c1", definitionId: SCRIPT, from: shown.value, node: edit((rules) => rules, "No such script") }), (err: Error) => err instanceof PushRefused && /no compliance script named/.test(err.message));
+  await assert.rejects(pushToExistingPolicy("token", { policyId: "c1", definitionId: SCRIPT, from: shown.value, node: edit(() => []) }), (err: Error) => err instanceof PushRefused && /at least one rule/.test(err.message));
+  // Nor can it be set up in a policy that doesn't exist yet.
+  await assert.rejects(pushNewPolicy("token", { name: "New", platform: "windows10", settings: [{ definitionId: SCRIPT, node: shown.structured! }] }), PushRefused);
+  assert.equal(calls.length, 0);
+
+  // Taking custom compliance out of the policy altogether is a removal like any other.
+  await pushToExistingPolicy("token", { policyId: "c1", definitionId: SCRIPT, from: shown.value, node: { kind: "unknown", definitionId: SCRIPT, name: "Script" }, remove: true });
+  assert.deepEqual(calls[0].body, { "@odata.type": WINDOWS, deviceCompliancePolicyScript: null });
 });

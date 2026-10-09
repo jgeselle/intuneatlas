@@ -36,6 +36,14 @@ export async function fetchNotificationTemplates(token: string): Promise<Map<str
   return templates && new Map(templates.map((template) => [template.id, template.displayName ?? template.id]));
 }
 
+/** The tenant's custom compliance scripts, id to name — undefined where they can't be read (it takes a permission of its own). */
+export async function fetchComplianceScripts(token: string): Promise<Map<string, string> | undefined> {
+  const scripts = await graphGetAll<{ id: string; displayName?: string }>(token, "/deviceManagement/deviceComplianceScripts?$select=id,displayName", GRAPH_BETA_BASE).catch(
+    unavailable(400, 403, 404),
+  );
+  return scripts && new Map(scripts.map((script) => [script.id, script.displayName ?? script.id]));
+}
+
 /**
  * Gives each action that uses a notification template that template's
  * name, which is what the value shows in place of the id. A push reads a
@@ -100,11 +108,8 @@ export async function fetchCompliancePolicies(token: string): Promise<{ policies
   if (actions.some(usesNotificationTemplate)) nameNotificationTemplates(actions, await fetchNotificationTemplates(token));
   const scripts = found.map((policy) => policy.deviceCompliancePolicyScript as { deviceComplianceScriptId?: string; scriptName?: string } | null | undefined).filter((script) => script?.deviceComplianceScriptId);
   if (scripts.length > 0) {
-    const known = await graphGetAll<{ id: string; displayName?: string }>(token, "/deviceManagement/deviceComplianceScripts?$select=id,displayName", GRAPH_BETA_BASE).catch(
-      unavailable(400, 403, 404),
-    );
-    const names = new Map((known ?? []).map((script) => [script.id, script.displayName]));
-    for (const script of scripts) script!.scriptName = names.get(script!.deviceComplianceScriptId!);
+    const names = await fetchComplianceScripts(token);
+    for (const script of scripts) script!.scriptName = names?.get(script!.deviceComplianceScriptId!);
   }
 
   const policies = found.map(mapSimplePolicy);

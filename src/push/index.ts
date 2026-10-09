@@ -6,11 +6,12 @@ import { resolveSettingInstances } from "../scan/configurationPolicies.js";
 import { definitionPath } from "../scan/settingDefinitions.js";
 import type { GraphSettingInstance } from "../scan/settingValue.js";
 import type { SettingSchema, SettingValueNode } from "../scan/types.js";
-import { fetchNotificationTemplates } from "../scan/compliancePolicies.js";
+import { fetchComplianceScripts, fetchNotificationTemplates } from "../scan/compliancePolicies.js";
 import { COMPLIANCE_ENUMS, COMPLIANCE_TYPES } from "../scan/complianceSchema.generated.js";
 import { actionsToWrite, readActions, writeActions } from "./actions.js";
 import { graphWrite } from "./graphWrite.js";
 import { pushLegacySetting } from "./legacy.js";
+import { scriptToWrite } from "./script.js";
 import { fetchTemplateSlots, slotsOfInstance, withTemplateReferences, type TemplateSlot } from "./templates.js";
 import { complianceValueFromNode, instanceFromNode, PushRefused } from "./values.js";
 
@@ -51,7 +52,8 @@ export { PushRefused } from "./values.js";
  * A legacy device configuration profile is written where the tool reads
  * it at all — a few Device Restrictions switches; see legacy.ts.
  *
- * Refused outright: a compliance policy's custom script.
+ * A compliance policy's custom compliance — its script and rules — is
+ * written over the rules file the tenant holds; see script.ts.
  */
 export interface PushItem {
   definitionId: string;
@@ -93,8 +95,11 @@ function typedProperty(definitionId: string): [type: string, property: string] {
 
 const ACTIONS = "scheduledActionsForRule";
 
-const NOT_WRITABLE: Record<string, string> = {
-  deviceCompliancePolicyScript: "A custom compliance script can't be pushed: its rules are a file uploaded in Intune.",
+const SCRIPT = "deviceCompliancePolicyScript";
+
+/** What a policy being created can't be given from here. */
+const NOT_IN_A_NEW_POLICY: Record<string, string> = {
+  [SCRIPT]: "Custom compliance can't be set up in a new policy from here: its rules file, with the messages shown to users, is uploaded in Intune.",
 };
 
 function refuseIfDrifted(name: string, current: string | undefined, from: string): void {
@@ -179,12 +184,20 @@ async function pushCatalogSetting(token: string, collection: Collection, change:
 
 async function pushComplianceProperty(token: string, change: ExistingPolicyPush): Promise<void> {
   const [, property] = typedProperty(change.definitionId);
-  if (NOT_WRITABLE[property]) throw new PushRefused(NOT_WRITABLE[property]);
 
   const path = `/deviceManagement/deviceCompliancePolicies/${change.policyId}`;
   const policy = await graphGet<Record<string, unknown>>(token, path, GRAPH_BETA_BASE).catch(notFound("This compliance policy no longer exists."));
+  // A custom script shows by name where the tenant's scripts can be read — the policy is read here as a scan reads it.
+  const stored = policy[SCRIPT] as { deviceComplianceScriptId?: string; scriptName?: string } | null | undefined;
+  const scripts = property === SCRIPT && stored?.deviceComplianceScriptId ? await fetchComplianceScripts(token) : undefined;
+  if (stored && scripts) stored.scriptName = scripts.get(stored.deviceComplianceScriptId ?? "");
   const current = complianceSettingsOf(policy).find((setting) => setting.settingDefinitionId === change.definitionId);
   refuseIfDrifted(change.node.name, current?.value, change.from);
+
+  if (property === SCRIPT && !change.remove) {
+    await graphWrite(token, "PATCH", path, { "@odata.type": policy["@odata.type"], [SCRIPT]: scriptToWrite(change.node, stored ?? {}, scripts) });
+    return;
+  }
 
   // Graph needs the type to know which kind of policy the property belongs to; nothing else is sent, so nothing else changes.
   // A removal returns the property to what an unset one holds.
@@ -242,7 +255,7 @@ export async function pushNewPolicy(token: string, policy: { name: string; platf
     let actions: unknown = blockAtOnce;
     for (const setting of policy.settings) {
       const [, property] = typedProperty(setting.definitionId);
-      if (NOT_WRITABLE[property]) throw new PushRefused(NOT_WRITABLE[property]);
+      if (NOT_IN_A_NEW_POLICY[property]) throw new PushRefused(NOT_IN_A_NEW_POLICY[property]);
       // Staged actions for noncompliance take the place of the default one.
       if (property === ACTIONS) actions = [{ ruleName: "PasswordRequired", scheduledActionConfigurations: actionsToWrite(setting.node, [], await fetchNotificationTemplates(token)) }];
       else properties[property] = complianceValueFromNode(setting.node);
