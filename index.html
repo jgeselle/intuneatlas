@@ -298,6 +298,15 @@
   .box{border:1px solid var(--line);border-radius:11px;padding:18px;background:var(--paper)}
   .band .box{background:var(--paper)}
   .box h3{font-size:.9375rem;margin-top:12px}
+  /* the one entry point that is for more than one person: across the full width, with its own way in */
+  .box-wide{display:flex;flex-wrap:wrap;align-items:center;gap:16px 28px}
+  .box-wide > div{flex:1 1 320px;min-width:0}
+  @media(min-width:760px){.box-wide{grid-column:1 / -1}}
+  .box-go{
+    flex:none;display:inline-flex;align-items:center;padding:9px 16px;border-radius:9px;
+    background:var(--ink);color:#fff;font-size:.875rem;font-weight:500;text-decoration:none;transition:background .15s;
+  }
+  .box-go:hover{background:var(--green-2)}
   .box p{margin-top:7px;font-size:.875rem;color:var(--muted);line-height:1.6}
 
   .chip{
@@ -615,12 +624,24 @@
         <p class="kicker">Run it</p>
         <h2>Open it, query it, or wire it into CI.</h2>
         <p class="lede">
-          One index, four entry points. The default command builds it and serves it on localhost; the rest hand you
-          a single value, a file, or an exit code instead.
+          One index, five entry points. The default command builds it and serves it on localhost; hosted on Azure
+          it is the same thing for a whole team; the rest hand you a single value, a file, or an exit code instead.
         </p>
       </div>
 
       <div class="cols">
+        <div class="box box-wide">
+          <div>
+            <p class="kicker">For a team</p>
+            <h3>Hosted on Azure &mdash; your own Container App</h3>
+            <p>
+              One template deploys the web UI into your own subscription, on its own HTTPS address. Everyone signs
+              in with their own Microsoft account; roles decide who may stage, review and push. Notes, reviews and
+              each setting's history are shared, and nothing leaves your tenant.
+            </p>
+          </div>
+          <a class="box-go" href="/docs/#azure">Deploy to Azure</a>
+        </div>
         <div class="box">
           <p class="kicker">Read the index</p>
           <h3>Web UI &mdash; <code style="font-family:var(--mono);font-size:.8125rem;font-weight:400">intuneatlas ui</code></h3>
@@ -629,7 +650,7 @@
             editable with Intune's own options and ranges, note threads, and a history of what changed between
             scans. Configuration and compliance policies both, for the whole tenant or one group. Staged changes
             pass a review gate, and an Admin can push them to Intune. Runs on your machine against the report on
-            disk, or hosted for a team as an Azure Container App.
+            disk, with no server and no upload.
           </p>
         </div>
         <div class="box">

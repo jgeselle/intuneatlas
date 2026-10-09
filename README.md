@@ -37,15 +37,22 @@ curl -fsSL https://intuneatlas.com/install.sh | bash    # Linux
 intuneatlas ui --tenant <your-tenant>.onmicrosoft.com
 ```
 
-That's it for a solo run. The **[Getting started guide](https://intuneatlas.com/docs/)**
+That's it for a solo run.
+
+**For a team, host it on Azure.** One template deploys IntuneAtlas as a
+Container App in your own subscription: its own HTTPS address, everyone
+signing in with their own Microsoft account, roles for who may stage, review
+and push. No server or certificate to look after.
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fjgeselle%2Fintuneatlas%2Fmain%2Finfra%2Fazure%2Fazuredeploy.json)
+
+Steps, parameters and what it creates are in [`infra/azure`](./infra/azure).
+
+The **[Getting started guide](https://intuneatlas.com/docs/)**
 covers the one-time Entra app registration the first sign-in needs, sharing
 it with a team and assigning roles, and has the full
 [CLI reference](https://intuneatlas.com/docs/cli.html). Building from a
 clone instead: `npm install && npm run build && node dist/cli.js ui`.
-
-To host a shared instance on Azure instead of a machine of your own, see
-[`infra/azure`](./infra/azure) — one template, deployed from a button, onto
-Azure Container Apps.
 
 ## What's in this repo
 
