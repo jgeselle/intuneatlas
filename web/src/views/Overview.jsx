@@ -45,7 +45,7 @@ function Overview({ settingIndex, compliancePolicies, enrollmentConfigurations, 
           sub={enrollmentDeployed + " assigned"}
           icon={DeviceMobile}
         />
-        <Stat label="Conflicts" value={conflicts} icon={Warning} tone={conflicts ? "neutral" : "good"} />
+        <Stat label="Conflicts" value={conflicts} icon={Warning} />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-5">

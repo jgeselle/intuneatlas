@@ -94,10 +94,10 @@ function SettingsView({
 
         <div className={"grid grid-cols-2 gap-3 " + (conflicts ? "sm:grid-cols-3 lg:grid-cols-5" : "lg:grid-cols-4")}>
           <Stat label="Managed" value={managedCount} icon={Sliders} />
-          <Stat label="Below baseline" value={count("Below baseline")} icon={WarningCircle} tone={count("Below baseline") ? "neutral" : "good"} />
-          {conflicts && <Stat label="Conflicting" value={count("Conflict")} icon={Warning} tone={count("Conflict") ? "neutral" : "good"} />}
+          <Stat label="Below baseline" value={count("Below baseline")} icon={WarningCircle} />
+          {conflicts && <Stat label="Conflicting" value={count("Conflict")} icon={Warning} />}
           <Stat label="Not assigned" value={count("Not assigned")} icon={Prohibit} />
-          <Stat label="Missing" value={count("Missing")} icon={Question} tone={count("Missing") ? "neutral" : "good"} />
+          <Stat label="Missing" value={count("Missing")} icon={Question} />
         </div>
 
         <div className="flex flex-col gap-3">

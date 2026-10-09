@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Dropdown } from "./Dropdown.jsx";
-import { Check, CaretRight, Copy, Trash, CheckCircle } from "@phosphor-icons/react";
+import { Check, CaretRight, Copy, Trash } from "@phosphor-icons/react";
 import { SEVERITY_STYLE } from "../lib/styles.js";
 
 function Chip({ className = "", children }) {
@@ -395,31 +395,19 @@ function HistoryList({ events }) {
 }
 
 /**
- * One number at the top of a page. The label is quiet — small, sentence
- * case — so the number is what is read. What kind of number it is sits
- * in the tile's lower right corner: a large grey icon, running off the
- * edge and fading out toward the text. No colour — the shape says it. A
- * count that should be zero and is (`tone="good"`) shows a tick instead
- * of its warning sign.
+ * One number at the top of a page: a small bold label with its icon in
+ * front, both grey, and the number. No colour — the tiles say what is
+ * counted, the list below says what needs attention.
  */
-function Stat({ label, value, sub, icon, tone = "neutral" }) {
-  const Icon = icon && tone === "good" ? CheckCircle : icon;
+function Stat({ label, value, sub, icon: Icon }) {
   return (
-    <div className="relative overflow-hidden rounded-lg border border-stone-200 bg-white p-4">
-      {Icon ? (
-        <Icon
-          weight="regular"
-          aria-hidden="true"
-          className="pointer-events-none absolute -bottom-7 -right-6 h-28 w-28 text-stone-400 opacity-[0.42]"
-          // Dissolves toward the upper left, where the label and the number are.
-          style={{ maskImage: "linear-gradient(135deg, transparent 8%, black 62%)", WebkitMaskImage: "linear-gradient(135deg, transparent 8%, black 62%)" }}
-        />
-      ) : null}
-      <div className="relative">
-        <div className="text-xs font-semibold text-stone-500">{label}</div>
-        <div className="mt-1.5 text-3xl font-semibold tabular-nums text-stone-900">{value}</div>
-        {sub ? <div className="mt-1 text-xs text-stone-500">{sub}</div> : null}
+    <div className="rounded-lg border border-stone-200 bg-white p-4">
+      <div className="flex items-center gap-1.5 text-stone-500">
+        {Icon ? <Icon weight="bold" aria-hidden="true" className="h-3.5 w-3.5 shrink-0" /> : null}
+        <div className="text-xs font-semibold">{label}</div>
       </div>
+      <div className="mt-1.5 text-3xl font-semibold tabular-nums text-stone-900">{value}</div>
+      {sub ? <div className="mt-1 text-xs text-stone-500">{sub}</div> : null}
     </div>
   );
 }
