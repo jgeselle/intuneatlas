@@ -395,18 +395,16 @@ function HistoryList({ events }) {
 }
 
 /**
- * One number at the top of a page: a small bold label with its icon in
- * front, both grey, and the number. No colour — the tiles say what is
+ * One number at the top of a page: its icon on a line of its own, a small
+ * bold label under it, both grey, and the number. No colour — the tiles say what is
  * counted, the list below says what needs attention.
  */
 function Stat({ label, value, sub, icon: Icon }) {
   return (
     <div className="rounded-lg border border-stone-200 bg-white p-4">
-      <div className="flex items-center gap-1.5 text-stone-500">
-        {Icon ? <Icon weight="bold" aria-hidden="true" className="h-3.5 w-3.5 shrink-0" /> : null}
-        <div className="text-xs font-semibold">{label}</div>
-      </div>
-      <div className="mt-1.5 text-3xl font-semibold tabular-nums text-stone-900">{value}</div>
+      {Icon ? <Icon weight="bold" aria-hidden="true" className="h-5 w-5 text-stone-500" /> : null}
+      <div className={"text-xs font-semibold text-stone-500 " + (Icon ? "mt-2" : "")}>{label}</div>
+      <div className="mt-1 text-3xl font-semibold tabular-nums text-stone-900">{value}</div>
       {sub ? <div className="mt-1 text-xs text-stone-500">{sub}</div> : null}
     </div>
   );
