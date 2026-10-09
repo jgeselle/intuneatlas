@@ -303,3 +303,48 @@ test("push: a legacy Device Restrictions profile gets the one switch, turned bac
   await assert.rejects(pushToExistingPolicy("token", { policyId: "l1", definitionId: "push_defer", from: "14", node: deferTo(7) }), (err: Error) => err instanceof PushRefused && /legacy profile/.test(err.message));
   assert.deepEqual(calls, []);
 });
+
+// ---- taking a setting out of a policy
+
+test("push: a removal sends a Settings Catalog policy back without the setting — and never leaves a policy empty", async (t) => {
+  const calls = fakeGraph(t, { ...catalogPolicy(), ...DEFINITIONS });
+  const named = { kind: "unknown" as const, definitionId: "push_defer", name: "Defer" };
+
+  await pushToExistingPolicy("token", { policyId: "p1", definitionId: "push_defer", from: "14", node: named, remove: true });
+  assert.deepEqual((calls[0].body!.settings as unknown[]), [{ "@odata.type": `${T}Setting`, settingInstance: camera }]);
+
+  calls.length = 0;
+  // Staged for removal when it was 30; it is 14 now.
+  await assert.rejects(pushToExistingPolicy("token", { policyId: "p1", definitionId: "push_defer", from: "30", node: named, remove: true }), PushRefused);
+  // The policy's only setting.
+  const lone = fakeGraph(t, {
+    "/deviceManagement/configurationPolicies/p2/settings": { value: [{ id: "0", settingInstance: defer }] },
+    "/deviceManagement/configurationPolicies/p2": { id: "p2", name: "One setting", platforms: "windows10", technologies: "mdm", templateReference: { templateId: "" } },
+    ...DEFINITIONS,
+  });
+  await assert.rejects(pushToExistingPolicy("token", { policyId: "p2", definitionId: "push_defer", from: "14", node: named, remove: true }), (err: Error) => err instanceof PushRefused && /only setting/.test(err.message));
+  assert.deepEqual([calls, lone], [[], []]);
+});
+
+test("push: removing a compliance setting returns the property to what an unset one holds", async (t) => {
+  const WINDOWS = "#microsoft.graph.windows10CompliancePolicy";
+  const calls = fakeGraph(t, { "/deviceManagement/deviceCompliancePolicies/c1": { "@odata.type": WINDOWS, id: "c1", tpmRequired: true, passwordMinimumLength: 12, passwordRequiredType: "alphanumeric" } });
+  const remove = (property: string, from: string) =>
+    pushToExistingPolicy("token", { policyId: "c1", definitionId: `compliance.windows10.${property}`, from, node: { kind: "unknown", definitionId: `compliance.windows10.${property}`, name: property }, remove: true });
+
+  await remove("tpmRequired", "Require");
+  await remove("passwordMinimumLength", "12");
+  await remove("passwordRequiredType", "Alphanumeric");
+
+  assert.deepEqual(calls.map((c) => c.body), [
+    { "@odata.type": WINDOWS, tpmRequired: false },
+    { "@odata.type": WINDOWS, passwordMinimumLength: null },
+    { "@odata.type": WINDOWS, passwordRequiredType: "deviceDefault" },
+  ]);
+
+  // What can't be "not configured" at all.
+  calls.length = 0;
+  await assert.rejects(pushToExistingPolicy("token", { policyId: "tenant-compliance-settings", definitionId: "compliance.tenant.secureByDefault", from: "Compliant", node: { kind: "unknown", definitionId: "x", name: "x" }, remove: true }), PushRefused);
+  await assert.rejects(pushToExistingPolicy("token", { policyId: "c1", definitionId: "compliance.windows10.scheduledActionsForRule", from: "x", node: { kind: "unknown", definitionId: "x", name: "x" }, remove: true }), PushRefused);
+  assert.deepEqual(calls, []);
+});

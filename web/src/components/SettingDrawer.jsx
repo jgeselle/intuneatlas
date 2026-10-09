@@ -118,9 +118,16 @@ function BaselineCheckCard({ check, canUse, isSelected, onUse, onStageNew, newPo
  * `settled` is the text the draft counts as unchanged against: the
  * tenant's value, or the staged one while there is a staged change.
  */
-function PolicyValueCard({ title, nameField, subtitle, isNew = false, alert = false, settled, tenantValue, schemas, canStage, change, canRevert, draft, setDraft, onReset, onStage, onRevert }) {
+/** A staged change that takes the setting out of the policy instead of changing its value. */
+const isRemoval = (change) => change?.toStructured?.kind === "removed";
+
+function PolicyValueCard({ title, nameField, subtitle, isNew = false, alert = false, settled, tenantValue, schemas, canStage, change, canRevert, draft, setDraft, onReset, onStage, onRevert, onStageRemoval }) {
   const [reason, setReason] = useState(change?.reason ?? "");
-  const editable = canStage && draft !== null;
+  // Asked for, not yet staged: the card shows what staging it will do in place of the editor.
+  const [removing, setRemoving] = useState(false);
+  const removal = isRemoval(change);
+  // A staged removal has no value to edit; revert it to get the editor back.
+  const editable = canStage && draft !== null && !removal;
   // A policy that isn't staged yet (it has a name field instead of a name) is unsaved by definition.
   const dirty = editable && (Boolean(nameField) || renderNode(draft) !== settled);
   const error = dirty ? (nameField && !nameField.value.trim() ? "Give the policy a name." : validateNode(draft, schemas)) : null;
@@ -158,7 +165,37 @@ function PolicyValueCard({ title, nameField, subtitle, isNew = false, alert = fa
       <div className={(nameField ? "mt-1 " : "mt-0.5 ") + "break-words text-xs " + (isNew ? "text-teal-700" : "text-stone-500")}>{subtitle}</div>
 
       <div className="mt-2">
-        {editable ? (
+        {editable && removing ? (
+          <div>
+            <p className="text-sm font-medium text-stone-700">Not configured</p>
+            <input
+              type="text"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="Reason (optional)"
+              className="mt-2.5 w-full rounded-md border border-stone-300 bg-white px-2.5 py-1.5 text-xs placeholder-stone-400 focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600"
+            />
+            <div className="mt-2 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  onStageRemoval(reason);
+                  setRemoving(false);
+                }}
+                className="rounded-md bg-teal-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-teal-700 active:scale-[0.97] focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500"
+              >
+                Stage removal
+              </button>
+              <button
+                type="button"
+                onClick={() => setRemoving(false)}
+                className="rounded-md px-2.5 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-100 focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : editable ? (
           <>
             <ValueEditor node={draft} schemas={schemas} onChange={setDraft} />
             {error ? (
@@ -196,6 +233,16 @@ function PolicyValueCard({ title, nameField, subtitle, isNew = false, alert = fa
                   </button>
                 </div>
               </div>
+            )}
+            {/* Taking the setting out of this policy altogether — offered while nothing else is being edited or staged here. */}
+            {onStageRemoval && !dirty && !change && (
+              <button
+                type="button"
+                onClick={() => setRemoving(true)}
+                className="mt-2 text-xs font-medium text-stone-500 hover:text-stone-800 hover:underline focus:outline-none focus-visible:underline"
+              >
+                Remove from this policy
+              </button>
             )}
           </>
         ) : (
@@ -378,7 +425,8 @@ function SettingDrawer({ entry, notes, onAddNote, onDeleteNote, onClose, changes
   const [drafts, setDrafts] = useState(() =>
     entry.sources.map((source, n) => {
       const change = changeFor(source, n);
-      return change ? stagedDraft(change) : initialDraft(source);
+      // A staged removal has no value of its own: the editor keeps the tenant's, ready for when it is reverted.
+      return change && !isRemoval(change) ? stagedDraft(change) : initialDraft(source);
     }),
   );
 
@@ -426,7 +474,21 @@ function SettingDrawer({ entry, notes, onAddNote, onDeleteNote, onClose, changes
                   canRevert={change ? canRevert(change) : false}
                   draft={drafts[n]}
                   setDraft={(value) => setDraft(n, value)}
-                  onReset={() => setDraft(n, change ? stagedDraft(change) : initialDraft(source))}
+                  onReset={() => setDraft(n, change && !isRemoval(change) ? stagedDraft(change) : initialDraft(source))}
+                  // Where the setting can go back to "not configured": a policy's own setting with structure — not
+                  // the tenant-wide settings, which aren't in a policy, nor the actions every compliance policy must have.
+                  onStageRemoval={
+                    source.structured && !/^compliance\.tenant\.|\.scheduledActionsForRule$/.test(entry.definitionId ?? "")
+                      ? (reason) =>
+                          onStage(source, {
+                            to: "Not configured",
+                            toStructured: { kind: "removed", definitionId: entry.definitionId, name: entry.name },
+                            from: source.value,
+                            reason,
+                            ruleId: "manual",
+                          })
+                      : undefined
+                  }
                   onStage={(draft, reason) => {
                     const node = normalizeNode(draft, schemas);
                     const to = renderNode(node);

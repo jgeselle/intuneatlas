@@ -96,6 +96,8 @@ interface HistoryRow {
 }
 
 const BACKFILLED_KEY = "history_backfilled";
+/** What a setting reads as once a policy no longer sets it — also the text a staged removal carries as its new value. */
+export const NOT_CONFIGURED = "Not configured";
 
 function settingsOfScan(db: DatabaseSync, scanId: number | bigint): ScannedSetting[] {
   const rows = db.prepare(`SELECT key, sources_json, definition_json FROM settings_snapshot WHERE scan_id = ?`).all(scanId) as unknown as Array<{
@@ -128,8 +130,10 @@ function insertEvents(
   );
   for (const event of diffScans(previous.settings, current)) {
     // What a push did is already on record, with who and why. Seeing it in the tenant confirms that entry; it isn't a second change.
-    if ((event.kind === "changed" || event.kind === "added") && event.to !== undefined) {
-      const confirmed = confirm.run(scan.scannedAt, scan.tenant, event.settingKey, event.policyId, event.to, scan.scannedAt);
+    // A pushed removal is on record as a change to "Not configured"; the scan sees the policy no longer setting it.
+    const seen = event.kind === "changed" || event.kind === "added" ? event.to : event.kind === "removed" ? NOT_CONFIGURED : undefined;
+    if (seen !== undefined) {
+      const confirmed = confirm.run(scan.scannedAt, scan.tenant, event.settingKey, event.policyId, seen, scan.scannedAt);
       if (Number(confirmed.changes) > 0) continue;
     }
     insert.run(scan.tenant, event.settingKey, scan.id, scan.scannedAt, previous.scannedAt, event.kind, event.policyId, event.policyName, event.from ?? null, event.to ?? null);

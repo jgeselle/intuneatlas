@@ -41,9 +41,10 @@ export async function applyPush(
 
   if (change.targetKind !== "new") {
     const item = pushable(change, current);
-    await pushToExistingPolicy(writeToken, { ...item, policyId: change.policyId, from: change.from });
+    const remove = isRemoval(change);
+    await pushToExistingPolicy(writeToken, { ...item, policyId: change.policyId, from: change.from, ...(remove ? { remove } : {}) });
     close(change, change.policyId, viewer, tenant);
-    return { closed: [change], policyName: change.policyName, created: false, ...(current ? { report: withPushedValue(current, change, item.node) } : {}) };
+    return { closed: [change], policyName: change.policyName, created: false, ...(current ? { report: withPushedValue(current, change, remove ? undefined : item.node) } : {}) };
   }
 
   const together = Object.values(getAllChanges()).filter((other) => other.targetKind === "new" && other.policyName === change.policyName);
@@ -53,11 +54,19 @@ export async function applyPush(
       `"${change.policyName}" is created from all ${together.length} settings staged for it, and ${notReady.length} of them ${notReady.length === 1 ? "still needs" : "still need"} a reason and a reviewer.`,
     );
   }
+  if (together.some(isRemoval)) throw new PushRefused("A removal can't be part of a policy that doesn't exist yet.");
   const items = together.map((other) => pushable(other, current));
   const { policyId } = await pushNewPolicy(writeToken, { name: change.policyName, platform: platformOf(change), settings: items });
   for (const other of together) close(other, policyId, viewer, tenant);
   return { closed: together, policyName: change.policyName, created: true };
 }
+
+/**
+ * A staged removal: the setting is to be taken out of the policy. Staged
+ * like any change, with this in place of a value (and "Not configured" as
+ * the text of what it will be).
+ */
+export const isRemoval = (change: StagedChange) => (change.toStructured as { kind?: string } | undefined)?.kind === "removed";
 
 /** The setting a change is about, by the key it has while a policy sets it — a Missing setting's own key says "uncovered". */
 const settingKeyOf = (change: StagedChange) => (change.settingKey || change.targetKey).replace(/^uncovered::/, "");
@@ -71,7 +80,9 @@ function pushable(change: StagedChange, report: PushableReport | null) {
     throw new PushRefused(`The staged value of "${change.targetName}" has no structure to write — it was staged as plain text. Stage it again from the setting's panel.`);
   }
   const entry = report?.settings.find((e) => e.key === settingKeyOf(change));
-  return { definitionId: definitionIdOf(change), node: change.toStructured as SettingValueNode, ...(entry?.schemas ? { schemas: entry.schemas } : {}) };
+  // A removal has no value to write; the push only needs to know which setting, and what to call it.
+  const node = isRemoval(change) ? ({ kind: "unknown", definitionId: definitionIdOf(change), name: change.targetName } as SettingValueNode) : (change.toStructured as SettingValueNode);
+  return { definitionId: definitionIdOf(change), node, ...(entry?.schemas ? { schemas: entry.schemas } : {}) };
 }
 
 function close(change: StagedChange, policyId: string, viewer: ViewerIdentity, tenant: string): void {
@@ -91,13 +102,19 @@ function close(change: StagedChange, policyId: string, viewer: ViewerIdentity, t
   revertChange(change.id);
 }
 
-function withPushedValue(report: PushableReport, change: StagedChange, node: SettingValueNode): PushableReport {
+/** The report with the policy's value as it now is in the tenant — or, `node` undefined, without that policy setting it at all. */
+function withPushedValue(report: PushableReport, change: StagedChange, node: SettingValueNode | undefined): PushableReport {
   return {
     ...report,
-    settings: report.settings.map((entry) => {
-      if (entry.key !== settingKeyOf(change) || !entry.sources.some((source) => source.policyId === change.policyId)) return entry;
-      const sources = entry.sources.map((source) => (source.policyId === change.policyId ? { ...source, value: change.to, structured: node } : source));
-      return { ...entry, sources, ...summarizeSources(sources, report.groups, { conflicts: !isComplianceDefinition(entry.definitionId) }) };
-    }),
+    settings: report.settings
+      .map((entry) => {
+        if (entry.key !== settingKeyOf(change) || !entry.sources.some((source) => source.policyId === change.policyId)) return entry;
+        const sources = node
+          ? entry.sources.map((source) => (source.policyId === change.policyId ? { ...source, value: change.to, structured: node } : source))
+          : entry.sources.filter((source) => source.policyId !== change.policyId);
+        return { ...entry, sources, ...summarizeSources(sources, report.groups, { conflicts: !isComplianceDefinition(entry.definitionId) }) };
+      })
+      // A setting no policy sets any more isn't in the list — until a baseline misses it.
+      .filter((entry) => entry.sources.length > 0),
   };
 }

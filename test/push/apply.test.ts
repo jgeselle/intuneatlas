@@ -142,3 +142,21 @@ test("applyPush: a new policy is created from every setting staged under its nam
   const [entry] = getSettingHistory("contoso", "compliance.windows10.tpmRequired::windows10");
   assert.deepEqual([entry.kind, entry.policyId, entry.policyName, entry.from, entry.to], ["pushed", "created-id", "Baseline – Compliance", undefined, "Require"]);
 });
+
+test("applyPush: a staged removal takes the setting out, records it as now not configured, and drops it from the report", async (t) => {
+  const writes = fakeTenant(t, { "@odata.type": WINDOWS, id: "c1", displayName: "Windows compliance", passwordMinimumLength: 14 });
+  const staged = stageChange(
+    { targetKey: `${LEN}::windows10::c1`, targetName: "Minimum password length", settingKey: `${LEN}::windows10`, policyId: "c1", policyName: "Windows compliance", ruleId: "manual", from: "14", to: "Not configured", toStructured: { kind: "removed", definitionId: LEN, name: "Minimum password length" }, reason: "Covered by the new baseline policy." },
+    "oid-sam",
+    "Sam Okafor",
+  );
+  updateReviewer(staged.id, "Alex Meyer");
+
+  const result = await applyPush(staged.id, "write-token", admin, reportWith(14), "contoso");
+
+  assert.deepEqual(writes, [{ method: "PATCH", path: "/deviceManagement/deviceCompliancePolicies/c1", body: { "@odata.type": WINDOWS, passwordMinimumLength: null } }]);
+  // No policy sets it any more: it is no longer in the list.
+  assert.deepEqual((result.report as { settings: unknown[] }).settings, []);
+  const [entry] = getSettingHistory("contoso", `${LEN}::windows10`);
+  assert.deepEqual([entry.kind, entry.from, entry.to, entry.reason], ["pushed", "14", "Not configured", "Covered by the new baseline policy."]);
+});

@@ -140,3 +140,13 @@ test("history: a scan showing a different value than the one pushed doesn't conf
   assert.equal(pushed.kind, "pushed");
   assert.equal(pushed.confirmedAt, undefined);
 });
+
+test("history: a pushed removal is confirmed by the scan that finds the policy no longer setting it", () => {
+  recordPushedChange({ tenant: "contoso", settingKey: "tamper", policyId: "p3", policyName: "Policy p3", from: "Enabled", to: "Not configured", pushedBy: "Alex Meyer", stagedBy: "Alex Meyer", reviewedBy: "Sam Okafor", reason: "Moved to the baseline policy.", at: "2026-01-13T09:00:00.000Z" });
+  recordScan(scan("contoso", "2026-01-13T12:00:00.000Z", [entry("defer", [["p1", "5", false]])]));
+
+  const [latest] = getSettingHistory("contoso", "tamper");
+  // One entry for it — the push, now confirmed — not a second, anonymous "no longer sets it".
+  assert.deepEqual([latest.kind, latest.to, latest.confirmedAt], ["pushed", "Not configured", "2026-01-13T12:00:00.000Z"]);
+  assert.equal(getSettingHistory("contoso", "tamper").filter((e) => e.kind === "removed").length, 0);
+});

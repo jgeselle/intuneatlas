@@ -167,9 +167,15 @@ function ChangeCard({ change, onUpdateField, onRevert, onPush, viewer, inGroup =
         <PushButton
           label="Push to tenant"
           confirmText={
-            <>
-              Writes <span className="font-medium">{change.to.split("\n").join(", ")}</span> to <span className="font-medium">{change.policyName || "the policy"}</span> in Intune.
-            </>
+            change.toStructured?.kind === "removed" ? (
+              <>
+                Removes <span className="font-medium">{change.targetName}</span> from <span className="font-medium">{change.policyName || "the policy"}</span> in Intune.
+              </>
+            ) : (
+              <>
+                Writes <span className="font-medium">{change.to.split("\n").join(", ")}</span> to <span className="font-medium">{change.policyName || "the policy"}</span> in Intune.
+              </>
+            )
           }
           confirmLabel="Push"
           onPush={() => onPush(change)}

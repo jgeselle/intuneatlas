@@ -7,6 +7,7 @@ import { definitionPath } from "../scan/settingDefinitions.js";
 import type { GraphSettingInstance } from "../scan/settingValue.js";
 import type { SettingSchema, SettingValueNode } from "../scan/types.js";
 import { fetchNotificationTemplates } from "../scan/compliancePolicies.js";
+import { COMPLIANCE_ENUMS, COMPLIANCE_TYPES } from "../scan/complianceSchema.generated.js";
 import { actionsToWrite, readActions, writeActions } from "./actions.js";
 import { graphWrite } from "./graphWrite.js";
 import { pushLegacySetting } from "./legacy.js";
@@ -63,6 +64,13 @@ export interface ExistingPolicyPush extends PushItem {
   policyId: string;
   /** The policy's value when the change was staged — what its reviewer saw as "before". */
   from: string;
+  /**
+   * Take the setting out of the policy instead of changing it — back to
+   * "Not configured". `node` then only names the setting. In a Settings
+   * Catalog policy the setting is left out of what is sent back; a typed
+   * compliance policy's property is returned to its unset value.
+   */
+  remove?: boolean;
 }
 
 type Target = "configuration" | "complianceCatalog" | "compliance" | "tenant";
@@ -103,9 +111,15 @@ const notFound = (what: string) => (error: unknown) => {
 
 export async function pushToExistingPolicy(token: string, change: ExistingPolicyPush): Promise<void> {
   const target = targetOf(change.definitionId);
-  if (target === "tenant") return pushTenantSetting(token, change);
+  if (target === "tenant") {
+    if (change.remove) throw new PushRefused("A tenant-wide compliance setting can't be removed, only changed.");
+    return pushTenantSetting(token, change);
+  }
   // Actions for noncompliance sit beside a compliance policy of either kind, and are written by a route of their own.
-  if (target === "compliance" && typedProperty(change.definitionId)[1] === ACTIONS) return pushActions(token, change);
+  if (target === "compliance" && typedProperty(change.definitionId)[1] === ACTIONS) {
+    if (change.remove) throw new PushRefused("A compliance policy always has actions for noncompliance; they can be changed, not removed.");
+    return pushActions(token, change);
+  }
   if (target === "compliance") return pushComplianceProperty(token, change);
   return pushCatalogSetting(token, target === "complianceCatalog" ? "compliancePolicies" : "configurationPolicies", change);
 }
@@ -124,7 +138,7 @@ async function pushCatalogSetting(token: string, collection: Collection, change:
   const policy = await graphGet<GraphCatalogPolicy>(token, path, GRAPH_BETA_BASE).catch(async (error: unknown) => {
     if (!(error instanceof Error && /failed: (400|404)\b/.test(error.message))) throw error;
     // Not a Settings Catalog policy by that id: a legacy profile sets the same settings under its own.
-    if (collection === "configurationPolicies" && (await pushLegacySetting(token, change))) return undefined;
+    if (collection === "configurationPolicies" && !change.remove && (await pushLegacySetting(token, change))) return undefined;
     throw new PushRefused("This policy no longer exists.");
   });
   if (!policy) return;
@@ -136,8 +150,11 @@ async function pushCatalogSetting(token: string, collection: Collection, change:
   // A policy created from a template (endpoint security, a security baseline): the rebuilt setting has
   // to name its slots in that template again, or Intune would no longer know where it belongs.
   const templateId = policy.templateReference?.templateId ?? "";
-  let replacement = instanceFromNode(change.node, change.schemas);
-  if (templateId) {
+  if (change.remove && settings.length === 1) {
+    throw new PushRefused(`"${change.node.name}" is the only setting in "${policy.name}", and a policy can't be left empty. Delete the policy in Intune instead.`);
+  }
+  let replacement = change.remove ? {} : instanceFromNode(change.node, change.schemas);
+  if (templateId && !change.remove) {
     const fromTemplate = await fetchTemplateSlots(token, templateId).catch(() => new Map<string, TemplateSlot>());
     // The template first — it knows slots this policy hasn't used yet; what the old instance names covers a template that can no longer be read.
     replacement = withTemplateReferences(replacement, new Map([...slotsOfInstance(settings[index].settingInstance), ...fromTemplate]));
@@ -150,11 +167,13 @@ async function pushCatalogSetting(token: string, collection: Collection, change:
     technologies: policy.technologies,
     roleScopeTagIds: policy.roleScopeTagIds ?? ["0"],
     templateReference: { templateId },
-    // Every setting goes back exactly as it came, but the one being changed.
-    settings: settings.map((setting, i) => ({
-      "@odata.type": "#microsoft.graph.deviceManagementConfigurationSetting",
-      settingInstance: i === index ? replacement : setting.settingInstance,
-    })),
+    // Every setting goes back exactly as it came, but the one being changed — or, for a removal, without it.
+    settings: settings
+      .map((setting, i) => ({
+        "@odata.type": "#microsoft.graph.deviceManagementConfigurationSetting",
+        settingInstance: i === index ? replacement : setting.settingInstance,
+      }))
+      .filter((_, i) => !(change.remove && i === index)),
   });
 }
 
@@ -168,7 +187,19 @@ async function pushComplianceProperty(token: string, change: ExistingPolicyPush)
   refuseIfDrifted(change.node.name, current?.value, change.from);
 
   // Graph needs the type to know which kind of policy the property belongs to; nothing else is sent, so nothing else changes.
-  await graphWrite(token, "PATCH", path, { "@odata.type": policy["@odata.type"], [property]: complianceValueFromNode(change.node) });
+  // A removal returns the property to what an unset one holds.
+  const value = change.remove ? unsetComplianceValue(change.definitionId) : complianceValueFromNode(change.node);
+  await graphWrite(token, "PATCH", path, { "@odata.type": policy["@odata.type"], [property]: value });
+}
+
+/** What Graph holds in a typed compliance policy's property that isn't configured: false for a switch, an enum's first member, an empty list, otherwise null. */
+function unsetComplianceValue(definitionId: string): unknown {
+  const [type, property] = typedProperty(definitionId);
+  const kind = COMPLIANCE_TYPES[`${type}CompliancePolicy`]?.[property];
+  if (kind === "boolean") return false;
+  if (typeof kind === "object" && "enum" in kind) return COMPLIANCE_ENUMS[kind.enum]?.[0] ?? null;
+  if (typeof kind === "object" && "object" in kind && kind.list) return [];
+  return null;
 }
 
 async function pushActions(token: string, change: ExistingPolicyPush): Promise<void> {
