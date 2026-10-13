@@ -175,6 +175,8 @@ export async function startServer(options: StartServerOptions): Promise<{ url: s
     currentReport = { ...existing, changes: existingChanges };
   }
 
+  const scanJobs = createScanJobs();
+
   const server = createServer(async (req, res) => {
     try {
       if (req.method === "GET" && req.url === "/auth/login") {
@@ -224,17 +226,14 @@ export async function startServer(options: StartServerOptions): Promise<{ url: s
       }
 
       if (req.method === "POST" && req.url === "/api/scan") {
-        await handleScanRequest(
-          req,
-          res,
-          options.onScanRequest,
-          options.onEvaluateForViewer,
-          session,
-          viewer,
-          (report) => {
-            currentReport = report;
-          },
-        );
+        await handleScanRequest(req, res, options.onScanRequest, session, viewer, scanJobs, (report) => {
+          currentReport = report;
+        });
+        return;
+      }
+
+      if (req.method === "GET" && req.url?.startsWith("/api/scan?")) {
+        await handleScanStatus(req, res, options.onEvaluateForViewer, viewer, scanJobs, () => currentReport);
         return;
       }
 
@@ -435,43 +434,99 @@ async function serveStatic(
   res.end(body);
 }
 
+/**
+ * A scan of a real tenant takes minutes, and the proxies a shared
+ * instance sits behind give up on a request long before that (Azure
+ * Container Apps: four minutes) — the browser would see an error while
+ * the scan carried on unseen. So starting one only starts it: the answer
+ * comes straight back, and the page asks how it's going until it's done.
+ * One scan at a time; a second "sync" while one runs joins it.
+ */
+interface ScanJob {
+  id: number;
+  status: "running" | "done" | "failed";
+  error?: string;
+}
+
+function createScanJobs() {
+  let job: ScanJob | undefined;
+  return {
+    current: () => job,
+    start(run: () => Promise<void>): ScanJob {
+      if (job?.status === "running") return job;
+      const started: ScanJob = { id: (job?.id ?? 0) + 1, status: "running" };
+      job = started;
+      run().then(
+        () => {
+          started.status = "done";
+        },
+        (err) => {
+          logRequestError(err);
+          started.status = "failed";
+          started.error = err instanceof Error ? err.message : String(err);
+        },
+      );
+      return started;
+    },
+  };
+}
+
 async function handleScanRequest(
   req: IncomingMessage,
   res: ServerResponse,
   onScanRequest: StartServerOptions["onScanRequest"],
-  onEvaluateForViewer: StartServerOptions["onEvaluateForViewer"],
   session: WebSessionManager,
   viewer: ViewerIdentity,
+  jobs: ReturnType<typeof createScanJobs>,
   setReport: (report: unknown) => void,
 ): Promise<void> {
-  if (!onScanRequest) {
-    res.writeHead(501, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ error: "Live scanning isn't available from this session." }));
-    return;
-  }
-  if (!can(viewer.role, "scan")) {
-    res.writeHead(403, { "Content-Type": "application/json" });
-    res.end(JSON.stringify({ error: "Your role doesn't include scanning the tenant. Ask an Admin." }));
-    return;
-  }
+  const json = (status: number, body: unknown) => {
+    res.writeHead(status, { "Content-Type": "application/json" });
+    res.end(JSON.stringify(body));
+  };
+  if (!onScanRequest) return json(501, { error: "Live scanning isn't available from this session." });
+  if (!can(viewer.role, "scan")) return json(403, { error: "Your role doesn't include scanning the tenant. Ask an Admin." });
 
   try {
     const graphToken = await session.getGraphToken(req.headers.cookie);
-    if (!graphToken) {
-      res.writeHead(401, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: "Your sign-in expired — refresh the page to sign in again.", loginUrl: "/auth/login" }));
-      return;
-    }
+    if (!graphToken) return json(401, { error: "Your sign-in expired — refresh the page to sign in again.", loginUrl: "/auth/login" });
 
-    // What's stored (and what every OTHER viewer's own next request judges
-    // for themselves) is the raw report — only the response to whoever
-    // triggered this scan gets judged right away, against their own active
-    // baseline selection.
-    const rawReport = await onScanRequest(graphToken);
-    setReport(rawReport);
-    const report = onEvaluateForViewer ? await onEvaluateForViewer(rawReport, viewer) : rawReport;
-    res.writeHead(200, { "Content-Type": "application/json" });
-    res.end(JSON.stringify(report));
+    // What's stored (and what every viewer's own next request judges for
+    // themselves) is the raw report — see handleScanStatus for the answer
+    // whoever is waiting on this scan gets.
+    const job = jobs.start(async () => setReport(await onScanRequest(graphToken)));
+    json(202, { job: job.id, status: job.status });
+  } catch (err) {
+    sendApiError(res, err);
+  }
+}
+
+/** How the scan a page is waiting on is going — and, once it's done, the report judged for whoever asks. */
+async function handleScanStatus(
+  req: IncomingMessage,
+  res: ServerResponse,
+  onEvaluateForViewer: StartServerOptions["onEvaluateForViewer"],
+  viewer: ViewerIdentity,
+  jobs: ReturnType<typeof createScanJobs>,
+  getReport: () => unknown,
+): Promise<void> {
+  const json = (status: number, body: unknown) => {
+    res.writeHead(status, { "Content-Type": "application/json" });
+    res.end(JSON.stringify(body));
+  };
+  if (!can(viewer.role, "view")) return json(403, { error: "Your role doesn't include viewing the report." });
+
+  const wanted = Number(new URL(req.url ?? "", "http://x").searchParams.get("job"));
+  const job = jobs.current();
+  // A job this server doesn't know — it restarted mid-scan — is one that will never finish.
+  if (!job || job.id !== wanted) return json(404, { error: "That scan was interrupted. Start it again." });
+  if (job.status === "running") return json(200, { job: job.id, status: "running" });
+  if (job.status === "failed") return json(200, { job: job.id, status: "failed", error: job.error });
+
+  try {
+    const raw = getReport();
+    const report = onEvaluateForViewer ? await onEvaluateForViewer(raw, viewer) : raw;
+    json(200, { job: job.id, status: "done", report });
   } catch (err) {
     sendApiError(res, err);
   }

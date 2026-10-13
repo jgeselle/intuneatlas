@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { runScan } from "./lib/scan.js";
 
 function ConnectScreen({ onConnected, session }) {
   const [scanning, setScanning] = useState(false);
@@ -11,10 +12,7 @@ function ConnectScreen({ onConnected, session }) {
     setScanning(true);
     setError(null);
     try {
-      const res = await fetch("/api/scan", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.error || "Scan failed");
-      onConnected(body);
+      onConnected(await runScan("Scan failed"));
     } catch (err) {
       setError(err.message);
       setScanning(false);

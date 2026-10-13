@@ -15,6 +15,7 @@ import { AccountMenu } from "./components/AccountMenu.jsx";
 import { SettingDrawer } from "./components/SettingDrawer.jsx";
 import { SimplePolicyDrawer } from "./components/SimplePolicyDrawer.jsx";
 import { isComplianceSetting } from "./lib/format.js";
+import { runScan } from "./lib/scan.js";
 import { Overview } from "./views/Overview.jsx";
 import { SettingsView } from "./views/SettingsView.jsx";
 import { SimplePolicyList } from "./views/SimplePolicyList.jsx";
@@ -334,9 +335,7 @@ function Dashboard({ initialReport, session }) {
     if (syncing) return;
     setSyncing(true);
     try {
-      const res = await fetch("/api/scan", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
-      const body = await res.json();
-      if (!res.ok) throw new Error(body.error || "Sync failed");
+      const body = await runScan("Sync failed");
       setReport(body);
       flash("Re-indexed " + (body.policyCount ?? 0) + " policies · " + (body.settingCount ?? 0) + " settings");
     } catch (err) {

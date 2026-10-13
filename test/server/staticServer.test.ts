@@ -426,3 +426,75 @@ test("push: an Admin's push gets the Admin's own write token, and the answer nam
 test("push: unavailable (501) where the server wasn't given a way to push, and 404 for a change that isn't staged", async () => {
   assert.equal((await pushAs(18807, "admin", { writeToken: "write-token" })).status, 501);
 });
+
+// ------------------------------------------------------------------------
+// /api/scan — a scan runs in the background; the page asks how it's going
+// ------------------------------------------------------------------------
+
+test("scan: starting one answers at once, and its status carries the judged report when it's done", async () => {
+  const port = 18861;
+  const identity: ViewerIdentity = { id: "oid", name: "Alex", email: "a@x.com", role: "admin" };
+  let finish: (report: unknown) => void = () => {};
+  let scans = 0;
+  const { server } = await startServer({
+    report: null,
+    host: "127.0.0.1",
+    startPort: port,
+    session: mockSession({ getSession: async () => identity, getGraphToken: async () => "graph-token" }),
+    onScanRequest: () => {
+      scans++;
+      return new Promise((resolve) => (finish = resolve));
+    },
+    onEvaluateForViewer: async (r) => ({ ...(r as object), evaluated: true }),
+  });
+  const call = async (method: string, path: string) => {
+    const res = await fetch(`http://127.0.0.1:${port}${path}`, { method, ...(method === "POST" ? { headers: { "Content-Type": "application/json" }, body: "{}" } : {}) });
+    return { status: res.status, body: (await res.json()) as Record<string, unknown> };
+  };
+  try {
+    const started = await call("POST", "/api/scan");
+    assert.equal(started.status, 202);
+    assert.deepEqual(started.body, { job: 1, status: "running" });
+
+    // A second sync while one runs joins it rather than scanning the tenant twice.
+    assert.deepEqual((await call("POST", "/api/scan")).body, { job: 1, status: "running" });
+    assert.equal(scans, 1);
+    assert.deepEqual((await call("GET", "/api/scan?job=1")).body, { job: 1, status: "running" });
+
+    finish({ policyCount: 3 });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    assert.deepEqual((await call("GET", "/api/scan?job=1")).body, { job: 1, status: "done", report: { policyCount: 3, evaluated: true } });
+
+    // A job the server never ran (it restarted mid-scan) is reported as such, not waited on forever.
+    assert.equal((await call("GET", "/api/scan?job=7")).status, 404);
+  } finally {
+    server.close();
+  }
+});
+
+test("scan: one that fails says why in its status; a viewer without the scan role can't start one", async () => {
+  const port = 18862;
+  let role: Role = "admin";
+  const { server } = await startServer({
+    report: null,
+    host: "127.0.0.1",
+    startPort: port,
+    session: mockSession({ getSession: async () => ({ id: "oid", name: "Alex", email: "a@x.com", role }), getGraphToken: async () => "graph-token" }),
+    onScanRequest: async () => {
+      throw new Error("Couldn't reach Microsoft Graph (ETIMEDOUT) after 6 tries");
+    },
+  });
+  try {
+    const post = () => fetch(`http://127.0.0.1:${port}/api/scan`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+    const started = (await (await post()).json()) as { job: number };
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    const status = (await (await fetch(`http://127.0.0.1:${port}/api/scan?job=${started.job}`)).json()) as Record<string, unknown>;
+    assert.equal(status.status, "failed");
+    assert.match(String(status.error), /ETIMEDOUT/);
+
+    role = "viewer";
+    assert.equal((await post()).status, 403);
+  } finally {
+    server.close();
+  }
+});
