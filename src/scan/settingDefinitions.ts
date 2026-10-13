@@ -1,5 +1,5 @@
 import { GRAPH_BETA_BASE } from "../config.js";
-import { graphGet } from "../graph.js";
+import { graphGet, graphGetAll } from "../graph.js";
 import { graphDefinitionId, inComplianceCatalog, toComplianceCatalogId } from "./complianceCatalog.js";
 import type { SettingKind, SettingSchema } from "./types.js";
 
@@ -84,6 +84,8 @@ export interface DefinitionStore {
   /** The kept answer for `key`, unless there is none or it's older than `maxAgeMs`. */
   get(key: string, maxAgeMs: number): string | undefined;
   set(key: string, json: string): void;
+  /** Many at once — the whole catalog is some 19,000 entries. */
+  setMany(entries: Array<[key: string, json: string]>): void;
 }
 
 let store: DefinitionStore | undefined;
@@ -119,6 +121,89 @@ export function useDefinitionStore(next: DefinitionStore | undefined): void {
   primed.clear();
   cache.clear();
   categoryCache.clear();
+}
+
+/**
+ * Intune's whole catalog, fetched in three requests instead of one per
+ * definition. Confirmed live: listing configurationSettings with no
+ * paging options answers with every definition at once (18,402 of them,
+ * 55 MB, about fifteen seconds), each identical to what a lookup by id
+ * returns; the categories (1,027) and the Linux compliance catalog (21)
+ * come the same way. A baseline of ~800 settings used to cost ~1,750
+ * requests and got the scan throttled; this is how other tools that
+ * compare against baselines avoid that too.
+ *
+ * Done when there's somewhere to keep it and what's kept is older than
+ * a week. Only the fields read here are kept — about a third less. If it
+ * fails, nothing is lost: each definition is still looked up by id as
+ * it's needed, the slow way.
+ */
+const CATALOG_KEY = "catalog";
+const CATALOG_TIMEOUT_MS = 5 * 60_000;
+const KEPT_FIELDS = [
+  "@odata.type",
+  "id",
+  "displayName",
+  "description",
+  "baseUri",
+  "offsetUri",
+  "categoryId",
+  "options",
+  "defaultOptionId",
+  "valueDefinition",
+  "defaultValue",
+  "childIds",
+  "minimumCount",
+  "maximumCount",
+] as const;
+
+function slim(definition: Record<string, unknown>): Record<string, unknown> {
+  const kept: Record<string, unknown> = {};
+  for (const field of KEPT_FIELDS) if (definition[field] !== undefined && definition[field] !== null) kept[field] = definition[field];
+  if (Array.isArray(kept.options)) {
+    kept.options = (kept.options as Array<Record<string, unknown>>).map((o) => ({
+      itemId: o.itemId,
+      displayName: o.displayName,
+      ...(o.description ? { description: o.description } : {}),
+      ...(Array.isArray(o.dependedOnBy) && o.dependedOnBy.length ? { dependedOnBy: o.dependedOnBy } : {}),
+    }));
+  }
+  return kept;
+}
+
+let loadingCatalog: Promise<void> | undefined;
+
+export function loadCatalog(token: string, say: (message: string) => void = () => {}): Promise<void> {
+  const target = store;
+  if (!target) return Promise.resolve();
+  try {
+    if (target.get(CATALOG_KEY, KEEP_MS) !== undefined) return Promise.resolve();
+  } catch {
+    return Promise.resolve();
+  }
+  loadingCatalog ??= (async () => {
+    try {
+      say("Fetching Intune's settings catalog …");
+      const [settings, compliance, categories] = await Promise.all([
+        graphGetAll<Record<string, unknown>>(token, "/deviceManagement/configurationSettings", GRAPH_BETA_BASE, CATALOG_TIMEOUT_MS),
+        graphGetAll<Record<string, unknown>>(token, "/deviceManagement/complianceSettings", GRAPH_BETA_BASE, CATALOG_TIMEOUT_MS),
+        graphGetAll<Record<string, unknown>>(token, "/deviceManagement/configurationCategories", GRAPH_BETA_BASE, CATALOG_TIMEOUT_MS),
+      ]);
+      const entries: Array<[string, string]> = [];
+      for (const d of settings) if (typeof d.id === "string") entries.push([`configurationSettings/${d.id}`, JSON.stringify(slim(d))]);
+      for (const d of compliance) if (typeof d.id === "string") entries.push([`complianceSettings/${d.id}`, JSON.stringify(slim(d))]);
+      for (const c of categories) {
+        if (typeof c.id === "string") entries.push([`category/${c.id}`, JSON.stringify({ id: c.id, displayName: c.displayName, description: c.description })]);
+      }
+      entries.push([CATALOG_KEY, JSON.stringify({ definitions: settings.length + compliance.length, categories: categories.length })]);
+      target.setMany(entries);
+    } catch (err) {
+      say(`Couldn't fetch the settings catalog in one go (${err instanceof Error ? err.message.split("\n")[0] : String(err)}); looking settings up one by one instead.`);
+    } finally {
+      loadingCatalog = undefined;
+    }
+  })();
+  return loadingCatalog;
 }
 
 // Microsoft does rename settings and add options, so nothing is trusted

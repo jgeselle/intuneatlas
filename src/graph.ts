@@ -58,7 +58,7 @@ async function waitOutThrottling(): Promise<void> {
 
 type Outcome<T> = { body: T } | { retryInMs: number } | { throttled: true } | { error: Error };
 
-export async function graphGet<T>(token: string, path: string, base: string = GRAPH_V1_BASE): Promise<T> {
+export async function graphGet<T>(token: string, path: string, base: string = GRAPH_V1_BASE, timeoutMs: number = REQUEST_TIMEOUT_MS): Promise<T> {
   const url = path.startsWith("http") ? path : `${base}${path}`;
   let failures = 0;
   let throttles = 0;
@@ -72,7 +72,7 @@ export async function graphGet<T>(token: string, path: string, base: string = GR
       await waitOutThrottling();
       let response: Response;
       try {
-        response = await fetch(url, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
+        response = await fetch(url, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(timeoutMs) });
       } catch (err) {
         if (canRetry) return { retryInMs: backoffMs };
         return { error: new Error(`Couldn't reach Microsoft Graph (${networkReason(err)}) after ${MAX_ATTEMPTS} tries: ${url}`, { cause: err }) };
@@ -123,14 +123,14 @@ interface ODataPage<T> {
 }
 
 /** Follows @odata.nextLink until exhausted, returning every item across all pages. */
-export async function graphGetAll<T>(token: string, path: string, base: string = GRAPH_V1_BASE): Promise<T[]> {
+export async function graphGetAll<T>(token: string, path: string, base: string = GRAPH_V1_BASE, timeoutMs?: number): Promise<T[]> {
   const items: T[] = [];
   let next: string | undefined = path;
 
   while (next) {
     // graphGet only prefixes `base` onto relative paths; @odata.nextLink is
     // already a full URL, so it passes through untouched on later iterations.
-    const page: ODataPage<T> = await graphGet<ODataPage<T>>(token, next, base);
+    const page: ODataPage<T> = await graphGet<ODataPage<T>>(token, next, base, timeoutMs);
     items.push(...page.value);
     next = page["@odata.nextLink"];
   }

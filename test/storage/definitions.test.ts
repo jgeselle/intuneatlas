@@ -24,3 +24,8 @@ test("definitionStore: keeps an answer, replaces it, and stops returning it once
   assert.equal(definitionStore.get("configurationSettings/a", 60_000), '{"v":2}');
   assert.equal(definitionStore.get("configurationSettings/a", 0), undefined);
 });
+
+test("definitionStore: many entries go in together", () => {
+  definitionStore.setMany(Array.from({ length: 500 }, (_, i) => [`configurationSettings/many_${i}`, `{"i":${i}}`]));
+  assert.equal(definitionStore.get("configurationSettings/many_499", 60_000), '{"i":499}');
+});

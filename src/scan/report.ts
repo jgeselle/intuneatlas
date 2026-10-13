@@ -1,5 +1,5 @@
 import { applyBaselines, findUncoveredEntries, type BaselineDefinitions } from "../baselines/evaluate.js";
-import { resolveBaselineDefinitions } from "./settingDefinitions.js";
+import { loadCatalog, resolveBaselineDefinitions } from "./settingDefinitions.js";
 import { definitionIdsIn } from "./settingValue.js";
 import { fetchGroupDirectory } from "./groups.js";
 import { groupIdsIn } from "./targets.js";
@@ -65,6 +65,8 @@ export interface ScanReport {
  * facts already on disk.
  */
 export async function buildReport(token: string, flow: string, tenant: string, baselineDefinitionIds: string[] = []): Promise<ScanReport> {
+  // First, so nothing below asks for a definition the catalog is about to bring anyway.
+  await loadCatalog(token, (message) => console.error(message));
   const [policies, legacyPolicies, compliance, enrollmentConfigurations, tenantName] = await Promise.all([
     fetchConfigurationPolicies(token),
     fetchLegacyDeviceConfigurations(token),
