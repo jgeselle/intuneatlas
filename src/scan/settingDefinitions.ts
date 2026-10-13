@@ -65,11 +65,81 @@ export interface ResolvedDefinition {
  * deviceManagementConfigurationSettingDefinition is beta-only. Isolated here
  * so a future breaking change is a single-file fix.
  *
- * Cached per process (i.e. per `scan` run): many policies reuse the same
- * settingDefinitionId, and this is the highest-volume call in a scan.
+ * Remembered in memory and, where a store is set, on disk: many policies
+ * reuse the same settingDefinitionId, and this is the highest-volume call
+ * in a scan.
  */
-const cache = new Map<string, ResolvedDefinition>();
-const categoryCache = new Map<string, string>();
+const cache = new Map<string, { at: number; value: Promise<ResolvedDefinition> }>();
+const categoryCache = new Map<string, { at: number; value: Promise<string> }>();
+
+/**
+ * Somewhere to keep what Graph said about a definition or a category
+ * between runs — a first scan against a large baseline otherwise asks
+ * for ~1,500 of them one by one, slowly enough to be throttled, every
+ * time the process starts. What's kept is Intune's own catalog, the same
+ * for every tenant; nothing a tenant configured. Graph's answer is kept
+ * as it came, so a change to how it's read here needs no new fetch.
+ */
+export interface DefinitionStore {
+  /** The kept answer for `key`, unless there is none or it's older than `maxAgeMs`. */
+  get(key: string, maxAgeMs: number): string | undefined;
+  set(key: string, json: string): void;
+}
+
+let store: DefinitionStore | undefined;
+
+export function useDefinitionStore(next: DefinitionStore | undefined): void {
+  store = next;
+  cache.clear();
+  categoryCache.clear();
+}
+
+// Microsoft does rename settings and add options, so nothing is trusted
+// forever — in memory or on disk. An id Graph had nothing for is asked
+// about again sooner: new settings do appear.
+const KEEP_MS = 7 * 24 * 60 * 60 * 1000;
+const KEEP_MISSING_MS = 24 * 60 * 60 * 1000;
+const MISSING = "missing";
+
+/** Graph has nothing usable for this id — remembered from an earlier 400/404 rather than asked again. */
+class KnownMissing extends Error {}
+
+function kept(key: string): unknown {
+  let json: string | undefined;
+  try {
+    json = store?.get(key, KEEP_MS);
+    if (json === undefined) return undefined;
+    return JSON.parse(json);
+  } catch {
+    // An unreadable store or entry is the same as none: ask Graph.
+    return undefined;
+  }
+}
+
+function keep(key: string, value: unknown): void {
+  try {
+    store?.set(key, JSON.stringify(value));
+  } catch {
+    // Not being able to remember must never fail a scan.
+  }
+}
+
+/**
+ * One lookup per id, however many callers want it at the same moment —
+ * a scan resolves everything at once, and hundreds of settings share a
+ * definition or a category. A failed lookup is forgotten so it can be
+ * tried again.
+ */
+function once<T>(memory: Map<string, { at: number; value: Promise<T> }>, id: string, load: () => Promise<T>): Promise<T> {
+  const held = memory.get(id);
+  if (held && Date.now() - held.at < KEEP_MS) return held.value;
+  const value = load();
+  memory.set(id, { at: Date.now(), value });
+  value.catch(() => {
+    if (memory.get(id)?.value === value) memory.delete(id);
+  });
+  return value;
+}
 
 /**
  * Resolves a category id to its friendly display name (e.g. "Windows
@@ -86,50 +156,52 @@ const categoryCache = new Map<string, string>();
  * never a blank string. Cached per process, same reasoning as
  * resolveSettingDefinition below: many settings share a category.
  */
-async function resolveCategoryName(token: string, categoryId: string): Promise<string> {
-  const cached = categoryCache.get(categoryId);
-  if (cached) return cached;
-
-  const category = await graphGet<CategoryResponse>(
-    token,
-    `/deviceManagement/configurationCategories/${categoryId}`,
-    GRAPH_BETA_BASE,
-  );
-
-  const name = category.displayName || category.description || categoryId;
-  categoryCache.set(categoryId, name);
-  return name;
+function resolveCategoryName(token: string, categoryId: string): Promise<string> {
+  return once(categoryCache, categoryId, async () => {
+    const key = `category/${categoryId}`;
+    let category = kept(key) as CategoryResponse | undefined;
+    if (!category) {
+      category = await graphGet<CategoryResponse>(token, `/deviceManagement/configurationCategories/${categoryId}`, GRAPH_BETA_BASE);
+      keep(key, category);
+    }
+    return category.displayName || category.description || categoryId;
+  });
 }
 
-export async function resolveSettingDefinition(
-  token: string,
-  settingDefinitionId: string,
-): Promise<ResolvedDefinition> {
-  const cached = cache.get(settingDefinitionId);
-  if (cached) return cached;
+export function resolveSettingDefinition(token: string, settingDefinitionId: string): Promise<ResolvedDefinition> {
+  return once(cache, settingDefinitionId, async () => {
+    // A compliance catalog setting (see complianceCatalog.ts) is asked for in its own catalog, by Graph's
+    // own id, and comes back with every id it mentions marked the same way. Categories are shared.
+    const compliance = inComplianceCatalog(settingDefinitionId);
+    const catalog = compliance ? "complianceSettings" : "configurationSettings";
+    const graphId = graphDefinitionId(settingDefinitionId);
+    const key = `${catalog}/${graphId}`;
 
-  // A compliance catalog setting (see complianceCatalog.ts) is asked for in its own catalog, by Graph's
-  // own id, and comes back with every id it mentions marked the same way. Categories are shared.
-  const compliance = inComplianceCatalog(settingDefinitionId);
-  const definition = await graphGet<SettingDefinitionResponse>(
-    token,
-    definitionPath(graphDefinitionId(settingDefinitionId), compliance ? "complianceSettings" : "configurationSettings"),
-    GRAPH_BETA_BASE,
-  );
-  const schema = compliance ? asComplianceSchema(toSchema(definition)) : toSchema(definition);
+    let definition = kept(key) as SettingDefinitionResponse | typeof MISSING | undefined;
+    if (definition === MISSING) {
+      // Remembered for a shorter time than a real answer.
+      if (store?.get(key, KEEP_MISSING_MS) !== undefined) throw new KnownMissing(`No definition for ${settingDefinitionId}`);
+      definition = undefined;
+    }
+    if (!definition) {
+      try {
+        definition = await graphGet<SettingDefinitionResponse>(token, definitionPath(graphId, catalog), GRAPH_BETA_BASE);
+      } catch (err) {
+        if (isUnresolvable(err)) keep(key, MISSING);
+        throw err;
+      }
+      keep(key, definition);
+    }
+    const schema = compliance ? asComplianceSchema(toSchema(definition)) : toSchema(definition);
 
-  const resolved: ResolvedDefinition = {
-    name: definition.displayName,
-    cspPath: `${definition.baseUri}${definition.offsetUri}`,
-    category: await resolveCategoryName(token, definition.categoryId),
-    ...(definition.options
-      ? { options: new Map(definition.options.map((o) => [o.itemId, o.displayName])) }
-      : {}),
-    schema,
-  };
-
-  cache.set(settingDefinitionId, resolved);
-  return resolved;
+    return {
+      name: definition.displayName,
+      cspPath: `${definition.baseUri}${definition.offsetUri}`,
+      category: await resolveCategoryName(token, definition.categoryId),
+      ...(definition.options ? { options: new Map(definition.options.map((o) => [o.itemId, o.displayName])) } : {}),
+      schema,
+    };
+  });
 }
 
 /**
@@ -157,7 +229,7 @@ export function definitionPath(id: string, catalog: "configurationSettings" | "c
  * with the scan itself (throttling, auth, an outage).
  */
 function isUnresolvable(err: unknown): boolean {
-  return err instanceof Error && /failed: (400|404)\b/.test(err.message);
+  return err instanceof KnownMissing || (err instanceof Error && /failed: (400|404)\b/.test(err.message));
 }
 
 /**

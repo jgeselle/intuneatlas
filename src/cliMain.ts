@@ -7,6 +7,8 @@ import { installPersistent, uninstallPersistent } from "./commands/persist.js";
 import { runScan } from "./commands/scan.js";
 import { runSearch } from "./commands/search.js";
 import { runUi } from "./commands/ui.js";
+import { useDefinitionStore } from "./scan/settingDefinitions.js";
+import { definitionStore } from "./storage/definitions.js";
 
 // Node tries each address of a host in turn and gives every one only a
 // quarter of a second to connect. Where IPv6 is offered but doesn't work
@@ -16,6 +18,10 @@ import { runUi } from "./commands/ui.js";
 // seconds per address is still quick and no longer gives up on a
 // connection that was about to succeed.
 net.setDefaultAutoSelectFamilyAttemptTimeout(2000);
+
+// What Graph says about Intune's catalog is kept on disk between runs — set here, once, so the
+// scan code itself never reaches for the database (and tests of it never touch one).
+useDefinitionStore(definitionStore);
 
 const program = new Command();
 

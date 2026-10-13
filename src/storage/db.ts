@@ -124,6 +124,15 @@ export function getDb(): DatabaseSync {
       value TEXT NOT NULL
     );
 
+    -- Intune's own catalog as Graph described it (setting definitions,
+    -- categories) — the same for every tenant, kept so a scan doesn't ask
+    -- for it all again. Safe to empty at any time.
+    CREATE TABLE IF NOT EXISTS definition_cache (
+      key TEXT PRIMARY KEY,
+      json TEXT NOT NULL,
+      fetched_at INTEGER NOT NULL
+    );
+
     -- Which baseline packs (source/name+version folders under baselines/)
     -- are active, per signed-in viewer — not tenant data, a personal
     -- preference. Row absence means "never customized" (defaults to every
