@@ -2,7 +2,7 @@ import { GRAPH_BETA_BASE } from "../config.js";
 import { graphGetAll } from "../graph.js";
 import { mapAssignmentTargets } from "./assignments.js";
 import { asComplianceInstance } from "./complianceCatalog.js";
-import { resolveDeclaredSchemas, resolveSettingDefinitionOrStandIn, type ResolvedDefinition } from "./settingDefinitions.js";
+import { primeDefinitions, resolveDeclaredSchemas, resolveSettingDefinitionOrStandIn, type ResolvedDefinition } from "./settingDefinitions.js";
 import { renderNode, type GraphSettingInstance } from "./settingValue.js";
 import type { RawPolicy, RawSetting, SettingSchema, SettingValueNode } from "./types.js";
 
@@ -15,6 +15,8 @@ interface GraphPolicy {
 
 interface GraphSetting {
   settingInstance: GraphSettingInstance;
+  /** Present when asked for with $expand: the setting's own definition and those of the sub-settings it holds. */
+  settingDefinitions?: unknown[];
 }
 
 export function fetchConfigurationPolicies(token: string): Promise<RawPolicy[]> {
@@ -33,7 +35,7 @@ export async function fetchCatalogPolicies(token: string, collection: "configura
   // Confirmed live against a real tenant: this resource 404s on v1.0
   // ("Resource not found for the segment 'configurationPolicies'") — it's
   // still beta-only, same as setting-definition resolution below.
-  const policies = await graphGetAll<GraphPolicy>(token, `/deviceManagement/${collection}?$expand=Assignments`, GRAPH_BETA_BASE);
+  const policies = await graphGetAll<GraphPolicy>(token, `/deviceManagement/${collection}?$select=id,name,platforms&$expand=assignments`, GRAPH_BETA_BASE);
 
   return Promise.all(
     policies.map(async (policy) => ({
@@ -47,7 +49,12 @@ export async function fetchCatalogPolicies(token: string, collection: "configura
 }
 
 async function fetchPolicySettings(token: string, collection: "configurationPolicies" | "compliancePolicies", policyId: string): Promise<RawSetting[]> {
-  const graphSettings = await graphGetAll<GraphSetting>(token, `/deviceManagement/${collection}/${policyId}/settings`, GRAPH_BETA_BASE);
+  // Confirmed live on both collections: with $expand=settingDefinitions each setting arrives with its
+  // definition and those of every sub-setting it holds — the same objects a lookup by id returns. That
+  // turns "one request per distinct definition in the tenant" into none at all for what policies set.
+  const graphSettings = await graphGetAll<GraphSetting>(token, `/deviceManagement/${collection}/${policyId}/settings?$expand=settingDefinitions&$top=1000`, GRAPH_BETA_BASE);
+  const catalog = collection === "compliancePolicies" ? "complianceSettings" : "configurationSettings";
+  for (const setting of graphSettings) if (Array.isArray(setting.settingDefinitions)) primeDefinitions(catalog, setting.settingDefinitions);
   return resolveSettingInstances(token, collection, graphSettings);
 }
 

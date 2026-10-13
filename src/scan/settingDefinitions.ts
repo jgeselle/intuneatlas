@@ -88,8 +88,35 @@ export interface DefinitionStore {
 
 let store: DefinitionStore | undefined;
 
+/**
+ * Definitions Graph handed over alongside something else — a policy's
+ * settings come with theirs when asked (see configurationPolicies.ts) —
+ * so they needn't be asked for one by one. Kept for the life of the
+ * process and passed on to the store.
+ */
+const primed = new Map<string, SettingDefinitionResponse>();
+
+export function primeDefinitions(catalog: "configurationSettings" | "complianceSettings", definitions: unknown[]): void {
+  for (const candidate of definitions) {
+    const definition = candidate as Partial<SettingDefinitionResponse> | null;
+    // Only what a lookup would have returned: anything less is left to be asked for properly.
+    if (!definition || typeof definition.id !== "string" || typeof definition.categoryId !== "string" || typeof definition.baseUri !== "string") continue;
+    const key = `${catalog}/${definition.id}`;
+    primed.set(key, definition as SettingDefinitionResponse);
+    // The same definition arrives with every policy that uses it — written once a day is plenty.
+    let fresh = false;
+    try {
+      fresh = store?.get(key, KEEP_MISSING_MS) !== undefined && store.get(key, KEEP_MISSING_MS) !== JSON.stringify(MISSING);
+    } catch {
+      fresh = false;
+    }
+    if (!fresh) keep(key, definition);
+  }
+}
+
 export function useDefinitionStore(next: DefinitionStore | undefined): void {
   store = next;
+  primed.clear();
   cache.clear();
   categoryCache.clear();
 }
@@ -177,7 +204,7 @@ export function resolveSettingDefinition(token: string, settingDefinitionId: str
     const graphId = graphDefinitionId(settingDefinitionId);
     const key = `${catalog}/${graphId}`;
 
-    let definition = kept(key) as SettingDefinitionResponse | typeof MISSING | undefined;
+    let definition = primed.get(key) ?? (kept(key) as SettingDefinitionResponse | typeof MISSING | undefined);
     if (definition === MISSING) {
       // Remembered for a shorter time than a real answer.
       if (store?.get(key, KEEP_MISSING_MS) !== undefined) throw new KnownMissing(`No definition for ${settingDefinitionId}`);

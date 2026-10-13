@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test, type TestContext } from "node:test";
-import { resolveSettingDefinition, resolveSettingDefinitionOrStandIn, useDefinitionStore, type DefinitionStore } from "../../src/scan/settingDefinitions.js";
+import { primeDefinitions, resolveSettingDefinition, resolveSettingDefinitionOrStandIn, useDefinitionStore, type DefinitionStore } from "../../src/scan/settingDefinitions.js";
 
 /**
  * Covers what a real hosted instance ran into: a first scan against a
@@ -104,4 +104,22 @@ test("definitions: a store that throws or holds rubbish never fails a lookup", a
     },
   });
   assert.equal((await resolveSettingDefinition("token", "setting_a")).name, "Name of setting_a");
+});
+
+test("definitions: one that arrived with a policy's settings is never asked for, and is kept for next time", async (t) => {
+  const { calls } = mockGraph(t);
+  const store = memoryStore();
+  useDefinitionStore(store);
+  primeDefinitions("configurationSettings", [
+    { id: "handed_over", displayName: "Handed over", baseUri: "./Device", offsetUri: "/x", categoryId: "cat" },
+    { id: "half a definition" },
+    null,
+  ]);
+  assert.equal((await resolveSettingDefinition("token", "handed_over")).name, "Handed over");
+  assert.deepEqual(calls, ["configurationCategories/cat"]);
+  assert.deepEqual([...store.rows.keys()].sort(), ["category/cat", "configurationSettings/handed_over"]);
+
+  useDefinitionStore(store);
+  assert.equal((await resolveSettingDefinition("token", "handed_over")).name, "Handed over");
+  assert.equal(calls.length, 1);
 });

@@ -16,6 +16,9 @@ const MAX_ATTEMPTS = 6;
 // take turns, and one that dies on the network is tried again.
 const MAX_CONCURRENT = 8;
 const TRANSIENT_STATUS = new Set([502, 503, 504]);
+// A request that has heard nothing for this long is given up on and tried again, rather than
+// holding its turn (and the whole scan) for the several minutes Node would otherwise wait.
+const REQUEST_TIMEOUT_MS = 60_000;
 
 let inFlight = 0;
 const waiting: Array<() => void> = [];
@@ -69,7 +72,7 @@ export async function graphGet<T>(token: string, path: string, base: string = GR
       await waitOutThrottling();
       let response: Response;
       try {
-        response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+        response = await fetch(url, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
       } catch (err) {
         if (canRetry) return { retryInMs: backoffMs };
         return { error: new Error(`Couldn't reach Microsoft Graph (${networkReason(err)}) after ${MAX_ATTEMPTS} tries: ${url}`, { cause: err }) };
