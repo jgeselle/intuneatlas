@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { BaselineRule } from "../../src/baselines/types.js";
 import { fetchCompliancePolicies } from "../../src/scan/compliancePolicies.js";
+import { withCatalog } from "../catalog.js";
 import { complianceSettingsOf } from "../../src/scan/complianceSettings.js";
 import { buildSettingIndex } from "../../src/scan/index.js";
 import { applyBaselinesToReport, type ScanReport } from "../../src/scan/report.js";
@@ -260,7 +261,7 @@ test("fetchCompliancePolicies: reads Linux compliance policies too — Settings 
     },
   };
   const asked: string[] = [];
-  global.fetch = (async (input: string | URL) => {
+  global.fetch = withCatalog((async (input: string | URL) => {
     const url = decodeURIComponent(String(input));
     asked.push(url);
     if (url.includes("/deviceManagement/deviceCompliancePolicies?")) return respond(200, { value: [] });
@@ -298,7 +299,7 @@ test("fetchCompliancePolicies: reads Linux compliance policies too — Settings 
     const definition = /\/complianceSettings(?:\/|\(')([^?')]+)/.exec(url);
     if (definition && definitions[definition[1]]) return respond(200, definitions[definition[1]]);
     return respond(404, { error: { message: `unexpected ${url}` } });
-  }) as typeof fetch;
+  }) as typeof fetch, { complianceSettings: Object.keys(definitions) });
 
   const { policies, settings } = await fetchCompliancePolicies("token");
 

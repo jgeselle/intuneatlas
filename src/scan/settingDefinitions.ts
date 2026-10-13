@@ -58,27 +58,34 @@ export interface ResolvedDefinition {
   schema: SettingSchema;
 }
 
-/**
- * Resolves a Settings Catalog setting's human name, CSP/OMA-URI path, and
- * (for choice-type settings) its option display names. This is the one call
- * in the whole codebase that has no v1.0 equivalent —
- * deviceManagementConfigurationSettingDefinition is beta-only. Isolated here
- * so a future breaking change is a single-file fix.
- *
- * Remembered in memory and, where a store is set, on disk: many policies
- * reuse the same settingDefinitionId, and this is the highest-volume call
- * in a scan.
- */
-const cache = new Map<string, { at: number; value: Promise<ResolvedDefinition> }>();
-const categoryCache = new Map<string, { at: number; value: Promise<string> }>();
 
 /**
- * Somewhere to keep what Graph said about a definition or a category
- * between runs — a first scan against a large baseline otherwise asks
- * for ~1,500 of them one by one, slowly enough to be throttled, every
- * time the process starts. What's kept is Intune's own catalog, the same
- * for every tenant; nothing a tenant configured. Graph's answer is kept
- * as it came, so a change to how it's read here needs no new fetch.
+ * Where a setting's human name, CSP/OMA-URI path, options and shape come
+ * from: Intune's own catalog, the same for every tenant. This is the one
+ * part of the codebase with no v1.0 equivalent —
+ * deviceManagementConfigurationSettingDefinition is beta-only. Isolated
+ * here so a future breaking change is a single-file fix.
+ *
+ * The catalog is fetched whole, never a definition at a time. Confirmed
+ * live: listing configurationSettings with no paging options answers
+ * with every definition at once (18,402 of them, 55 MB, about fifteen
+ * seconds), each identical to what a lookup by id returns; the Linux
+ * compliance catalog (21) and both lists of categories come the same
+ * way. Asking per definition instead — which this file once did — meant
+ * ~1,750 requests for a baseline of ~800 settings, and a scan throttled
+ * by Graph before it finished. Other tools that compare a tenant with a
+ * baseline fetch the catalog whole for the same reason.
+ *
+ * A definition the catalog doesn't hold is one Intune has nothing usable
+ * for (baselines do name such ids), or one newer than the kept copy.
+ * The second kind still resolves for anything a policy sets, because a
+ * policy's settings arrive with their definitions (see primeDefinitions).
+ */
+
+/**
+ * Somewhere to keep the catalog between runs, so it's fetched once a
+ * week rather than every time the process starts. Nothing a tenant
+ * configured is ever kept here.
  */
 export interface DefinitionStore {
   /** The kept answer for `key`, unless there is none or it's older than `maxAgeMs`. */
@@ -88,58 +95,31 @@ export interface DefinitionStore {
   setMany(entries: Array<[key: string, json: string]>): void;
 }
 
+// Microsoft does rename settings and add options, so a kept catalog is replaced after a week.
+const KEEP_MS = 7 * 24 * 60 * 60 * 1000;
+const CATALOG_KEY = "catalog";
+const CATALOG_TIMEOUT_MS = 5 * 60_000;
+
 let store: DefinitionStore | undefined;
+/** The catalog itself when there's no store to keep it in — a one-off run, or a test. */
+let inMemory: Map<string, string> | undefined;
+/** When the catalog this process works from was last known good, and the load in progress if there is one. */
+let readyAt = 0;
+let loading: Promise<void> | undefined;
 
-/**
- * Definitions Graph handed over alongside something else — a policy's
- * settings come with theirs when asked (see configurationPolicies.ts) —
- * so they needn't be asked for one by one. Kept for the life of the
- * process and passed on to the store.
- */
+const resolved = new Map<string, ResolvedDefinition>();
+/** Definitions Graph handed over alongside a policy's settings — see primeDefinitions. */
 const primed = new Map<string, SettingDefinitionResponse>();
-
-export function primeDefinitions(catalog: "configurationSettings" | "complianceSettings", definitions: unknown[]): void {
-  for (const candidate of definitions) {
-    const definition = candidate as Partial<SettingDefinitionResponse> | null;
-    // Only what a lookup would have returned: anything less is left to be asked for properly.
-    if (!definition || typeof definition.id !== "string" || typeof definition.categoryId !== "string" || typeof definition.baseUri !== "string") continue;
-    const key = `${catalog}/${definition.id}`;
-    primed.set(key, definition as SettingDefinitionResponse);
-    // The same definition arrives with every policy that uses it — written once a day is plenty.
-    let fresh = false;
-    try {
-      fresh = store?.get(key, KEEP_MISSING_MS) !== undefined && store.get(key, KEEP_MISSING_MS) !== JSON.stringify(MISSING);
-    } catch {
-      fresh = false;
-    }
-    if (!fresh) keep(key, definition);
-  }
-}
 
 export function useDefinitionStore(next: DefinitionStore | undefined): void {
   store = next;
+  inMemory = undefined;
+  readyAt = 0;
+  loading = undefined;
+  resolved.clear();
   primed.clear();
-  cache.clear();
-  categoryCache.clear();
 }
 
-/**
- * Intune's whole catalog, fetched in three requests instead of one per
- * definition. Confirmed live: listing configurationSettings with no
- * paging options answers with every definition at once (18,402 of them,
- * 55 MB, about fifteen seconds), each identical to what a lookup by id
- * returns; the categories (1,027) and the Linux compliance catalog (21)
- * come the same way. A baseline of ~800 settings used to cost ~1,750
- * requests and got the scan throttled; this is how other tools that
- * compare against baselines avoid that too.
- *
- * Done when there's somewhere to keep it and what's kept is older than
- * a week. Only the fields read here are kept — about a third less. If it
- * fails, nothing is lost: each definition is still looked up by id as
- * it's needed, the slow way.
- */
-const CATALOG_KEY = "catalog";
-const CATALOG_TIMEOUT_MS = 5 * 60_000;
 const KEPT_FIELDS = [
   "@odata.type",
   "id",
@@ -157,6 +137,7 @@ const KEPT_FIELDS = [
   "maximumCount",
 ] as const;
 
+/** Only the fields read here are kept — about a third less than Graph sends. */
 function slim(definition: Record<string, unknown>): Record<string, unknown> {
   const kept: Record<string, unknown> = {};
   for (const field of KEPT_FIELDS) if (definition[field] !== undefined && definition[field] !== null) kept[field] = definition[field];
@@ -171,149 +152,165 @@ function slim(definition: Record<string, unknown>): Record<string, unknown> {
   return kept;
 }
 
-let loadingCatalog: Promise<void> | undefined;
-
-export function loadCatalog(token: string, say: (message: string) => void = () => {}): Promise<void> {
-  const target = store;
-  if (!target) return Promise.resolve();
+function read(key: string): unknown {
   try {
-    if (target.get(CATALOG_KEY, KEEP_MS) !== undefined) return Promise.resolve();
+    const json = inMemory ? inMemory.get(key) : store?.get(key, Infinity);
+    return json === undefined ? undefined : JSON.parse(json);
   } catch {
-    return Promise.resolve();
-  }
-  loadingCatalog ??= (async () => {
-    try {
-      say("Fetching Intune's settings catalog …");
-      const [settings, compliance, categories] = await Promise.all([
-        graphGetAll<Record<string, unknown>>(token, "/deviceManagement/configurationSettings", GRAPH_BETA_BASE, CATALOG_TIMEOUT_MS),
-        graphGetAll<Record<string, unknown>>(token, "/deviceManagement/complianceSettings", GRAPH_BETA_BASE, CATALOG_TIMEOUT_MS),
-        graphGetAll<Record<string, unknown>>(token, "/deviceManagement/configurationCategories", GRAPH_BETA_BASE, CATALOG_TIMEOUT_MS),
-      ]);
-      const entries: Array<[string, string]> = [];
-      for (const d of settings) if (typeof d.id === "string") entries.push([`configurationSettings/${d.id}`, JSON.stringify(slim(d))]);
-      for (const d of compliance) if (typeof d.id === "string") entries.push([`complianceSettings/${d.id}`, JSON.stringify(slim(d))]);
-      for (const c of categories) {
-        if (typeof c.id === "string") entries.push([`category/${c.id}`, JSON.stringify({ id: c.id, displayName: c.displayName, description: c.description })]);
-      }
-      entries.push([CATALOG_KEY, JSON.stringify({ definitions: settings.length + compliance.length, categories: categories.length })]);
-      target.setMany(entries);
-    } catch (err) {
-      say(`Couldn't fetch the settings catalog in one go (${err instanceof Error ? err.message.split("\n")[0] : String(err)}); looking settings up one by one instead.`);
-    } finally {
-      loadingCatalog = undefined;
-    }
-  })();
-  return loadingCatalog;
-}
-
-// Microsoft does rename settings and add options, so nothing is trusted
-// forever — in memory or on disk. An id Graph had nothing for is asked
-// about again sooner: new settings do appear.
-const KEEP_MS = 7 * 24 * 60 * 60 * 1000;
-const KEEP_MISSING_MS = 24 * 60 * 60 * 1000;
-const MISSING = "missing";
-
-/** Graph has nothing usable for this id — remembered from an earlier 400/404 rather than asked again. */
-class KnownMissing extends Error {}
-
-function kept(key: string): unknown {
-  let json: string | undefined;
-  try {
-    json = store?.get(key, KEEP_MS);
-    if (json === undefined) return undefined;
-    return JSON.parse(json);
-  } catch {
-    // An unreadable store or entry is the same as none: ask Graph.
     return undefined;
   }
 }
 
-function keep(key: string, value: unknown): void {
-  try {
-    store?.set(key, JSON.stringify(value));
-  } catch {
-    // Not being able to remember must never fail a scan.
+const firstLine = (err: unknown) => (err instanceof Error ? err.message.split("\n")[0] : String(err));
+
+async function download(token: string): Promise<Array<[string, string]>> {
+  const list = (path: string) => graphGetAll<Record<string, unknown>>(token, `/deviceManagement/${path}`, GRAPH_BETA_BASE, CATALOG_TIMEOUT_MS);
+  const [settings, compliance, categories, complianceCategories] = await Promise.all([
+    list("configurationSettings"),
+    list("complianceSettings"),
+    list("configurationCategories"),
+    list("complianceCategories"),
+  ]);
+
+  const entries: Array<[string, string]> = [];
+  const wanted = new Set<string>();
+  for (const [catalog, definitions] of [["configurationSettings", settings], ["complianceSettings", compliance]] as const) {
+    for (const d of definitions) {
+      if (typeof d.id !== "string") continue;
+      entries.push([`${catalog}/${d.id}`, JSON.stringify(slim(d))]);
+      if (typeof d.categoryId === "string") wanted.add(d.categoryId);
+    }
+  }
+
+  // Confirmed live: displayName is the populated field (`name` is null), and every ADMX-derived
+  // category has an empty displayName but a useful description ("Administrative Templates").
+  const names = new Map<string, string>();
+  for (const c of [...categories, ...complianceCategories]) {
+    const name = c.displayName || c.description;
+    if (typeof c.id === "string" && typeof name === "string" && name) names.set(c.id, name);
+  }
+  // The lists leave some categories out (confirmed live: 26, behind 244 definitions — Apple
+  // enrolment, quiet time). Those few are asked for by id, here, once, as part of the catalog.
+  await Promise.all(
+    [...wanted]
+      .filter((id) => !names.has(id))
+      .map(async (id) => {
+        try {
+          const c = await graphGet<CategoryResponse>(token, `/deviceManagement/configurationCategories/${id}`, GRAPH_BETA_BASE);
+          const name = c.displayName || c.description;
+          if (name) names.set(id, name);
+        } catch (err) {
+          // A category Graph has nothing for is shown by its id; anything else is the catalog failing.
+          if (!/failed: (400|404)\b/.test(firstLine(err))) throw err;
+        }
+      }),
+  );
+  for (const [id, name] of names) entries.push([`category/${id}`, JSON.stringify(name)]);
+  entries.push([CATALOG_KEY, JSON.stringify({ definitions: settings.length + compliance.length, categories: names.size })]);
+  return entries;
+}
+
+/**
+ * Makes sure there is a catalog to read from, fetching it when there is
+ * none or the kept one is over a week old. Without a catalog a scan
+ * can't name a single setting, so failing to get one fails the scan and
+ * says why — unless an older copy is at hand, which is then used as is.
+ */
+export function loadCatalog(token: string, say: (message: string) => void = () => {}): Promise<void> {
+  if (Date.now() - readyAt < KEEP_MS) return Promise.resolve();
+  loading ??= (async () => {
+    try {
+      let kept = false;
+      try {
+        if (store?.get(CATALOG_KEY, KEEP_MS) !== undefined) kept = true;
+      } catch {
+        kept = false;
+      }
+      if (!kept) {
+        say("Fetching Intune's settings catalog …");
+        try {
+          const entries = await download(token);
+          resolved.clear();
+          let saved = false;
+          try {
+            store?.setMany(entries);
+            saved = store !== undefined;
+          } catch (err) {
+            say(`Couldn't save the settings catalog (${firstLine(err)}); it will be fetched again next time.`);
+          }
+          inMemory = saved ? undefined : new Map(entries);
+        } catch (err) {
+          let older = false;
+          try {
+            older = store?.get(CATALOG_KEY, Infinity) !== undefined;
+          } catch {
+            older = false;
+          }
+          if (!older) {
+            throw new Error(
+              `Couldn't download Intune's settings catalog from Microsoft Graph, and a scan can't name settings without it. Nothing in the tenant was changed — try again in a minute.\n${firstLine(err)}`,
+              { cause: err },
+            );
+          }
+          say(`Couldn't refresh the settings catalog (${firstLine(err)}); using the copy from an earlier scan.`);
+        }
+      }
+      readyAt = Date.now();
+    } finally {
+      loading = undefined;
+    }
+  })();
+  return loading;
+}
+
+/**
+ * A policy's settings arrive with their definitions when asked (see
+ * configurationPolicies.ts) — which is how a setting newer than the kept
+ * catalog still gets its name. Anything the catalog didn't have is added
+ * to it.
+ */
+export function primeDefinitions(catalog: "configurationSettings" | "complianceSettings", definitions: unknown[]): void {
+  for (const candidate of definitions) {
+    const definition = candidate as Partial<SettingDefinitionResponse> | null;
+    if (!definition || typeof definition.id !== "string" || typeof definition.categoryId !== "string" || typeof definition.baseUri !== "string") continue;
+    const key = `${catalog}/${definition.id}`;
+    if (primed.has(key)) continue;
+    primed.set(key, definition as SettingDefinitionResponse);
+    try {
+      if (store && !inMemory && store.get(key, Infinity) === undefined) store.set(key, JSON.stringify(slim(definition as Record<string, unknown>)));
+    } catch {
+      // Not being able to keep it must never fail a scan.
+    }
   }
 }
 
-/**
- * One lookup per id, however many callers want it at the same moment —
- * a scan resolves everything at once, and hundreds of settings share a
- * definition or a category. A failed lookup is forgotten so it can be
- * tried again.
- */
-function once<T>(memory: Map<string, { at: number; value: Promise<T> }>, id: string, load: () => Promise<T>): Promise<T> {
-  const held = memory.get(id);
-  if (held && Date.now() - held.at < KEEP_MS) return held.value;
-  const value = load();
-  memory.set(id, { at: Date.now(), value });
-  value.catch(() => {
-    if (memory.get(id)?.value === value) memory.delete(id);
-  });
-  return value;
-}
+/** The catalog has no such definition. */
+class NotInCatalog extends Error {}
 
-/**
- * Resolves a category id to its friendly display name (e.g. "Windows
- * Update For Business"). Confirmed against a live tenant: the
- * deviceManagementConfigurationCategory resource's `name` property is
- * null — `displayName` is the one that's actually populated, same
- * convention as every other setting-catalog resource in this file.
- * BUT confirmed against a much larger real-world corpus (importing ~1500
- * real settings from a real tenant's exported policies) that displayName
- * itself is sometimes empty too — every ADMX-derived leaf category seen
- * so far (Group Policy templates imported into the catalog) has an empty
- * displayName but a real, useful `description` ("Administrative
- * Templates"). Falls back through both before giving up to the raw id,
- * never a blank string. Cached per process, same reasoning as
- * resolveSettingDefinition below: many settings share a category.
- */
-function resolveCategoryName(token: string, categoryId: string): Promise<string> {
-  return once(categoryCache, categoryId, async () => {
-    const key = `category/${categoryId}`;
-    let category = kept(key) as CategoryResponse | undefined;
-    if (!category) {
-      category = await graphGet<CategoryResponse>(token, `/deviceManagement/configurationCategories/${categoryId}`, GRAPH_BETA_BASE);
-      keep(key, category);
-    }
-    return category.displayName || category.description || categoryId;
-  });
-}
+export async function resolveSettingDefinition(token: string, settingDefinitionId: string): Promise<ResolvedDefinition> {
+  await loadCatalog(token);
+  const known = resolved.get(settingDefinitionId);
+  if (known) return known;
 
-export function resolveSettingDefinition(token: string, settingDefinitionId: string): Promise<ResolvedDefinition> {
-  return once(cache, settingDefinitionId, async () => {
-    // A compliance catalog setting (see complianceCatalog.ts) is asked for in its own catalog, by Graph's
-    // own id, and comes back with every id it mentions marked the same way. Categories are shared.
-    const compliance = inComplianceCatalog(settingDefinitionId);
-    const catalog = compliance ? "complianceSettings" : "configurationSettings";
-    const graphId = graphDefinitionId(settingDefinitionId);
-    const key = `${catalog}/${graphId}`;
+  // A compliance catalog setting (see complianceCatalog.ts) lives in its own catalog, under Graph's
+  // own id, and has every id it mentions marked the same way. Categories are shared.
+  const compliance = inComplianceCatalog(settingDefinitionId);
+  const key = `${compliance ? "complianceSettings" : "configurationSettings"}/${graphDefinitionId(settingDefinitionId)}`;
+  const definition = (read(key) as SettingDefinitionResponse | undefined) ?? primed.get(key);
+  if (!definition) throw new NotInCatalog(`Intune's settings catalog has no definition for ${settingDefinitionId}`);
 
-    let definition = primed.get(key) ?? (kept(key) as SettingDefinitionResponse | typeof MISSING | undefined);
-    if (definition === MISSING) {
-      // Remembered for a shorter time than a real answer.
-      if (store?.get(key, KEEP_MISSING_MS) !== undefined) throw new KnownMissing(`No definition for ${settingDefinitionId}`);
-      definition = undefined;
-    }
-    if (!definition) {
-      try {
-        definition = await graphGet<SettingDefinitionResponse>(token, definitionPath(graphId, catalog), GRAPH_BETA_BASE);
-      } catch (err) {
-        if (isUnresolvable(err)) keep(key, MISSING);
-        throw err;
-      }
-      keep(key, definition);
-    }
-    const schema = compliance ? asComplianceSchema(toSchema(definition)) : toSchema(definition);
-
-    return {
-      name: definition.displayName,
-      cspPath: `${definition.baseUri}${definition.offsetUri}`,
-      category: await resolveCategoryName(token, definition.categoryId),
-      ...(definition.options ? { options: new Map(definition.options.map((o) => [o.itemId, o.displayName])) } : {}),
-      schema,
-    };
-  });
+  const schema = compliance ? asComplianceSchema(toSchema(definition)) : toSchema(definition);
+  const category = read(`category/${definition.categoryId}`);
+  const result: ResolvedDefinition = {
+    name: definition.displayName,
+    cspPath: `${definition.baseUri}${definition.offsetUri}`,
+    // Never a blank string: a category with no name is shown by its id.
+    category: typeof category === "string" && category ? category : definition.categoryId,
+    ...(definition.options ? { options: new Map(definition.options.map((o) => [o.itemId, o.displayName])) } : {}),
+    schema,
+  };
+  resolved.set(settingDefinitionId, result);
+  return result;
 }
 
 /**
@@ -335,13 +332,9 @@ export function definitionPath(id: string, catalog: "configurationSettings" | "c
   return `${base}('${encoded}')`;
 }
 
-/**
- * Whether a failed definition lookup means "Graph has nothing usable for
- * this id" (it answered 400 or 404) rather than something being wrong
- * with the scan itself (throttling, auth, an outage).
- */
+/** The catalog has nothing for this id — as opposed to the catalog itself being out of reach. */
 function isUnresolvable(err: unknown): boolean {
-  return err instanceof KnownMissing || (err instanceof Error && /failed: (400|404)\b/.test(err.message));
+  return err instanceof NotInCatalog;
 }
 
 /**
@@ -453,13 +446,11 @@ function toSchema(definition: SettingDefinitionResponse): SettingSchema {
  * or not any policy's value configures them. Without this an editor could
  * show what is set but never offer what could be added.
  *
- * A declared id Graph has nothing usable for is skipped: confirmed live
- * that definitions do name children that 404 (66 of 701 declared ids in
- * one tenant, e.g. most of DMClient's "Provider ID" group), and that an
- * id can make Graph answer 400 outright. The setting just can't offer
- * that one sub-setting. Any other failure still fails the scan —
- * silently dropping definitions over a throttling or auth error would
- * look exactly the same and be wrong.
+ * A declared id the catalog has nothing for is skipped: confirmed live
+ * that definitions do name children that don't exist (66 of 701 declared
+ * ids in one tenant, e.g. most of DMClient's "Provider ID" group). The
+ * setting just can't offer that one sub-setting. The catalog itself being
+ * out of reach still fails the scan.
  */
 export async function resolveDeclaredSchemas(token: string, schemas: Record<string, SettingSchema>): Promise<void> {
   let pending = declaredIds(Object.values(schemas)).filter((id) => !(id in schemas));

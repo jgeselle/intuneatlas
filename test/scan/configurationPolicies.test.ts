@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { fetchConfigurationPolicies } from "../../src/scan/configurationPolicies.js";
+import { definitionPath, useDefinitionStore } from "../../src/scan/settingDefinitions.js";
+import { withCatalog } from "../catalog.js";
 
 /**
  * Covers two real bugs found by seeding an actual test tenant and running
@@ -25,7 +27,7 @@ test("fetchConfigurationPolicies", async (t) => {
     global.fetch = originalFetch;
   });
 
-  global.fetch = (async (url: string | URL) => {
+  global.fetch = withCatalog((async (url: string | URL) => {
     const u = String(url);
     if (u.includes("/deviceManagement/configurationPolicies?")) {
       return jsonResponse({
@@ -87,7 +89,7 @@ test("fetchConfigurationPolicies", async (t) => {
       return jsonResponse({ id: CATEGORY_ID, name: null, displayName: "Attack surface reduction" });
     }
     throw new Error(`unexpected fetch: ${u}`);
-  }) as typeof fetch;
+  }) as typeof fetch, { configurationSettings: [ROOT_DEF_ID, CHILD_DEF_ID] });
 
   const policies = await fetchConfigurationPolicies("token");
 
@@ -120,7 +122,7 @@ test("fetchConfigurationPolicies — a choice setting's dependent child", async 
   const CHILD_ID = `${PARENT_ID}_pol_secguide_block_flash`;
   const CATEGORY_ID = "cat-2";
 
-  global.fetch = (async (url: string | URL) => {
+  global.fetch = withCatalog((async (url: string | URL) => {
     const u = String(url);
     if (u.includes("/deviceManagement/configurationPolicies?")) {
       return jsonResponse({
@@ -176,7 +178,7 @@ test("fetchConfigurationPolicies — a choice setting's dependent child", async 
       return jsonResponse({ id: CATEGORY_ID, name: null, displayName: "MS Security Guide" });
     }
     throw new Error(`unexpected fetch: ${u}`);
-  }) as typeof fetch;
+  }) as typeof fetch, { configurationSettings: [PARENT_ID, CHILD_ID] });
 
   const policies = await fetchConfigurationPolicies("token");
 
@@ -206,7 +208,7 @@ test("fetchConfigurationPolicies — a category with an empty displayName falls 
   const DEF_ID = "device_vendor_msft_policy_config_admx_printing2_registerspoolerremoterpcendpoint";
   const CATEGORY_ID = "cat-admx";
 
-  global.fetch = (async (url: string | URL) => {
+  global.fetch = withCatalog((async (url: string | URL) => {
     const u = String(url);
     if (u.includes("/deviceManagement/configurationPolicies?")) {
       return jsonResponse({ value: [{ id: "policy-3", name: "Printing policy", platforms: "windows10", assignments: [] }] });
@@ -240,7 +242,7 @@ test("fetchConfigurationPolicies — a category with an empty displayName falls 
       return jsonResponse({ id: CATEGORY_ID, name: null, displayName: "", description: "Administrative Templates" });
     }
     throw new Error(`unexpected fetch: ${u}`);
-  }) as typeof fetch;
+  }) as typeof fetch, { configurationSettings: [DEF_ID] });
 
   const policies = await fetchConfigurationPolicies("token");
   assert.equal(policies[0].settings[0].category, "Administrative Templates");
@@ -328,7 +330,7 @@ test("fetchConfigurationPolicies — structured values and definition schemas", 
     },
   };
 
-  global.fetch = (async (url: string | URL) => {
+  global.fetch = withCatalog((async (url: string | URL) => {
     const u = String(url);
     if (u.includes("/deviceManagement/configurationPolicies?")) {
       return jsonResponse({ value: [{ id: "policy-schema", name: "Schema policy", platforms: "windows10", assignments: [] }] });
@@ -370,7 +372,7 @@ test("fetchConfigurationPolicies — structured values and definition schemas", 
       return jsonResponse({ id: CATEGORY_ID, displayName: "Schema tests" });
     }
     throw new Error(`unexpected fetch: ${u}`);
-  }) as typeof fetch;
+  }) as typeof fetch, { configurationSettings: Object.keys(definitions) });
 
   const [choice, list] = (await fetchConfigurationPolicies("token"))[0].settings;
 
@@ -418,13 +420,11 @@ test("fetchConfigurationPolicies — structured values and definition schemas", 
 
 /**
  * Found on a real tenant: a macOS preference-domain definition id that
- * embeds an app's file name — spaces and parentheses included. As a URL
- * path segment Graph answered "400 Bad Request - Error in query syntax"
- * however it was encoded, which failed the whole scan; confirmed live
- * that it does answer OData key syntax, configurationSettings('<id>').
- * And where Graph has nothing usable for an id, the scan must carry on.
+ * embeds an app's file name — spaces, parentheses, quotes and all. Read
+ * from the catalog such an id is a key like any other; and where the
+ * catalog has nothing for an id, the scan must carry on.
  */
-test("fetchConfigurationPolicies — definition ids with spaces and parentheses are asked for by key, and an unresolvable one doesn't fail the scan", async (t) => {
+test("fetchConfigurationPolicies — odd definition ids resolve like any other, and one the catalog doesn't hold doesn't fail the scan", async (t) => {
   const originalFetch = global.fetch;
   t.after(() => {
     global.fetch = originalFetch;
@@ -432,13 +432,14 @@ test("fetchConfigurationPolicies — definition ids with spaces and parentheses 
 
   const ODD_ID = "com.apple.managedclient.preferences_applications_microsoft teams (work or school).app";
   const ODD_CHILD = `${ODD_ID}_it's "quoted"*!`;
-  const BAD_ROOT = "encoding_test_root graph (rejects)";
-  const BAD_DECLARED = "encoding_test_declared (rejected)";
+  const BAD_ROOT = "encoding_test_root (not in the catalog)";
+  const BAD_DECLARED = "encoding_test_declared (not in the catalog)";
   const CATEGORY_ID = "cat-encoding";
-  const requested: string[] = [];
+  const asked: string[] = [];
 
   global.fetch = (async (url: string | URL) => {
     const u = String(url);
+    asked.push(u);
     if (u.includes("/deviceManagement/configurationPolicies?")) {
       return jsonResponse({ value: [{ id: "policy-enc", name: "Odd ids", platforms: "macOS", assignments: [] }] });
     }
@@ -455,62 +456,72 @@ test("fetchConfigurationPolicies — definition ids with spaces and parentheses 
         ],
       });
     }
-    if (u.includes("/deviceManagement/configurationSettings")) {
-      const rest = u.slice(u.indexOf("/configurationSettings") + "/configurationSettings".length);
-      requested.push(rest);
-      // Only the quoted-key form reaches a definition here, as on the real service; an odd id as a path segment is a 400.
-      const key = rest.match(/^\('(.*)'\)$/);
-      const id = key ? decodeURIComponent(key[1]).replace(/''/g, "'") : rest.slice(1);
-      if (!key && !/^\/[A-Za-z0-9._~{}-]+$/.test(rest)) {
-        return new Response(JSON.stringify({ error: { code: "BadRequest", message: "Bad Request - Error in query syntax." } }), { status: 400, statusText: "Bad Request" });
-      }
-      if (id === ODD_ID) {
-        return jsonResponse({
-          id: ODD_ID,
-          displayName: "Microsoft Teams (work or school)",
-          baseUri: "",
-          offsetUri: "",
-          categoryId: CATEGORY_ID,
-          options: [{ itemId: `${ODD_ID}_1`, displayName: "Allowed", dependedOnBy: [{ dependedOnBy: ODD_CHILD }, { dependedOnBy: BAD_DECLARED }] }],
-        });
-      }
-      if (id === ODD_CHILD) return jsonResponse({ id: ODD_CHILD, displayName: "Odd child", baseUri: "", offsetUri: "", categoryId: CATEGORY_ID });
-      // What Graph does with an id it can't parse or doesn't have.
-      return new Response(JSON.stringify({ error: { code: "BadRequest", message: "Bad Request - Error in query syntax." } }), { status: 400, statusText: "Bad Request" });
+    if (u.endsWith("/deviceManagement/configurationSettings")) {
+      return jsonResponse({
+        value: [
+          {
+            id: ODD_ID,
+            displayName: "Microsoft Teams (work or school)",
+            baseUri: "",
+            offsetUri: "",
+            categoryId: CATEGORY_ID,
+            options: [{ itemId: `${ODD_ID}_1`, displayName: "Allowed", dependedOnBy: [{ dependedOnBy: ODD_CHILD }, { dependedOnBy: BAD_DECLARED }] }],
+          },
+          { id: ODD_CHILD, displayName: "Odd child", baseUri: "", offsetUri: "", categoryId: CATEGORY_ID },
+        ],
+      });
     }
-    if (u.endsWith(`/deviceManagement/configurationCategories/${CATEGORY_ID}`)) return jsonResponse({ id: CATEGORY_ID, displayName: "Preferences" });
+    if (u.endsWith("/deviceManagement/configurationCategories")) return jsonResponse({ value: [{ id: CATEGORY_ID, displayName: "Preferences" }] });
+    if (u.endsWith("/deviceManagement/complianceSettings") || u.endsWith("/deviceManagement/complianceCategories")) return jsonResponse({ value: [] });
     throw new Error(`unexpected fetch: ${u}`);
   }) as typeof fetch;
+  useDefinitionStore(undefined);
 
   const [odd, bad] = (await fetchConfigurationPolicies("token"))[0].settings;
 
-  // Inside the quoted key nothing but unreserved characters and percent-escapes may be left for Graph to interpret.
-  for (const rest of requested) {
-    assert.match(rest, /^\('[A-Za-z0-9._~%-]+'\)$/, `"${rest}" isn't a cleanly encoded key`);
-  }
-  assert.ok(requested.includes("('com.apple.managedclient.preferences_applications_microsoft%20teams%20%28work%20or%20school%29.app')"));
-  // A single quote in an id is doubled (OData's escape) before encoding.
-  assert.ok(requested.some((rest) => rest.includes("it%27%27s")));
-
   assert.equal(odd.name, "Microsoft Teams (work or school)");
+  assert.equal(odd.category, "Preferences");
   assert.equal(odd.value, "Allowed\nOdd child: x");
-  assert.deepEqual(Object.keys(odd.schemas!).sort(), [ODD_ID, ODD_CHILD].sort(), "the declared sub-setting Graph rejects is simply not offered");
+  assert.deepEqual(Object.keys(odd.schemas!).sort(), [ODD_ID, ODD_CHILD].sort(), "the declared sub-setting the catalog doesn't hold is simply not offered");
 
-  // A setting the policy really sets but Graph can't describe still appears — by its id, with its value.
+  // A setting the policy really sets but the catalog can't describe still appears — by its id, with its value.
   assert.equal(bad.name, BAD_ROOT);
   assert.equal(bad.value, "5");
   assert.equal(bad.category, "Unknown");
   assert.deepEqual(bad.structured, { kind: "simple", definitionId: BAD_ROOT, name: BAD_ROOT, value: 5 });
+
+  // Nothing was asked for one definition at a time — not even the ones the catalog lacks.
+  assert.deepEqual(asked.filter((u) => /\/configurationSettings./.test(u)), []);
 });
 
-test("fetchConfigurationPolicies — a definition lookup failing for any other reason (throttled out, unauthorized) still fails the scan", async (t) => {
+/**
+ * The one place a single definition is still asked for by id is creating
+ * a policy (see push/index.ts). Confirmed live: an id with spaces or
+ * parentheses as a path segment gets "400 Bad Request - Error in query
+ * syntax" however it's encoded; what Graph accepts is OData key syntax.
+ */
+test("definitionPath — a plain id is a path segment; an odd one is a cleanly encoded quoted key", () => {
+  assert.equal(definitionPath("device_vendor_msft_policy_config_camera_allowcamera"), "/deviceManagement/configurationSettings/device_vendor_msft_policy_config_camera_allowcamera");
+  assert.equal(
+    definitionPath("com.apple.managedclient.preferences_applications_microsoft teams (work or school).app"),
+    "/deviceManagement/configurationSettings('com.apple.managedclient.preferences_applications_microsoft%20teams%20%28work%20or%20school%29.app')",
+  );
+  // A single quote in an id is doubled (OData's escape) before encoding, and nothing is left for Graph to interpret.
+  const quoted = definitionPath(`it's "quoted"*!`, "complianceSettings");
+  assert.match(quoted, /^\/deviceManagement\/complianceSettings\('[A-Za-z0-9._~%-]+'\)$/);
+  assert.ok(quoted.includes("it%27%27s"));
+});
+
+test("fetchConfigurationPolicies — the catalog being out of reach (throttled out, unauthorized) fails the scan, and says what was missing", async (t) => {
   const originalFetch = global.fetch;
   t.after(() => {
     global.fetch = originalFetch;
   });
 
+  const asked: string[] = [];
   global.fetch = (async (url: string | URL) => {
     const u = String(url);
+    asked.push(u);
     if (u.includes("/deviceManagement/configurationPolicies?")) {
       return jsonResponse({ value: [{ id: "policy-403", name: "P", platforms: "windows10", assignments: [] }] });
     }
@@ -519,6 +530,13 @@ test("fetchConfigurationPolicies — a definition lookup failing for any other r
     }
     return new Response(JSON.stringify({ error: { code: "Forbidden" } }), { status: 403, statusText: "Forbidden" });
   }) as typeof fetch;
+  useDefinitionStore(undefined);
 
-  await assert.rejects(fetchConfigurationPolicies("token"), /failed: 403/);
+  await assert.rejects(fetchConfigurationPolicies("token"), (err: Error) => {
+    assert.match(err.message, /Couldn't download Intune's settings catalog/);
+    assert.match(err.message, /403 Forbidden/);
+    return true;
+  });
+  // There is no falling back to asking for the setting on its own.
+  assert.equal(asked.some((u) => u.includes("encoding_test_forbidden")), false);
 });

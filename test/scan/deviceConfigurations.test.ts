@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { fetchLegacyDeviceConfigurations } from "../../src/scan/deviceConfigurations.js";
+import { withCatalog } from "../catalog.js";
 
 function jsonResponse(body: unknown): Response {
   return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
@@ -30,7 +31,7 @@ test("fetchLegacyDeviceConfigurations", async (t) => {
   });
 
   await t.test("maps cameraBlocked: true to the Allow Camera setting's blocked option", async () => {
-    global.fetch = (async (url: string | URL) => {
+    global.fetch = withCatalog((async (url: string | URL) => {
       const u = String(url);
       if (u.includes("/deviceManagement/deviceConfigurations?")) {
         return jsonResponse({
@@ -52,7 +53,7 @@ test("fetchLegacyDeviceConfigurations", async (t) => {
         return jsonResponse({ id: CATEGORY_ID, name: null, displayName: "Camera" });
       }
       throw new Error(`unexpected fetch: ${u}`);
-    }) as typeof fetch;
+    }) as typeof fetch, { configurationSettings: [CAMERA_DEF_ID] });
 
     const policies = await fetchLegacyDeviceConfigurations("token");
 
@@ -65,7 +66,7 @@ test("fetchLegacyDeviceConfigurations", async (t) => {
   });
 
   await t.test("maps cameraBlocked: false to the allowed option", async () => {
-    global.fetch = (async (url: string | URL) => {
+    global.fetch = withCatalog((async (url: string | URL) => {
       const u = String(url);
       if (u.includes("/deviceManagement/deviceConfigurations?")) {
         return jsonResponse({
@@ -87,14 +88,14 @@ test("fetchLegacyDeviceConfigurations", async (t) => {
         return jsonResponse({ id: CATEGORY_ID, name: null, displayName: "Camera" });
       }
       throw new Error(`unexpected fetch: ${u}`);
-    }) as typeof fetch;
+    }) as typeof fetch, { configurationSettings: [CAMERA_DEF_ID] });
 
     const policies = await fetchLegacyDeviceConfigurations("token");
     assert.equal(policies[0].settings[0].value, "Allowed.");
   });
 
   await t.test("a profile with no mapped property set produces no policy at all", async () => {
-    global.fetch = (async (url: string | URL) => {
+    global.fetch = withCatalog((async (url: string | URL) => {
       const u = String(url);
       if (u.includes("/deviceManagement/deviceConfigurations?")) {
         return jsonResponse({
@@ -112,14 +113,14 @@ test("fetchLegacyDeviceConfigurations", async (t) => {
         });
       }
       throw new Error(`unexpected fetch: ${u}`);
-    }) as typeof fetch;
+    }) as typeof fetch, { configurationSettings: [CAMERA_DEF_ID] });
 
     const policies = await fetchLegacyDeviceConfigurations("token");
     assert.deepEqual(policies, []);
   });
 
   await t.test("a non-windows10GeneralConfiguration profile is ignored entirely", async () => {
-    global.fetch = (async (url: string | URL) => {
+    global.fetch = withCatalog((async (url: string | URL) => {
       const u = String(url);
       if (u.includes("/deviceManagement/deviceConfigurations?")) {
         return jsonResponse({
@@ -135,7 +136,7 @@ test("fetchLegacyDeviceConfigurations", async (t) => {
         });
       }
       throw new Error(`unexpected fetch: ${u}`);
-    }) as typeof fetch;
+    }) as typeof fetch, { configurationSettings: [CAMERA_DEF_ID] });
 
     const policies = await fetchLegacyDeviceConfigurations("token");
     assert.deepEqual(policies, []);

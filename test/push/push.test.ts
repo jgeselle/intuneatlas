@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { pushNewPolicy, pushToExistingPolicy, PushRefused } from "../../src/push/index.js";
 import { complianceActionsSetting, complianceSettingsOf, tenantComplianceSettingsOf } from "../../src/scan/complianceSettings.js";
+import { withCatalog } from "../catalog.js";
 
 const T = "#microsoft.graph.deviceManagementConfiguration";
 const respond = (status: number, body: unknown) => new Response(status === 204 ? null : JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
@@ -19,7 +20,8 @@ function fakeGraph(t: { after: (fn: () => void) => void }, reads: Record<string,
     global.fetch = original;
   });
   const calls: Call[] = [];
-  global.fetch = (async (input: string | URL, init?: RequestInit) => {
+  const listed = (catalog: string) => Object.keys(reads).filter((key) => key.startsWith(`/deviceManagement/${catalog}/`)).map((key) => key.split("/").pop()!);
+  global.fetch = withCatalog((async (input: string | URL, init?: RequestInit) => {
     const path = decodeURIComponent(String(input)).replace("https://graph.microsoft.com/beta", "");
     const method = init?.method ?? "GET";
     if (method !== "GET") {
@@ -28,7 +30,7 @@ function fakeGraph(t: { after: (fn: () => void) => void }, reads: Record<string,
     }
     const match = Object.keys(reads).find((key) => path.startsWith(key));
     return match ? respond(200, reads[match]) : respond(404, { error: { message: `unexpected ${path}` } });
-  }) as typeof fetch;
+  }) as typeof fetch, { configurationSettings: listed("configurationSettings"), complianceSettings: listed("complianceSettings") });
   return calls;
 }
 
