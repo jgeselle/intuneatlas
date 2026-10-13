@@ -49,8 +49,8 @@ test("fetchGroupDirectory: a group that no longer exists is left without a name;
 });
 
 test("fetchGroupDirectory: any other failure still fails the scan", async (t) => {
-  mockGraph(t, () => json({ error: { code: "ServiceUnavailable" } }, 503));
-  await assert.rejects(fetchGroupDirectory("token", ["a"]), /failed: 503/);
+  mockGraph(t, () => json({ error: { code: "InternalServerError" } }, 500));
+  await assert.rejects(fetchGroupDirectory("token", ["a"]), /failed: 500/);
 });
 
 test("fetchGroupDirectory: no groups assigned means no requests at all", async (t) => {

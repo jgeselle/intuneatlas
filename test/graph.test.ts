@@ -56,4 +56,44 @@ test("graphGet", async (t) => {
     assert.equal(calls, 1);
     assert.deepEqual(result, { value: [1, 2, 3] });
   });
+
+  await t.test("a dropped connection is tried again instead of failing the scan", async () => {
+    let calls = 0;
+    global.fetch = (async () => {
+      calls++;
+      if (calls === 1) throw new TypeError("fetch failed", { cause: Object.assign(new Error("socket hang up"), { code: "ECONNRESET" }) });
+      return jsonResponse({ ok: true });
+    }) as typeof fetch;
+
+    assert.deepEqual(await graphGet<{ ok: boolean }>("token", "/thing"), { ok: true });
+    assert.equal(calls, 2);
+  });
+
+  await t.test("a gateway error is tried again", async () => {
+    let calls = 0;
+    global.fetch = (async () => {
+      calls++;
+      if (calls === 1) return new Response("", { status: 503, headers: { "Retry-After": "0" } });
+      return jsonResponse({ ok: true });
+    }) as typeof fetch;
+
+    assert.deepEqual(await graphGet<{ ok: boolean }>("token", "/thing"), { ok: true });
+    assert.equal(calls, 2);
+  });
+
+  await t.test("never more than a handful of requests are open at once", async () => {
+    let open = 0;
+    let peak = 0;
+    global.fetch = (async () => {
+      open++;
+      peak = Math.max(peak, open);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      open--;
+      return jsonResponse({ ok: true });
+    }) as typeof fetch;
+
+    await Promise.all(Array.from({ length: 100 }, (_, i) => graphGet("token", `/thing/${i}`)));
+    assert.equal(peak, 8);
+    assert.equal(open, 0);
+  });
 });
