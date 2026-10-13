@@ -1,3 +1,4 @@
+import net from "node:net";
 import { Command } from "commander";
 import { runCheck } from "./commands/check.js";
 import { runExport } from "./commands/export.js";
@@ -6,6 +7,15 @@ import { installPersistent, uninstallPersistent } from "./commands/persist.js";
 import { runScan } from "./commands/scan.js";
 import { runSearch } from "./commands/search.js";
 import { runUi } from "./commands/ui.js";
+
+// Node tries each address of a host in turn and gives every one only a
+// quarter of a second to connect. Where IPv6 is offered but doesn't work
+// (seen on Azure Container Apps, and in more than one office network),
+// or the machine is busy, each try times out and the request dies as
+// "fetch failed" / ETIMEDOUT without Graph ever being reached. Two
+// seconds per address is still quick and no longer gives up on a
+// connection that was about to succeed.
+net.setDefaultAutoSelectFamilyAttemptTimeout(2000);
 
 const program = new Command();
 
