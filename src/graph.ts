@@ -5,6 +5,7 @@ import { GRAPH_V1_BASE } from "./config.js";
 // real settings across 111 policies, resolving hundreds of distinct
 // setting definitions and categories. Retries with the server's own
 // Retry-After rather than failing the whole scan over a transient 429.
+// MAX_ATTEMPTS is the budget for everything else that's worth another try.
 const MAX_ATTEMPTS = 6;
 
 // A scan asks for every policy's settings and every definition at once —
@@ -40,29 +41,52 @@ function networkReason(err: unknown): string {
   return cause?.code ?? cause?.message ?? (err instanceof Error ? err.message : String(err));
 }
 
-type Outcome<T> = { body: T } | { retryInMs: number } | { error: Error };
+// Graph throttles per app and tenant, not per request: when one request
+// is told to slow down, the rest are about to hear the same. So a 429
+// holds every request back until the time Graph named, instead of each
+// one finding out for itself and using up its tries doing so (seen on a
+// first scan resolving ~1,500 baseline definitions).
+const MAX_THROTTLE_WAITS = 12;
+let pausedUntil = 0;
+
+async function waitOutThrottling(): Promise<void> {
+  while (pausedUntil > Date.now()) await sleep(pausedUntil - Date.now());
+}
+
+type Outcome<T> = { body: T } | { retryInMs: number } | { throttled: true } | { error: Error };
 
 export async function graphGet<T>(token: string, path: string, base: string = GRAPH_V1_BASE): Promise<T> {
   const url = path.startsWith("http") ? path : `${base}${path}`;
+  let failures = 0;
+  let throttles = 0;
 
-  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-    const canRetry = attempt < MAX_ATTEMPTS;
-    // The slot covers the request and reading its answer, never the wait before a retry.
+  for (;;) {
+    const canRetry = failures + 1 < MAX_ATTEMPTS;
+    const backoffMs = 250 * 2 ** failures;
+    // The slot covers the request and reading its answer, never the wait before its own retry.
     const outcome = await withSlot<Outcome<T>>(async () => {
+      // Checked once the turn has come — a request that queued before the pause began must sit it out too.
+      await waitOutThrottling();
       let response: Response;
       try {
         response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
       } catch (err) {
-        if (canRetry) return { retryInMs: 250 * 2 ** (attempt - 1) };
+        if (canRetry) return { retryInMs: backoffMs };
         return { error: new Error(`Couldn't reach Microsoft Graph (${networkReason(err)}) after ${MAX_ATTEMPTS} tries: ${url}`, { cause: err }) };
       }
 
-      if ((response.status === 429 || TRANSIENT_STATUS.has(response.status)) && canRetry) {
-        const retryAfter = response.headers.get("Retry-After");
+      const retryAfter = Number(response.headers.get("Retry-After") ?? NaN);
+
+      if (response.status === 429 && throttles < MAX_THROTTLE_WAITS) {
         await response.body?.cancel();
-        if (retryAfter !== null && Number.isFinite(Number(retryAfter))) return { retryInMs: Number(retryAfter) * 1000 };
-        // Throttling wants real patience; a gateway hiccup is usually gone in a moment.
-        return { retryInMs: response.status === 429 ? 2 ** attempt * 1000 : 250 * 2 ** (attempt - 1) };
+        const waitMs = Number.isFinite(retryAfter) ? retryAfter * 1000 : Math.min(2 ** (throttles + 1), 30) * 1000;
+        pausedUntil = Math.max(pausedUntil, Date.now() + waitMs);
+        return { throttled: true };
+      }
+
+      if (TRANSIENT_STATUS.has(response.status) && canRetry) {
+        await response.body?.cancel();
+        return { retryInMs: Number.isFinite(retryAfter) ? retryAfter * 1000 : backoffMs };
       }
 
       if (!response.ok) {
@@ -74,17 +98,20 @@ export async function graphGet<T>(token: string, path: string, base: string = GR
         return { body: (await response.json()) as T };
       } catch (err) {
         // The connection can still drop while the answer is arriving.
-        if (canRetry) return { retryInMs: 250 * 2 ** (attempt - 1) };
+        if (canRetry) return { retryInMs: backoffMs };
         return { error: new Error(`Microsoft Graph's answer was cut off (${networkReason(err)}) after ${MAX_ATTEMPTS} tries: ${url}`, { cause: err }) };
       }
     });
 
     if ("body" in outcome) return outcome.body;
     if ("error" in outcome) throw outcome.error;
+    if ("throttled" in outcome) {
+      throttles++;
+      continue;
+    }
+    failures++;
     await sleep(outcome.retryInMs);
   }
-  // Unreachable: the last attempt always returns a body or an error.
-  throw new Error(`Graph request to ${url} failed: exhausted retries`);
 }
 
 interface ODataPage<T> {

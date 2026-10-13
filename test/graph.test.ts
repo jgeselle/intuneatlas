@@ -96,4 +96,36 @@ test("graphGet", async (t) => {
     assert.equal(peak, 8);
     assert.equal(open, 0);
   });
+
+  await t.test("one throttled request holds the others back, and none of them fails", async () => {
+    // Graph allows a burst, then refuses everything for a moment — the shape that used up every retry on a first scan.
+    let blockedUntil = 0;
+    let served = 0;
+    let refused = 0;
+    global.fetch = (async () => {
+      if (Date.now() < blockedUntil) {
+        refused++;
+        return new Response("", { status: 429, headers: { "Retry-After": "0.05" } });
+      }
+      served++;
+      if (served % 40 === 0) blockedUntil = Date.now() + 40;
+      return jsonResponse({ ok: true });
+    }) as typeof fetch;
+
+    await Promise.all(Array.from({ length: 400 }, (_, i) => graphGet("token", `/thing/${i}`)));
+    assert.equal(served, 400);
+    // Without the shared pause every queued request would be refused in turn, several times over.
+    assert.ok(refused < 100, `refused ${refused} times`);
+  });
+
+  await t.test("throttling that never lets up still ends in an error", async () => {
+    let calls = 0;
+    global.fetch = (async () => {
+      calls++;
+      return new Response("slow down", { status: 429, statusText: "Too Many Requests", headers: { "Retry-After": "0" } });
+    }) as typeof fetch;
+
+    await assert.rejects(() => graphGet("token", "/thing"), /429/);
+    assert.equal(calls, 13);
+  });
 });
