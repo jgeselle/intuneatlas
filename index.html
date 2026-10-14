@@ -651,8 +651,9 @@
             <h3>Hosted on Azure &mdash; your own Container App</h3>
             <p>
               One template deploys the web UI into your own subscription, on its own HTTPS address. Everyone signs
-              in with their own Microsoft account; roles decide who may stage, review and push. Notes, reviews and
-              each setting's history are shared, and nothing leaves your tenant.
+              in with their own Microsoft account and sees only the policies their own Intune role shows them;
+              roles decide who may stage, review and push. Notes, reminders, reviews and each setting's history
+              are shared, and nothing leaves your tenant.
             </p>
           </div>
           <a class="box-go" href="/docs/#azure">Deploy to Azure</a>
@@ -662,8 +663,9 @@
           <h3>Web UI &mdash; <code style="font-family:var(--mono);font-size:.8125rem;font-weight:400">intuneatlas ui</code></h3>
           <p>
             Every setting grouped by category, searchable by CSP path, with the policies that set it, each value
-            editable with Intune's own options and ranges, note threads, and a history of what changed between
-            scans. Configuration and compliance policies both, for the whole tenant or one group. Staged changes
+            editable with Intune's own options and ranges, note threads, reminders that come due on a schedule,
+            and a history of what changed between scans. Configuration and compliance policies both, custom
+            OMA-URI rows included, for the whole tenant or one group. Staged changes
             pass a review gate, and an Admin can push them to Intune. Runs on your machine against the report on
             disk, with no server and no upload.
           </p>
@@ -751,6 +753,10 @@
         <li>
           <span class="what">Enrollment, ADE tokens, certificate expiry<em>Expiry warnings for ADE and APNs</em></span>
           <span class="state good">stable</span>
+        </li>
+        <li>
+          <span class="what">Custom OMA-URI profiles<em>Every row a setting, by its OMA-URI. Intune encrypts text and certificate values, so those show by file name only, and the rows are read-only</em></span>
+          <span class="state part">new</span>
         </li>
         <li>
           <span class="what">macOS &amp; iOS payloads<em>Indexes and reports, but payload key mapping is incomplete, so some settings show a raw identifier</em></span>

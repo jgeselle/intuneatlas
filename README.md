@@ -88,6 +88,10 @@ Around that:
 - **One group at a time.** Pick a group and every page shows only what
   reaches it — assigned to it, to a group containing it, or to everyone —
   with conflicts and baseline results worked out again for that group.
+- **Custom OMA-URI rows too.** Every row of a custom Windows profile is a
+  setting of its own, keyed by its OMA-URI, so it shows up in search, history
+  and reminders like any other. Intune encrypts their text and certificate
+  values, so those show by file name or as encrypted, and can't be edited here.
 - **Compliance policies as settings.** What compliance policies demand is
   listed the same way, for Windows, iOS, macOS, Android and Linux, including
   the actions for noncompliance and the tenant-wide compliance settings.
@@ -107,6 +111,11 @@ Around that:
   — and exits non-zero when something needs attention.
 - **Documented.** A note explaining a deliberate deviation is attached to the
   setting itself, so context survives the person who wrote it.
+- **Reminders.** Any setting can carry a reminder — once, or every few
+  months — such as renewing a trusted publisher's code-signing certificate.
+  They're shared by everyone on the instance, and a bell shows what's due.
+- **Light or dark.** The app follows the system's appearance, or the choice
+  made in the account menu.
 
 ## Baselines
 
