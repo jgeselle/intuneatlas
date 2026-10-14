@@ -17,6 +17,7 @@ import {
 } from "../server/staticServer.js";
 import type { ViewerIdentity } from "../auth/webSession.js";
 import { addNote, deleteNote, getAllNotes, getNoteById, type Note } from "../storage/notes.js";
+import { addReminder, completeReminder, deleteReminder, getReminder, listReminders, snoozeReminder } from "../storage/reminders.js";
 import { applyPush } from "../push/apply.js";
 import { getSettingHistory } from "../storage/history.js";
 import { getLatestScan, recordScan } from "../storage/scans.js";
@@ -105,6 +106,14 @@ export async function runUi(options: UiOptions): Promise<void> {
     onNoteRequest: (body, viewer) => addNote(body.targetKey, viewer.id, viewer.name, body.text),
     onDeleteNote: (id: number) => deleteNote(id),
     getNoteById: (id: number) => getNoteById(id),
+    reminders: {
+      list: listReminders,
+      get: getReminder,
+      add: (input, viewer) => addReminder(input, viewer.id, viewer.name),
+      complete: (id) => completeReminder(id),
+      snooze: (id) => snoozeReminder(id),
+      remove: deleteReminder,
+    },
     onStageChange: (body: StageChangeRequestBody, viewer) => stageChange(body, viewer.id, viewer.name),
     onUpdateChange: (id: number, body: UpdateChangeRequestBody, viewer) => {
       // "Reviewed by" always names the real signed-in viewer, never

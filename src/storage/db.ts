@@ -133,6 +133,19 @@ export function getDb(): DatabaseSync {
       fetched_at INTEGER NOT NULL
     );
 
+    -- Dates to come back to a setting, shared by everyone (see storage/reminders.ts).
+    CREATE TABLE IF NOT EXISTS reminders (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      target_key TEXT NOT NULL,
+      target_name TEXT NOT NULL,
+      note TEXT NOT NULL DEFAULT '',
+      due_on TEXT NOT NULL,
+      repeat_months INTEGER,
+      created_by TEXT NOT NULL,
+      created_by_id TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+
     -- Which baseline packs (source/name+version folders under baselines/)
     -- are active, per signed-in viewer — not tenant data, a personal
     -- preference. Row absence means "never customized" (defaults to every

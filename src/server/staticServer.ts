@@ -84,6 +84,8 @@ export interface StartServerOptions {
   onDeleteNote?: (id: number) => { targetKey: string; notes: unknown[] } | undefined;
   /** Looks up who wrote a note, for the deleteNote ownership check — undefined if the id doesn't exist. */
   getNoteById?: (id: number) => { authorId: string } | undefined;
+  /** Reminders on settings (see storage/reminders.ts) — absent where they can't be kept. */
+  reminders?: ReminderStore;
   /** Stages a change; must return the created record including its targetKey. */
   onStageChange?: (body: StageChangeRequestBody, viewer: ViewerIdentity) => WithTargetKey;
   /** Updates reason/reviewer on a staged change; must return the updated record including its targetKey. */
@@ -272,6 +274,11 @@ export async function startServer(options: StartServerOptions): Promise<{ url: s
       const noteIdMatch = req.url?.match(/^\/api\/notes\/(\d+)$/);
       if (noteIdMatch && req.method === "DELETE") {
         await handleDeleteNote(res, Number(noteIdMatch[1]), options.onDeleteNote, options.getNoteById, viewer, setNotes);
+        return;
+      }
+
+      if (req.url === "/api/reminders" || req.url?.startsWith("/api/reminders/")) {
+        await handleReminders(req, res, options.reminders, viewer);
         return;
       }
 
@@ -774,6 +781,67 @@ async function handleNoteRequest(
     onSaved(body.targetKey, notes);
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify(notes));
+  } catch (err) {
+    sendApiError(res, err);
+  }
+}
+
+export interface ReminderStore {
+  list(): unknown[];
+  get(id: number): { createdById: string } | undefined;
+  add(input: { targetKey: string; targetName: string; note: string; dueOn: string; repeatMonths: number | null }, viewer: ViewerIdentity): unknown[];
+  complete(id: number): unknown[];
+  snooze(id: number): unknown[];
+  remove(id: number): unknown[];
+}
+
+/**
+ * Everyone who can see the report sees every reminder. Adding one, and
+ * marking one done or snoozing it, takes what adding a note takes;
+ * deleting one is its maker's or an Admin's, like a note. Every answer is
+ * the whole list again — it's short, and the bell and the drawer both
+ * show it.
+ */
+async function handleReminders(req: IncomingMessage, res: ServerResponse, store: ReminderStore | undefined, viewer: ViewerIdentity): Promise<void> {
+  const json = (status: number, body: unknown) => {
+    res.writeHead(status, { "Content-Type": "application/json" });
+    res.end(JSON.stringify(body));
+  };
+  if (!store) return json(501, { error: "Reminders aren't available from this session." });
+  if (!can(viewer.role, "view")) return json(403, { error: "Your role doesn't include viewing the report." });
+
+  try {
+    if (req.url === "/api/reminders") {
+      if (req.method === "GET") return json(200, store.list());
+      if (req.method !== "POST") return json(405, { error: "Method not allowed." });
+      if (!can(viewer.role, "note")) return json(403, { error: "Your role doesn't include adding reminders." });
+      const body = JSON.parse(await readRequestBody(req)) as Record<string, unknown>;
+      const repeat = body.repeatMonths === null || body.repeatMonths === undefined ? null : Number(body.repeatMonths);
+      const note = typeof body.note === "string" ? body.note.trim() : "";
+      if (typeof body.targetKey !== "string" || !body.targetKey || typeof body.targetName !== "string") return json(400, { error: "Name the setting." });
+      if (typeof body.dueOn !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(body.dueOn) || Number.isNaN(Date.parse(body.dueOn))) return json(400, { error: "Choose a date." });
+      if (repeat !== null && !(Number.isInteger(repeat) && repeat >= 1 && repeat <= 120)) return json(400, { error: "Repeat every 1 to 120 months, or not at all." });
+      if (note.length > 1000) return json(400, { error: "Keep the note under 1,000 characters." });
+      return json(200, store.add({ targetKey: body.targetKey, targetName: body.targetName, note, dueOn: body.dueOn, repeatMonths: repeat }, viewer));
+    }
+
+    const match = req.url?.match(/^\/api\/reminders\/(\d+)(?:\/(done|snooze))?$/);
+    if (!match) return json(404, { error: "Not found." });
+    const id = Number(match[1]);
+    const existing = store.get(id);
+    if (!existing) return json(404, { error: "That reminder no longer exists." });
+
+    if (match[2] && req.method === "POST") {
+      if (!can(viewer.role, "note")) return json(403, { error: "Your role doesn't include changing reminders." });
+      return json(200, match[2] === "done" ? store.complete(id) : store.snooze(id));
+    }
+    if (!match[2] && req.method === "DELETE") {
+      if (!can(viewer.role, "deleteNote", { ownerId: existing.createdById, viewerId: viewer.id })) {
+        return json(403, { error: "You can only delete reminders you made yourself, unless you're an Admin." });
+      }
+      return json(200, store.remove(id));
+    }
+    json(405, { error: "Method not allowed." });
   } catch (err) {
     sendApiError(res, err);
   }

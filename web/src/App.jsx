@@ -16,6 +16,7 @@ import { SettingDrawer } from "./components/SettingDrawer.jsx";
 import { SimplePolicyDrawer } from "./components/SimplePolicyDrawer.jsx";
 import { isComplianceSetting } from "./lib/format.js";
 import { runScan } from "./lib/scan.js";
+import { ReminderBell } from "./components/Reminders.jsx";
 import { Overview } from "./views/Overview.jsx";
 import { SettingsView } from "./views/SettingsView.jsx";
 import { SimplePolicyList } from "./views/SimplePolicyList.jsx";
@@ -127,6 +128,8 @@ function Dashboard({ initialReport, session }) {
   const [notes, setNotes] = useState(initialReport?.notes ?? {});
   const [changes, setChanges] = useState(initialReport?.changes ?? {});
   const [open, setOpen] = useState(null);
+  const [reminders, setReminders] = useState([]);
+  const canNote = session?.role === "contributor" || session?.role === "admin";
   const [toast, setToast] = useState(null);
   const [syncing, setSyncing] = useState(false);
   const [, forceTick] = useState(0);
@@ -386,6 +389,35 @@ function Dashboard({ initialReport, session }) {
     }
   }
 
+  // Reminders are shared and kept apart from scans — loaded once, then replaced by whatever each change answers with.
+  useEffect(() => {
+    fetch("/api/reminders")
+      .then((res) => (res.ok ? res.json() : []))
+      .then((list) => Array.isArray(list) && setReminders(list))
+      .catch(() => {});
+  }, []);
+
+  async function reminderRequest(method, path, body, done) {
+    try {
+      const res = await fetch("/api/reminders" + path, {
+        method,
+        ...(body ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {}),
+      });
+      const updated = await res.json();
+      if (!res.ok) throw new Error(updated.error || "Couldn't update the reminder");
+      setReminders(updated);
+      if (done) flash(done);
+      return true;
+    } catch (err) {
+      flash(err.message);
+      return false;
+    }
+  }
+  const addReminder = (entry, input) => reminderRequest("POST", "", { targetKey: entry.key, targetName: entry.name, ...input }, "Reminder added");
+  const completeReminder = (id) => reminderRequest("POST", `/${id}/done`, null, "Reminder done");
+  const snoozeReminder = (id) => reminderRequest("POST", `/${id}/snooze`, null, "Snoozed for a week");
+  const deleteReminder = (id) => reminderRequest("DELETE", `/${id}`, null, "Reminder deleted");
+
   async function addNote(key, text) {
     try {
       const res = await fetch("/api/notes", {
@@ -578,16 +610,25 @@ function Dashboard({ initialReport, session }) {
           {/* narrow layouts: the sidebar collapses into a top bar, so these ride along here */}
           {session && (
             <div className="ml-auto flex shrink-0 items-center gap-1 lg:hidden">
+              <ReminderBell reminders={reminders} canEdit={canNote} onOpen={(key) => setOpen({ type: "setting", key })} onDone={completeReminder} onSnooze={snoozeReminder} />
               <SyncControl syncing={syncing} syncedAgo={syncedAgo} onSync={resync} canSync={session?.role === "admin"} compact />
               <AccountMenu session={session} tenant={report.tenantName || report.tenant} />
             </div>
           )}
 
+          <ReminderBell
+            reminders={reminders}
+            canEdit={canNote}
+            onOpen={(key) => setOpen({ type: "setting", key })}
+            onDone={completeReminder}
+            onSnooze={snoozeReminder}
+            className={"ml-auto hidden transition-opacity duration-150 lg:block " + railDim()}
+          />
           <button
             onClick={toggleRailCollapsed}
             title={railCollapsed ? "Expand sidebar" : "Collapse sidebar"}
             aria-label={railCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-            className={"ml-auto hidden shrink-0 rounded-md p-1.5 text-teal-300 transition-opacity duration-150 hover:bg-teal-800 hover:text-teal-100 focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-300 lg:block " + railDim()}
+            className={"hidden shrink-0 rounded-md p-1.5 text-teal-300 transition-opacity duration-150 hover:bg-teal-800 hover:text-teal-100 focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-300 lg:block " + railDim()}
           >
             <CaretDoubleLeft
               weight="bold"
@@ -741,6 +782,11 @@ function Dashboard({ initialReport, session }) {
           scannedAt={report.scannedAt}
           entry={openSetting}
           notes={notes[openSetting.key] || []}
+          reminders={reminders.filter((r) => r.targetKey === openSetting.key)}
+          onAddReminder={(input) => addReminder(openSetting, input)}
+          onCompleteReminder={completeReminder}
+          onSnoozeReminder={snoozeReminder}
+          onDeleteReminder={deleteReminder}
           onAddNote={(text) => addNote(openSetting.key, text)}
           onDeleteNote={(id) => deleteNote(openSetting.key, id)}
           onClose={() => setOpen(null)}

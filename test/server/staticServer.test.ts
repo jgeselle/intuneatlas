@@ -498,3 +498,63 @@ test("scan: one that fails says why in its status; a viewer without the scan rol
     server.close();
   }
 });
+
+// ------------------------------------------------------------------------
+// /api/reminders — shared by everyone; making one takes what a note takes
+// ------------------------------------------------------------------------
+
+test("reminders: everyone sees them; who may add, complete and delete one follows the note rules", async () => {
+  const port = 18871;
+  let role: Role = "contributor";
+  let viewerId = "oid-maker";
+  const store = new Map<number, { id: number; createdById: string; dueOn: string; repeatMonths: number | null }>();
+  let nextId = 1;
+  const list = () => [...store.values()];
+  const { server } = await startServer({
+    report: null,
+    host: "127.0.0.1",
+    startPort: port,
+    session: mockSession({ getSession: async () => ({ id: viewerId, name: "Alex", email: "a@x.com", role }) }),
+    reminders: {
+      list,
+      get: (id) => store.get(id),
+      add: (input, viewer) => {
+        store.set(nextId, { id: nextId++, createdById: viewer.id, dueOn: input.dueOn, repeatMonths: input.repeatMonths });
+        return list();
+      },
+      complete: (id) => (store.delete(id), list()),
+      snooze: (id) => list().map((r) => (r.id === id ? { ...r, snoozed: true } : r)),
+      remove: (id) => (store.delete(id), list()),
+    },
+  });
+  const call = async (method: string, path: string, body?: unknown) => {
+    const res = await fetch(`http://127.0.0.1:${port}${path}`, {
+      method,
+      ...(body ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {}),
+    });
+    return { status: res.status, body: (await res.json()) as unknown };
+  };
+  const valid = { targetKey: "k::windows10", targetName: "Camera", note: "Check", dueOn: "2026-11-01", repeatMonths: 12 };
+  try {
+    assert.equal((await call("POST", "/api/reminders", valid)).status, 200);
+    assert.equal((await call("POST", "/api/reminders", { ...valid, dueOn: "next week" })).status, 400);
+    assert.equal((await call("POST", "/api/reminders", { ...valid, repeatMonths: 0 })).status, 400);
+    assert.equal((await call("POST", "/api/reminders", { ...valid, targetKey: "" })).status, 400);
+
+    role = "viewer";
+    assert.equal(((await call("GET", "/api/reminders")).body as unknown[]).length, 1, "a viewer sees them");
+    assert.equal((await call("POST", "/api/reminders", valid)).status, 403);
+    assert.equal((await call("POST", "/api/reminders/1/done")).status, 403);
+
+    // Someone else who can add notes can snooze or complete it — it's shared — but not delete it.
+    role = "contributor";
+    viewerId = "oid-colleague";
+    assert.equal((await call("POST", "/api/reminders/1/snooze")).status, 200);
+    assert.equal((await call("DELETE", "/api/reminders/1")).status, 403);
+    role = "admin";
+    assert.equal((await call("DELETE", "/api/reminders/1")).status, 200);
+    assert.equal((await call("POST", "/api/reminders/1/done")).status, 404);
+  } finally {
+    server.close();
+  }
+});
