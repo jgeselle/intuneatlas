@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowCounterClockwise, Check, MagnifyingGlass, PaperPlaneTilt, PencilSimple } from "@phosphor-icons/react";
-import { Chip, Diff, PageSubtitle, Empty } from "../components/bits.jsx";
+import { Check, MagnifyingGlass, PaperPlaneTilt, PencilSimple } from "@phosphor-icons/react";
+import { Chip, Diff, PageSubtitle, Empty, RevertButton } from "../components/bits.jsx";
 
 /**
  * The step that writes to the tenant, kept deliberate: the button asks
@@ -79,64 +79,27 @@ function when(iso) {
   return d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
 }
 
-/** The reason, read as a sentence — and, for whoever may, edited in place. */
-function Reason({ change, canEdit, onSave }) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(change.reason);
-  if (editing) {
-    return (
-      <form
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (draft !== change.reason) onSave(draft);
-          setEditing(false);
-        }}
-        className="space-y-1.5"
-      >
-        <textarea
-          autoFocus
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          rows={2}
-          placeholder="Why this change"
-          className="w-full resize-none rounded-md border border-stone-300 bg-surface p-2 text-xs placeholder-stone-400 focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600"
-        />
-        <div className="flex gap-1.5">
-          <button type="submit" className="rounded-md bg-stone-900 px-2.5 py-1 text-xs font-medium text-white dark:text-stone-50">
-            Save
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setDraft(change.reason);
-              setEditing(false);
-            }}
-            className={quietButton}
-          >
-            Cancel
-          </button>
-        </div>
-      </form>
-    );
-  }
-  if (!change.reason.trim()) {
-    return canEdit ? (
-      <button type="button" onClick={() => setEditing(true)} className="text-xs font-medium text-amber-800 hover:underline focus:outline-none focus-visible:underline">
-        Add a reason
-      </button>
-    ) : (
-      <p className="text-xs text-stone-400">No reason given yet</p>
-    );
+/**
+ * The reason, always open to whoever may edit it: typed straight in, and
+ * kept as soon as the field is left — no save button. Everyone else reads
+ * it as text.
+ */
+function Reason({ value, setValue, canEdit, onSave }) {
+  if (!canEdit) {
+    return value.trim() ? <p className="text-xs leading-relaxed text-stone-700 [overflow-wrap:anywhere]">{value}</p> : <p className="text-xs text-stone-400">No reason given yet</p>;
   }
   return (
-    <p className="group text-xs leading-relaxed text-stone-700 [overflow-wrap:anywhere]">
-      {change.reason}
-      {canEdit && (
-        <button type="button" onClick={() => setEditing(true)} className="ml-1.5 inline-flex align-[-2px] text-stone-400 hover:text-stone-700 focus:outline-none" aria-label="Edit the reason" title="Edit the reason">
-          <PencilSimple className="h-3.5 w-3.5" />
-        </button>
-      )}
-    </p>
+    <label className="block">
+      <span className="sr-only">Reason</span>
+      <textarea
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onBlur={onSave}
+        rows={2}
+        placeholder="Why this change?"
+        className="w-full resize-y rounded-md border border-stone-200 bg-stone-50 p-2 text-xs leading-relaxed placeholder-stone-400 hover:border-stone-300 focus:border-teal-600 focus:bg-surface focus:outline-none focus:ring-1 focus:ring-teal-600"
+      />
+    </label>
   );
 }
 
@@ -152,6 +115,12 @@ function ChangeCard({ change, onUpdateField, onRevert, onPush, viewer, inGroup =
   // unique or stable.
   const canEdit = viewer.role === "admin" || (viewer.role === "contributor" && change.stagedBy === viewer.id);
   const canPush = !inGroup && change.ready && onPush && viewer.role === "admin";
+  // The reason as typed, before it's kept — so "Mark reviewed" can appear as soon as there is one.
+  const [reason, setReason] = useState(change.reason);
+  useEffect(() => setReason(change.reason), [change.reason]);
+  const saveReason = async () => {
+    if (reason !== change.reason) await onUpdateField(change.id, "reason", reason);
+  };
 
   return (
     <li className="animate-rise-in rounded-lg border border-stone-200 bg-surface">
@@ -184,7 +153,7 @@ function ChangeCard({ change, onUpdateField, onRevert, onPush, viewer, inGroup =
         </div>
 
         <div className="mt-3">
-          <Reason change={change} canEdit={canEdit} onSave={(reason) => onUpdateField(change.id, "reason", reason)} />
+          <Reason value={reason} setValue={setReason} canEdit={canEdit} onSave={saveReason} />
         </div>
       </div>
 
@@ -201,18 +170,25 @@ function ChangeCard({ change, onUpdateField, onRevert, onPush, viewer, inGroup =
             )}
           </span>
         ) : (
-          <button type="button" onClick={() => onUpdateField(change.id, "reviewedBy", viewer.name)} disabled={!canEdit} className={quietButton + " ring-1 ring-inset ring-stone-300"}>
-            <Check className="h-3.5 w-3.5" />
-            Mark reviewed
-          </button>
+          // A change is reviewed with its reason, so the button is there once one is written — kept first if it's still being typed.
+          reason.trim() &&
+          canEdit && (
+            <button
+              type="button"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={async () => {
+                await saveReason();
+                await onUpdateField(change.id, "reviewedBy", viewer.name);
+              }}
+              className={quietButton + " ring-1 ring-inset ring-stone-300"}
+            >
+              <Check className="h-3.5 w-3.5" />
+              Mark reviewed
+            </button>
+          )
         )}
         <div className="ml-auto flex flex-wrap items-center gap-1.5">
-          {canEdit && (
-            <button onClick={() => onRevert(change.id, change.targetKey)} className={quietButton}>
-              <ArrowCounterClockwise className="h-3.5 w-3.5" />
-              Revert
-            </button>
-          )}
+          {canEdit && <RevertButton onRevert={() => onRevert(change.id, change.targetKey)} className="text-xs" />}
           {/* A change to an existing policy is pushed on its own; one of a new policy's settings goes with the policy (see NewPolicyGroup). */}
           {canPush && (
             <PushButton

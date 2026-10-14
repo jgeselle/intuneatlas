@@ -1029,6 +1029,12 @@ async function handleUpdateChange(
     res.writeHead(200, { "Content-Type": "application/json" });
     res.end(JSON.stringify(change));
   } catch (err) {
+    // A rule of review (see storage/changes.ts) is a refusal with its reason, not a server error.
+    if (err instanceof Error && err.name === "ChangeRefused") {
+      res.writeHead(400, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: err.message }));
+      return;
+    }
     sendApiError(res, err);
   }
 }

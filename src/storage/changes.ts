@@ -169,7 +169,14 @@ export function getChangeById(id: number): StagedChange | undefined {
   return row ? toStagedChange(row) : undefined;
 }
 
+/** A request that breaks a rule of review — answered as a refusal (400), not a server error. */
+export class ChangeRefused extends Error {
+  override name = "ChangeRefused";
+}
+
+/** Taking the reason away takes the review with it: a review is of a change and why it's made. */
 export function updateReason(id: number, reason: string): StagedChange {
+  if (!reason.trim()) updateField(id, "reviewed_by", "");
   return updateField(id, "reason", reason);
 }
 
@@ -182,6 +189,8 @@ export function updateReason(id: number, reason: string): StagedChange {
 // change, stable ids don't. When that lands, this needs viewer.id too, the
 // same way stageChange's stagedBy does.
 export function updateReviewer(id: number, reviewedBy: string): StagedChange {
+  // Nothing can be reviewed before it says why it's made.
+  if (reviewedBy.trim() && !getChangeById(id)?.reason.trim()) throw new ChangeRefused("Add a reason before marking the change reviewed.");
   return updateField(id, "reviewed_by", reviewedBy);
 }
 

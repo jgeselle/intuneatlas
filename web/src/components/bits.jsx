@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Dropdown } from "./Dropdown.jsx";
-import { Check, CaretRight, Copy, Trash } from "@phosphor-icons/react";
+import { ArrowCounterClockwise, Check, CaretRight, Copy, Trash } from "@phosphor-icons/react";
 import { SEVERITY_STYLE } from "../lib/styles.js";
 
 function Chip({ className = "", children }) {
@@ -448,4 +448,39 @@ function Stat({ label, value, sub, icon: Icon }) {
   );
 }
 
-export { Chip, Empty, PageSubtitle, SeverityChip, Diff, Differences, RefPath, NotesSection, HistoryList, Stat, ValueDisplay };
+/**
+ * Revert, asked once more: a staged change that's reverted is gone, with
+ * no trace, so one stray click shouldn't do it. The first click turns the
+ * button into the question; Escape or Keep takes it back.
+ */
+function RevertButton({ onRevert, className = "", compact = false }) {
+  const [asking, setAsking] = useState(false);
+  useEffect(() => {
+    if (!asking) return;
+    const onKey = (e) => e.key === "Escape" && setAsking(false);
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [asking]);
+  const quiet = "rounded-md font-medium focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500 " + (compact ? "px-1.5 py-0.5" : "px-2.5 py-1.5");
+  if (!asking) {
+    return (
+      <button type="button" onClick={() => setAsking(true)} className={quiet + " inline-flex items-center gap-1.5 text-stone-600 hover:bg-stone-100 " + className}>
+        {!compact && <ArrowCounterClockwise className="h-3.5 w-3.5" />}
+        Revert
+      </button>
+    );
+  }
+  return (
+    <span className={"inline-flex flex-wrap items-center gap-1.5 " + className}>
+      <span className="text-stone-600">Discard this staged change?</span>
+      <button type="button" autoFocus onClick={onRevert} className={quiet + " bg-red-700 text-white hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-500"}>
+        Revert
+      </button>
+      <button type="button" onClick={() => setAsking(false)} className={quiet + " text-stone-600 hover:bg-stone-100"}>
+        Keep
+      </button>
+    </span>
+  );
+}
+
+export { RevertButton, Chip, Empty, PageSubtitle, SeverityChip, Diff, Differences, RefPath, NotesSection, HistoryList, Stat, ValueDisplay };

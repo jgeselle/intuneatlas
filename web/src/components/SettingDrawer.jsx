@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { WarningCircle, CheckCircle, MinusCircle } from "@phosphor-icons/react";
 import { DrawerShell } from "./DrawerShell.jsx";
 import { RemindersSection } from "./Reminders.jsx";
-import { Chip, SeverityChip, Differences, RefPath, NotesSection, HistoryList, ValueDisplay, Empty } from "./bits.jsx";
+import { RevertButton, Chip, SeverityChip, Differences, RefPath, NotesSection, HistoryList, ValueDisplay, Empty } from "./bits.jsx";
 import { STATE_STYLE } from "../lib/styles.js";
 import { platformLabel, refLabel, isComplianceSetting, isCustomOmaSetting } from "../lib/format.js";
 import { rangeLabel } from "../lib/schema.js";
@@ -260,11 +260,7 @@ function PolicyValueCard({ title, nameField, subtitle, isNew = false, alert = fa
               {change.ready ? "Staged · ready" : "Staged · needs review"}
             </Chip>
             {change.stagedByName && <span className="truncate">{change.stagedByName}</span>}
-            {canRevert && (
-              <button type="button" onClick={() => onRevert(change)} className="ml-auto shrink-0 font-medium text-stone-600 hover:underline focus:outline-none">
-                Revert
-              </button>
-            )}
+            {canRevert && <RevertButton compact onRevert={() => onRevert(change)} className="ml-auto shrink-0" />}
           </div>
           {/* What the tenant has while the staged value sits in the editor above — for a new policy, there is nothing to note. */}
           {tenantValue !== undefined && (

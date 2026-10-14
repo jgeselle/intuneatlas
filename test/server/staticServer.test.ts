@@ -626,15 +626,37 @@ test("visibility: when it can't be checked, the viewer sees nothing and is told 
     policyVisibility: async () => {
       throw new Error("Couldn't reach Microsoft Graph (ETIMEDOUT) after 6 tries");
     },
+    onScopeReport: (r) => r,
     onEvaluateForViewer: async (r, viewer) => {
       evaluatedWith = viewer;
       return r;
     },
   });
   try {
-    await fetch(`http://127.0.0.1:${port}/`);
+    await fetch(`http://127.0.0.1:${port}/api/scope?group=g1`);
     assert.equal(evaluatedWith?.visiblePolicies?.size, 0);
     assert.match(evaluatedWith?.visibilityError ?? "", /^Couldn't check which policies your Intune role lets you see \(Couldn't reach Microsoft Graph \(ETIMEDOUT\)/);
+  } finally {
+    server.close();
+  }
+});
+
+test("changes: a rule of review comes back as a refusal with its reason, not a server error", async () => {
+  const port = 18891;
+  const { server } = await startServer({
+    report: null,
+    host: "127.0.0.1",
+    startPort: port,
+    session: mockSession({ getSession: async () => ({ id: "oid", name: "Alex", email: "a@x.com", role: "admin" }) }),
+    getChangeById: () => ({ stagedBy: "oid" }),
+    onUpdateChange: () => {
+      throw Object.assign(new Error("Add a reason before marking the change reviewed."), { name: "ChangeRefused" });
+    },
+  });
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/api/changes/5`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reviewedBy: "Alex" }) });
+    assert.equal(res.status, 400);
+    assert.deepEqual(await res.json(), { error: "Add a reason before marking the change reviewed." });
   } finally {
     server.close();
   }
