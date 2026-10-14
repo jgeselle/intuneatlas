@@ -105,19 +105,20 @@
 [data-theme="dark"] {
   color-scheme: dark;
 
-  --color-surface: oklch(0.19 0.005 70);
+  /* Neutral greys, from a #0a0a0a page up — no warm tint, which on near-black reads as brown. */
+  --color-surface: #141414;
 
-  --color-stone-50: oklch(0.15 0.004 70);
-  --color-stone-100: oklch(0.225 0.005 70);
-  --color-stone-200: oklch(0.275 0.006 70);
-  --color-stone-300: oklch(0.355 0.007 70);
-  --color-stone-400: oklch(0.53 0.008 70);
-  --color-stone-500: oklch(0.66 0.009 70);
-  --color-stone-600: oklch(0.75 0.009 70);
-  --color-stone-700: oklch(0.84 0.007 70);
-  --color-stone-800: oklch(0.9 0.005 70);
-  --color-stone-900: oklch(0.95 0.004 70);
-  --color-stone-950: oklch(0.98 0.002 70);
+  --color-stone-50: #0a0a0a;
+  --color-stone-100: #1c1c1c;
+  --color-stone-200: #282828;
+  --color-stone-300: #3c3c3c;
+  --color-stone-400: #6c6c6c;
+  --color-stone-500: #929292;
+  --color-stone-600: #aeaeae;
+  --color-stone-700: #cacaca;
+  --color-stone-800: #dedede;
+  --color-stone-900: #eeeeee;
+  --color-stone-950: #f8f8f8;
 
   --color-teal-50: oklch(0.235 0.035 158);
   --color-teal-100: oklch(0.275 0.045 158);
