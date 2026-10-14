@@ -17,6 +17,7 @@ import { SimplePolicyDrawer } from "./components/SimplePolicyDrawer.jsx";
 import { isComplianceSetting } from "./lib/format.js";
 import { runScan } from "./lib/scan.js";
 import { ReminderBell } from "./components/Reminders.jsx";
+import { isDue } from "./lib/reminders.js";
 import { Overview } from "./views/Overview.jsx";
 import { SettingsView } from "./views/SettingsView.jsx";
 import { SimplePolicyList } from "./views/SimplePolicyList.jsx";
@@ -130,6 +131,7 @@ function Dashboard({ initialReport, session }) {
   const [open, setOpen] = useState(null);
   const [reminders, setReminders] = useState([]);
   const canNote = session?.role === "contributor" || session?.role === "admin";
+  const dueReminders = reminders.filter((r) => isDue(r)).length;
   const [toast, setToast] = useState(null);
   const [syncing, setSyncing] = useState(false);
   const [, forceTick] = useState(0);
@@ -598,6 +600,16 @@ function Dashboard({ initialReport, session }) {
               <path fillRule="evenodd" d="M10 18A11 11 0 0 1 32 18V86.2A1.5 1.5 0 0 1 29.7 87.5A40 40 0 0 1 10 53ZM39 30A11 11 0 0 1 54.2 19.8L83.2 31.8A11 11 0 0 1 90 42V53A40 40 0 0 1 70.3 87.5A1.5 1.5 0 0 1 68 86.2V68.5A1.5 1.5 0 0 0 66.5 67H62.5A1.5 1.5 0 0 0 61 68.5V90.3A1.5 1.5 0 0 1 59.9 91.8A40 40 0 0 1 40.1 91.8A1.5 1.5 0 0 1 39 90.3ZM63.1 47.3L67.1 49A1.5 1.5 0 0 1 68 50.4V57.5A1.5 1.5 0 0 1 66.5 59H62.5A1.5 1.5 0 0 1 61 57.5V48.7A1.5 1.5 0 0 1 63.1 47.3Z" />
             </svg>
           )}
+          {/* Something is due: a dot on the logo, the one thing the icon strip shows up here. */}
+          {railCollapsed && dueReminders > 0 && (
+            <span
+              aria-hidden="true"
+              className={
+                "absolute left-[38px] top-[calc(50%-12px)] hidden h-2 w-2 rounded-full bg-amber-400 ring-2 ring-teal-900 transition-opacity duration-150 lg:block " +
+                (railWide ? "opacity-0" : "opacity-100")
+              }
+            />
+          )}
           <div className={"min-w-0 transition-opacity duration-150 " + railDim()}>
             <div className="whitespace-nowrap font-heading text-xl font-semibold leading-none tracking-tight text-white">
               IntuneAtlas
@@ -610,7 +622,7 @@ function Dashboard({ initialReport, session }) {
           {/* narrow layouts: the sidebar collapses into a top bar, so these ride along here */}
           {session && (
             <div className="ml-auto flex shrink-0 items-center gap-1 lg:hidden">
-              <ReminderBell reminders={reminders} canEdit={canNote} onOpen={(key) => setOpen({ type: "setting", key })} onDone={completeReminder} onSnooze={snoozeReminder} />
+              <ReminderBell reminders={reminders} canEdit={canNote} onOpen={(key) => setOpen({ type: "setting", key })} onDone={completeReminder} onSnooze={snoozeReminder} placement="bar" />
               <SyncControl syncing={syncing} syncedAgo={syncedAgo} onSync={resync} canSync={session?.role === "admin"} compact />
               <AccountMenu session={session} tenant={report.tenantName || report.tenant} />
             </div>
@@ -622,6 +634,7 @@ function Dashboard({ initialReport, session }) {
             onOpen={(key) => setOpen({ type: "setting", key })}
             onDone={completeReminder}
             onSnooze={snoozeReminder}
+            onOpenChange={pinRailWhileOpen}
             className={"ml-auto hidden transition-opacity duration-150 lg:block " + railDim()}
           />
           <button

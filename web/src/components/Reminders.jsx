@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { Bell } from "@phosphor-icons/react";
 import { addMonths, dueLabel, formatDate, isDue, localToday, repeatLabel } from "../lib/reminders.js";
 
@@ -162,17 +161,21 @@ function RemindersSection({ reminders, canEdit, viewer, onAdd, onDone, onSnooze,
 }
 
 /**
- * The bell in the sidebar: how many reminders are due, and every reminder
- * on the instance in a panel, due ones first. The panel is placed against
- * the viewport — the sidebar scrolls, and would clip it.
+ * The bell in the sidebar header: how many reminders are due, and every
+ * reminder on the instance in a panel, due ones first. Behaves like the
+ * account menu — opens inside the sidebar at its width (`rail`), keeps a
+ * collapsed sidebar open while it's up (`onOpenChange`), and on a narrow
+ * screen hangs below the top bar instead (`bar`).
  */
-function ReminderBell({ reminders, canEdit, onOpen, onDone, onSnooze, className = "" }) {
+function ReminderBell({ reminders, canEdit, onOpen, onDone, onSnooze, onOpenChange, placement = "rail", className = "" }) {
   const [open, setOpen] = useState(false);
-  const [place, setPlace] = useState(null);
-  const button = useRef(null);
   const today = localToday();
   const due = reminders.filter((r) => isDue(r, today));
   const upcoming = reminders.filter((r) => !isDue(r, today));
+
+  useEffect(() => {
+    onOpenChange?.(open);
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!open) return;
@@ -181,39 +184,43 @@ function ReminderBell({ reminders, canEdit, onOpen, onDone, onSnooze, className 
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
 
-  function toggle() {
-    const rect = button.current.getBoundingClientRect();
-    // Beside the sidebar on a wide screen, below the top bar on a narrow one.
-    const wide = window.innerWidth >= 1024;
-    const edge = button.current.closest("aside")?.getBoundingClientRect().right ?? rect.right;
-    setPlace(wide ? { top: rect.top - 4, left: edge + 8 } : { top: rect.bottom + 8, right: Math.max(8, window.innerWidth - rect.right) });
-    setOpen((o) => !o);
-  }
-
-  const item = (r) => (
-    <ReminderItem
-      key={r.id}
-      reminder={r}
-      canEdit={canEdit}
-      canDelete={false}
-      onOpen={() => {
-        setOpen(false);
-        onOpen(r.targetKey);
-      }}
-      onDone={() => onDone(r.id)}
-      onSnooze={() => onSnooze(r.id)}
-    />
-  );
+  const list = (title, items) =>
+    items.length > 0 && (
+      <div>
+        <h4 className="px-0.5 font-sans text-[11px] font-semibold uppercase tracking-wide text-stone-500">
+          {title} <span className="tabular-nums text-stone-400">· {items.length}</span>
+        </h4>
+        <ul className="mt-1.5 space-y-1.5">
+          {items.map((r) => (
+            <PanelItem
+              key={r.id}
+              reminder={r}
+              canEdit={canEdit}
+              onOpen={() => {
+                setOpen(false);
+                onOpen(r.targetKey);
+              }}
+              onDone={() => onDone(r.id)}
+              onSnooze={() => onSnooze(r.id)}
+            />
+          ))}
+        </ul>
+      </div>
+    );
 
   return (
     <>
       <button
-        ref={button}
-        onClick={toggle}
+        onClick={() => setOpen((o) => !o)}
         title={due.length ? `${due.length} reminder${due.length === 1 ? "" : "s"} due` : "Reminders"}
         aria-label={due.length ? `Reminders, ${due.length} due` : "Reminders"}
+        aria-haspopup="true"
         aria-expanded={open}
-        className={"relative shrink-0 rounded-md p-1.5 text-teal-300 hover:bg-teal-800 hover:text-teal-100 focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-300 " + className}
+        className={
+          "relative shrink-0 rounded-md p-1.5 text-teal-300 hover:bg-teal-800 hover:text-teal-100 focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-300 " +
+          (open ? "bg-teal-800 text-teal-100 " : "") +
+          className
+        }
       >
         <Bell weight="bold" className="h-4 w-4" />
         {due.length > 0 && (
@@ -222,38 +229,65 @@ function ReminderBell({ reminders, canEdit, onOpen, onDone, onSnooze, className 
           </span>
         )}
       </button>
-      {/* Outside the sidebar in the page, so it takes the content's colours, not the sidebar's greens. */}
-      {open &&
-        createPortal(
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-          <div
-            role="dialog"
-            aria-label="Reminders"
-            style={place ?? undefined}
-            className="fixed z-50 flex max-h-[min(36rem,calc(100vh-2rem))] w-80 max-w-[calc(100vw-1rem)] animate-rise-in flex-col overflow-hidden rounded-lg border border-stone-200 bg-stone-50 text-stone-900 shadow-xl"
-          >
-            <div className="border-b border-stone-200 px-3 py-2.5 font-heading text-sm font-semibold">Reminders</div>
-            <div className="space-y-4 overflow-y-auto p-3">
-              {reminders.length === 0 && <p className="py-6 text-center text-xs text-stone-500">No reminders</p>}
-              {due.length > 0 && (
-                <div>
-                  <h4 className="font-sans text-xs font-semibold uppercase tracking-wide text-stone-500">Due · {due.length}</h4>
-                  <ul className="mt-2 space-y-2">{due.map(item)}</ul>
-                </div>
-              )}
-              {upcoming.length > 0 && (
-                <div>
-                  <h4 className="font-sans text-xs font-semibold uppercase tracking-wide text-stone-500">Upcoming · {upcoming.length}</h4>
-                  <ul className="mt-2 space-y-2">{upcoming.map(item)}</ul>
-                </div>
-              )}
-            </div>
-          </div>
-        </>,
-          document.body,
-        )}
+
+      {open && <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />}
+      {/* Always mounted, like the account menu's, so closing plays its transition. Placed against the header. */}
+      <div
+        role="dialog"
+        aria-label="Reminders"
+        aria-hidden={!open}
+        className={
+          "absolute top-full z-40 flex max-h-[min(32rem,calc(100vh-6rem))] flex-col overflow-hidden rounded-lg border border-stone-200 bg-surface text-stone-900 shadow-xl transition duration-150 ease-out " +
+          (placement === "rail" ? "left-3 right-3 origin-top " : "right-3 w-[min(20rem,calc(100vw-1.5rem))] origin-top-right ") +
+          (open ? "translate-y-0 scale-100 opacity-100" : "pointer-events-none -translate-y-1.5 scale-95 opacity-0")
+        }
+      >
+        <div className="flex items-baseline justify-between border-b border-stone-100 px-3 py-2.5">
+          <span className="text-sm font-medium">Reminders</span>
+          {reminders.length > 0 && <span className="text-xs tabular-nums text-stone-400">{reminders.length}</span>}
+        </div>
+        <div className="space-y-3 overflow-y-auto p-2.5">
+          {reminders.length === 0 ? <p className="py-5 text-center text-xs text-stone-500">No reminders</p> : null}
+          {list("Due", due)}
+          {list("Upcoming", upcoming)}
+        </div>
+      </div>
     </>
+  );
+}
+
+/** A reminder in the bell's panel — compact: the panel is only as wide as the sidebar. */
+function PanelItem({ reminder, canEdit, onOpen, onDone, onSnooze }) {
+  const due = isDue(reminder);
+  return (
+    <li className="rounded-md border border-stone-200 bg-stone-50 p-2 text-xs">
+      <button onClick={onOpen} title={reminder.targetName} className="line-clamp-2 w-full text-left font-medium text-stone-800 hover:underline focus:outline-none focus-visible:underline">
+        {reminder.targetName}
+      </button>
+      <div className="mt-0.5 flex flex-wrap gap-x-2">
+        <span className={due ? "font-medium text-amber-700" : "text-stone-600"}>{dueLabel(reminder)}</span>
+        {reminder.repeatMonths ? <span className="text-stone-400">{repeatLabel(reminder.repeatMonths)}</span> : null}
+      </div>
+      {reminder.note && <p className="mt-1 line-clamp-3 break-words text-stone-600">{reminder.note}</p>}
+      {canEdit && due && (
+        <div className="mt-2 flex gap-1.5 whitespace-nowrap">
+          <button
+            onClick={onDone}
+            title={reminder.repeatMonths ? "Next: " + formatDate(nextDue(reminder)) : undefined}
+            className="flex-1 rounded-md bg-surface px-2 py-1 font-medium text-stone-700 ring-1 ring-inset ring-stone-300 hover:bg-stone-100 focus:outline-none focus-visible:ring-stone-500"
+          >
+            Done
+          </button>
+          <button
+            onClick={onSnooze}
+            title="Remind again in a week"
+            className="flex-1 rounded-md bg-surface px-2 py-1 font-medium text-stone-700 ring-1 ring-inset ring-stone-300 hover:bg-stone-100 focus:outline-none focus-visible:ring-stone-500"
+          >
+            Snooze 1 week
+          </button>
+        </div>
+      )}
+    </li>
   );
 }
 
