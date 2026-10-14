@@ -379,6 +379,9 @@
   .foot nav{display:flex;flex-wrap:wrap;gap:20px;margin-left:auto}
   .foot a{color:var(--muted);text-decoration:none}
   .foot a:hover{color:var(--text)}
+  /* The address follows the copyright after a dot — on a narrow screen it takes its own line, and the dot goes. */
+  .foot-mail{white-space:nowrap}
+  @media(max-width:639px){.foot-sep{display:none}.foot-mail{display:block;margin-top:6px}}
 
   a:focus-visible,button:focus-visible{outline:2px solid var(--green);outline-offset:3px;border-radius:5px}
 </style>
@@ -795,8 +798,7 @@
 
 <footer>
   <div class="wrap foot">
-    <span>MIT © 2026 IntuneAtlas contributors</span>
-    <a href="mailto:hello@intuneatlas.com">hello@intuneatlas.com</a>
+    <span>MIT © 2026 IntuneAtlas contributors<span class="foot-sep" aria-hidden="true"> · </span><a class="foot-mail" href="mailto:hello@intuneatlas.com">hello@intuneatlas.com</a></span>
     <nav>
       <a href="/docs/">Docs</a>
       <a href="#baselines">Baselines</a>
