@@ -145,6 +145,7 @@ function Dashboard({ initialReport, session }) {
     () => typeof window !== "undefined" && window.localStorage.getItem(RAIL_COLLAPSE_KEY) === "1",
   );
   const [menuPinned, setMenuPinned] = useState(false);
+  const railRef = useRef(null);
 
   // The rail's hover-to-flyout width used to be plain CSS (`lg:hover:w-60`
   // with a `lg:delay-200` on the resting state, so a quick pass-over
@@ -248,8 +249,21 @@ function Dashboard({ initialReport, session }) {
   // expanded for as long as it's open. Unpinning waits out the menu's own closing animation, so
   // the rail doesn't snap shut under it.
   function pinRailWhileOpen(isOpen) {
-    if (isOpen) setMenuPinned(true);
-    else window.setTimeout(() => setMenuPinned(false), 180);
+    if (isOpen) {
+      setMenuPinned(true);
+      return;
+    }
+    window.setTimeout(() => {
+      setMenuPinned(false);
+      // A menu's click-catching overlay belongs to the rail as far as React's mouse-leave goes, so leaving
+      // the rail while a menu was open never registered. Closed with the pointer elsewhere: collapse.
+      if (railRef.current && !railRef.current.matches(":hover")) {
+        setRailHoverOpen(false);
+        setRailSettled(false);
+        setSyncRevealed(false);
+        setSyncStatusFaded(false);
+      }
+    }, 180);
   }
 
   function toggleRailCollapsed() {
@@ -566,6 +580,7 @@ function Dashboard({ initialReport, session }) {
       {railCollapsed && <div className="hidden shrink-0 lg:block lg:w-16" aria-hidden="true" />}
 
       <aside
+        ref={railRef}
         onMouseEnter={onRailMouseEnter}
         onMouseLeave={onRailMouseLeave}
         className={

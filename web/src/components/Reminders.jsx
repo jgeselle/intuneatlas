@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Bell } from "@phosphor-icons/react";
 import { addMonths, dueLabel, formatDate, isDue, localToday, repeatLabel } from "../lib/reminders.js";
 
@@ -169,6 +170,8 @@ function RemindersSection({ reminders, canEdit, viewer, onAdd, onDone, onSnooze,
  */
 function ReminderBell({ reminders, canEdit, onOpen, onDone, onSnooze, onOpenChange, placement = "rail", className = "" }) {
   const [open, setOpen] = useState(false);
+  const [place, setPlace] = useState(null);
+  const button = useRef(null);
   const today = localToday();
   const due = reminders.filter((r) => isDue(r, today));
   const upcoming = reminders.filter((r) => !isDue(r, today));
@@ -176,6 +179,21 @@ function ReminderBell({ reminders, canEdit, onOpen, onDone, onSnooze, onOpenChan
   useEffect(() => {
     onOpenChange?.(open);
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Wider than the sidebar, which would clip it — so it's put in the page and lined up with the
+  // sidebar's header from there: from the sidebar's left edge, or under the top bar's right end.
+  useLayoutEffect(() => {
+    if (!open) return;
+    const measure = () => {
+      const header = button.current?.parentElement?.getBoundingClientRect();
+      const aside = button.current?.closest("aside")?.getBoundingClientRect();
+      if (!header) return;
+      setPlace(placement === "rail" ? { top: header.bottom - 4, left: (aside?.left ?? 0) + 12 } : { top: header.bottom + 4, right: 12 });
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [open, placement]);
 
   useEffect(() => {
     if (!open) return;
@@ -211,6 +229,7 @@ function ReminderBell({ reminders, canEdit, onOpen, onDone, onSnooze, onOpenChan
   return (
     <>
       <button
+        ref={button}
         onClick={() => setOpen((o) => !o)}
         title={due.length ? `${due.length} reminder${due.length === 1 ? "" : "s"} due` : "Reminders"}
         aria-label={due.length ? `Reminders, ${due.length} due` : "Reminders"}
@@ -230,15 +249,18 @@ function ReminderBell({ reminders, canEdit, onOpen, onDone, onSnooze, onOpenChan
         )}
       </button>
 
-      {open && <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />}
-      {/* Always mounted, like the account menu's, so closing plays its transition. Placed against the header. */}
+      {createPortal(
+        <>
+      {open && <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />}
+      {/* Always mounted, like the account menu's, so closing plays its transition. */}
       <div
         role="dialog"
+        style={place ?? { top: 0, left: 0 }}
         aria-label="Reminders"
         aria-hidden={!open}
         className={
-          "absolute top-full z-40 flex max-h-[min(32rem,calc(100vh-6rem))] flex-col overflow-hidden rounded-lg border border-stone-200 bg-surface text-stone-900 shadow-xl transition duration-150 ease-out " +
-          (placement === "rail" ? "left-3 right-3 origin-top " : "right-3 w-[min(20rem,calc(100vw-1.5rem))] origin-top-right ") +
+          "fixed z-50 flex max-h-[min(34rem,calc(100vh-6rem))] w-[min(21rem,calc(100vw-1.5rem))] flex-col overflow-hidden rounded-lg border border-stone-200 bg-surface text-stone-900 shadow-xl transition duration-150 ease-out " +
+          (placement === "rail" ? "origin-top-left " : "origin-top-right ") +
           (open ? "translate-y-0 scale-100 opacity-100" : "pointer-events-none -translate-y-1.5 scale-95 opacity-0")
         }
       >
@@ -252,6 +274,9 @@ function ReminderBell({ reminders, canEdit, onOpen, onDone, onSnooze, onOpenChan
           {list("Upcoming", upcoming)}
         </div>
       </div>
+        </>,
+        document.body,
+      )}
     </>
   );
 }
