@@ -90,7 +90,7 @@ function AccountMenu({ session, tenant, up = false, full = false, textClassName 
       <div
         style={up ? (place ?? { bottom: 0, left: 0 }) : undefined}
         className={
-          "z-40 w-[min(21rem,calc(100vw-1.5rem))] rounded-lg border border-stone-200 bg-surface p-3 text-stone-900 shadow-xl transition duration-150 ease-out " +
+          "z-40 w-[min(18rem,calc(100vw-1.5rem))] rounded-lg border border-stone-200 bg-surface p-3 text-stone-900 shadow-xl transition duration-150 ease-out " +
           // "up" opens from the sidebar footer, out over the page; the top-bar placement hangs below its button.
           (up ? "fixed origin-bottom-left " : "absolute right-0 mt-2 origin-top-right ") +
           (open
