@@ -95,7 +95,7 @@ export type AssignmentTarget =
  * their names, and which other groups each one contains (all levels
  * down). Lets a policy assigned to a parent group count for the groups
  * inside it. `available` is false when the app registration can't read
- * groups (no Group.Read.All) — everything then works on group ids alone,
+ * groups (no group permission) — everything then works on group ids alone,
  * without names and without nesting.
  *
  * Deliberately not here: which devices or users are in a group. The

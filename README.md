@@ -155,6 +155,11 @@ explicit about what's actually verifiable, rather than asking for trust:
   Roles (Viewer / Contributor / Admin) gate every mutating action, in the
   web UI and the CLI alike — see the
   [Getting started guide](https://intuneatlas.com/docs/) for assigning them.
+- **Nobody sees more than Intune shows them.** On a shared instance each
+  person who signs in sees only the policies their own Intune role and scope
+  tags let them see — IntuneAtlas asks Intune with their own sign-in — and a
+  push is made with the pusher's own rights. More on keeping access to a
+  minimum in the [guide](https://intuneatlas.com/docs/#least-privilege).
 
 ## Maintenance expectations
 

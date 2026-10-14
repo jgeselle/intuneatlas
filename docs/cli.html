@@ -190,7 +190,7 @@
         <table class="flags">
           <tr><th>Flag</th><th>Description</th></tr>
           <tr><td>[words...]</td><td>What to look for. A setting matches when every word appears somewhere in it. With no words, everything is listed.</td></tr>
-          <tr><td>--group &lt;name-or-id&gt;</td><td>Only what reaches this group: policies assigned to it, to a group containing it, or to everyone. Names need the scan to have read them (<code>Group.Read.All</code>); otherwise give the group's ID.</td></tr>
+          <tr><td>--group &lt;name-or-id&gt;</td><td>Only what reaches this group: policies assigned to it, to a group containing it, or to everyone. Names need the scan to have read them (<code>Group.ReadBasic.All</code>); otherwise give the group's ID.</td></tr>
           <tr><td>--state &lt;state&gt;</td><td>Only settings in this state: <code>Conflict</code>, <code>Below baseline</code>, <code>Missing</code>, <code>Not assigned</code>, <code>Meets baseline</code> or <code>Not checked</code></td></tr>
           <tr><td>--platform &lt;platform&gt;</td><td>Only this platform, e.g. <code>windows10</code>, <code>macOS</code>, <code>ios</code></td></tr>
           <tr><td>--baseline &lt;folder-or-url&gt;</td><td>Judge states against this baseline instead of the ones added in the web UI. Same forms as for <a href="#check">check</a>.</td></tr>

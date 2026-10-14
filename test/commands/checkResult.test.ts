@@ -91,7 +91,7 @@ test("check: a group is given by name or id — and a wrong one is answered with
   // Where the scan couldn't read group names, only an id will do — and the message says why.
   const nameless = { ...report, groups: { available: false, names: {}, contains: {} } };
   assert.deepEqual(resolveGroup(nameless, "pilot"), { id: "pilot", name: "pilot" });
-  assert.throws(() => resolveGroup(nameless, "Pilot ring"), /Group\.Read\.All/);
+  assert.throws(() => resolveGroup(nameless, "Pilot ring"), /Group\.ReadBasic\.All/);
   // Two groups with one name.
   const twins = { ...report, groups: { ...GROUPS, names: { pilot: "Ring", prod: "Ring" } } };
   assert.throws(() => resolveGroup(twins, "ring"), /2 groups are named "ring"/);

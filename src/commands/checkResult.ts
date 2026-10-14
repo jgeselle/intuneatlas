@@ -93,7 +93,7 @@ export function buildCheckResult(
 /**
  * The group meant by what was typed: an id, or a name — matched whole,
  * ignoring case. Names are only known where the scan could read them
- * (Group.Read.All); otherwise only an id can be given.
+ * (Group.ReadBasic.All); otherwise only an id can be given.
  */
 export function resolveGroup(report: ScanReport, wanted: string): { id: string; name: string } {
   const directory: GroupDirectory = report.groups ?? { available: false, names: {}, contains: {} };
@@ -111,7 +111,7 @@ export function resolveGroup(report: ScanReport, wanted: string): { id: string; 
 
   const known = [...ids].map(nameOf).sort((a, b) => a.localeCompare(b));
   const hint = !directory.available
-    ? " Group names couldn't be read (the app registration has no Group.Read.All), so only a group's id can be given."
+    ? " Group names couldn't be read (the app registration has no group permission, such as Group.ReadBasic.All), so only a group's id can be given."
     : known.length
       ? ` Groups policies are assigned to: ${known.slice(0, 20).join(", ")}${known.length > 20 ? `, and ${known.length - 20} more` : ""}.`
       : " No policy in the tenant is assigned to a group.";

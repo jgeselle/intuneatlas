@@ -155,6 +155,7 @@
       <a href="#push">Pushing a change</a>
       <a href="#baselines">Adding a baseline</a>
       <a href="#terminal">From the terminal</a>
+      <a href="#least-privilege">Keeping access to a minimum</a>
       <a href="#next">Next</a>
     </div>
 
@@ -211,14 +212,13 @@
           </li>
           <li>
             <b>API permissions</b> → <b>Add a permission</b> → <b>Microsoft Graph</b> →
-            <b>Delegated permissions</b> → add these four, all read-only:
-            <code>DeviceManagementConfiguration.Read.All</code>,
-            <code>DeviceManagementManagedDevices.Read.All</code>,
-            <code>Organization.Read.All</code>, and
-            <code>DeviceManagementServiceConfig.Read.All</code>. If you're a Global or Intune
+            <b>Delegated permissions</b> → add these two, both read-only:
+            <code>DeviceManagementConfiguration.Read.All</code> and
+            <code>DeviceManagementServiceConfig.Read.All</code>. <code>User.Read</code>, which a new
+            registration already has, covers the rest. If you're a Global or Intune
             admin, click <b>Grant admin consent</b> now — otherwise the first sign-in will
             prompt for it instead.
-            <br>Optionally also add <code>Group.Read.All</code>. IntuneAtlas uses it only to read the names of
+            <br>Optionally also add <code>Group.ReadBasic.All</code>. IntuneAtlas uses it only to read the names of
             the groups your policies are assigned to and which groups contain other groups, so it can show
             settings per group by name. Everything works without it: groups are then shown by their ID, and a
             policy assigned to a parent group isn't counted for the groups inside it.
@@ -404,7 +404,7 @@
         </p>
         <p>
           This is what is aimed at a group, not what one device ends up with: a device can be in several
-          groups. Group names and nesting need the optional <code>Group.Read.All</code> permission
+          groups. Group names and nesting need the optional <code>Group.ReadBasic.All</code> permission
           (<a href="#register-app">above</a>); without it groups are listed by ID.
         </p>
       </section>
@@ -507,6 +507,48 @@ settings:
           gate a scheduled job; <code>check --scan</code> does the scan and the check in one command. See the
           <a href="/docs/cli.html#check">CLI reference</a>.
         </p>
+      </section>
+
+      <section id="least-privilege">
+        <h2>Keeping access to a minimum</h2>
+        <p>
+          IntuneAtlas is a way into Intune, and Intune can reach every managed device, including the ones your
+          most privileged admins use. Treat it with the same care as Intune itself.
+        </p>
+        <ul>
+          <li>
+            <b>Everyone sees only what their Intune role shows them.</b> On a shared instance, a scan is made
+            with the rights of whoever ran it, but each person who signs in sees only the policies their own
+            Intune role and scope tags let them see. IntuneAtlas asks Intune with their own sign-in, so scope
+            tags, and Intune's newer scoped permissions, apply as they do in the Intune admin center. On your
+            own machine there's only you, and nothing is narrowed.
+          </li>
+          <li>
+            <b>A push is made with the pusher's own rights.</b> Intune checks their role and scope tags on
+            every write, whatever IntuneAtlas allows.
+          </li>
+          <li>
+            <b>Give the Admin role only to Intune admins.</b> It can push changes, so assign it through a group,
+            ideally with Privileged Identity Management, and cover the app with a Conditional Access policy
+            that asks for phishing-resistant MFA and a compliant device.
+          </li>
+          <li>
+            <b>Automation gets its own app registration.</b> <code>--client-secret</code> signs in as the app,
+            not a person, and an app's permissions apply to the whole tenant: no Intune role or scope tag
+            limits them. Give that registration read permissions only
+            (<code>DeviceManagementConfiguration.Read.All</code>,
+            <code>DeviceManagementServiceConfig.Read.All</code>, and optionally
+            <code>Group.ReadBasic.All</code> and <code>Organization.Read.All</code> for the tenant's name),
+            never the write permission, and keep its secret in a secret store.
+          </li>
+          <li>
+            <b>The hosting is part of it.</b> Whoever can change the Container App, its image or its settings
+            can change what runs while Admins sign in, and the file share holds the scans, notes and reviews.
+            Give access to that resource group to the same people as Intune administration, and pin the image
+            to a version (for example <code>ghcr.io/jgeselle/intuneatlas:0.0.54</code>) rather than
+            <code>latest</code>.
+          </li>
+        </ul>
       </section>
 
       <section id="next">

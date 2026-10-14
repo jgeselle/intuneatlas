@@ -79,7 +79,7 @@ export async function buildReport(token: string, flow: string, tenant: string, b
   // a legacy Device Restrictions profile writing the same real setting need
   // to land in the same bucket to be conflict-checked against each other.
   // Group names and nesting, for the groups any of those policies name. Optional: without
-  // Group.Read.All this comes back unavailable and everything works on group ids alone.
+  // a group permission (Group.ReadBasic.All is enough) this comes back unavailable and everything works on group ids alone.
   const groups = await fetchGroupDirectory(token, [
     ...[...policies, ...legacyPolicies].flatMap((p) => groupIdsIn(p.assignments)),
     ...[...compliancePolicies, ...enrollmentConfigurations].flatMap((p) => groupIdsIn(p.targets ?? [])),

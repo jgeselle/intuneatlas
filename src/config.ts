@@ -8,10 +8,15 @@ export const GRAPH_V1_BASE = "https://graph.microsoft.com/v1.0";
 // 'configurationPolicies'").
 export const GRAPH_BETA_BASE = "https://graph.microsoft.com/beta";
 
+/**
+ * What sign-in asks for, and no more. Nothing reads devices (a scan
+ * with no devices permission was confirmed to work, every part of it),
+ * and the tenant's name is all that's read about the organization —
+ * which User.Read covers (it returns the id, name and domains).
+ */
 export const DELEGATED_SCOPES = [
   "https://graph.microsoft.com/DeviceManagementConfiguration.Read.All",
-  "https://graph.microsoft.com/DeviceManagementManagedDevices.Read.All",
-  "https://graph.microsoft.com/Organization.Read.All",
+  "https://graph.microsoft.com/User.Read",
   // deviceEnrollmentConfigurations reads need this specifically — it's not
   // covered by DeviceManagementConfiguration.Read.All above.
   "https://graph.microsoft.com/DeviceManagementServiceConfig.Read.All",

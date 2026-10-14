@@ -14,7 +14,8 @@ const IDS_PER_LOOKUP = 15;
 
 /**
  * Names and nesting for the groups policies are assigned to. Needs the
- * Group.Read.All permission on the app registration, which is optional:
+ * Group.ReadBasic.All permission (or a broader one, such as Group.Read.All)
+ * on the app registration, which is optional — id and name are all that's read:
  * without it (Graph answers 403) the directory comes back empty and
  * marked unavailable, and the rest of the scan carries on — groups are
  * then known by id only and nesting can't be followed.
