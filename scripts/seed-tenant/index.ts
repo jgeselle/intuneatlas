@@ -25,7 +25,7 @@ const SCENARIOS: Record<string, (client: Awaited<ReturnType<typeof createSeedCli
   groupSetting: (client) => seedGroupSetting(client, arg),
   belowBaseline: (client) => seedBelowBaseline(client, arg),
   volume: (client) => seedVolume(client, arg ? Number(arg) : undefined),
-  multiPlatform: (client) => seedMultiPlatform(client),
+  multiPlatform: (client) => seedMultiPlatform(client, arg),
   legacyConflict: (client) => seedLegacyConflict(client, arg),
   dependentChoice: (client) => seedDependentChoice(client, arg),
   compliance: (client) => seedCompliance(client),

@@ -25,7 +25,7 @@ export interface SettingDefinition {
   rootDefinitionId?: string;
   baseUri: string;
   offsetUri: string;
-  options?: Array<{ itemId: string; displayName: string }>;
+  options?: Array<{ itemId: string; displayName: string; dependedOnBy?: Array<{ dependedOnBy: string; required?: boolean }> | null }>;
   // Both free-form Strings (Graph's docs don't enumerate their exact
   // flag-string format, e.g. how multi-value settings are joined —
   // confirmed comma-separated for platform, e.g. "iOS,macOS"). platform
@@ -152,6 +152,29 @@ export async function findFirstSimpleOrChoice(
     );
   }
   return match;
+}
+
+/**
+ * First choice definition matching keyword that sits directly inside a
+ * group collection, with that group — for platforms whose settings come
+ * only that way. Confirmed against a live catalog: iOS has no top-level
+ * choice setting usable in an ordinary (mdm) policy at all; its settings
+ * sit in payload groups, e.g. "Allow Camera" inside
+ * com.apple.applicationaccess (Restrictions).
+ */
+export async function findFirstNestedChoice(
+  client: SeedClient,
+  keyword: string,
+  platformToken: string,
+  technologyToken: string,
+): Promise<{ group: SettingDefinition; choice: SettingDefinition }> {
+  const matches = await findSettingDefinitions(client, keyword);
+  for (const d of matches) {
+    if (!isChoice(d) || isTopLevel(d) || !matchesPlatform(d, platformToken) || !usableWithPolicyTechnology(d, technologyToken) || !d.rootDefinitionId) continue;
+    const group = await getSettingDefinition(client, d.rootDefinitionId);
+    if (group["@odata.type"] === GROUP_COLLECTION) return { group, choice: d };
+  }
+  throw new Error(`No choice setting inside a group collection found matching "${keyword}" for platform "${platformToken}" and technology "${technologyToken}".`);
 }
 
 /** First group or group-collection definition matching keyword and platform, with its children resolved. */

@@ -71,8 +71,8 @@ same way as the first).
   your own baseline; none ships with the app). Default keyword: `Defer`.
 - `volume [count]` — many policies (default 200) spread across a handful
   of settings, for scale/UI testing.
-- `multiPlatform` — one policy per platform (Windows, iOS, macOS,
-  Android), each in its own group.
+- `multiPlatform [platform]` — one policy per platform (Windows, iOS, macOS,
+  Android), each in its own group; name a platform (e.g. `iOS`) for just that one.
 - `legacyConflict [keyword]` — a real legacy `deviceConfigurations`
   profile (Device Restrictions) and a real Settings Catalog policy,
   disagreeing on the same setting, assigned to the same group. Default

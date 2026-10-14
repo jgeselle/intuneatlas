@@ -27,19 +27,20 @@ export async function seedVolume(client: SeedClient, count = 200): Promise<void>
   }
 
   // Cycling through every option value (not just the first) is deliberate
-  // — it spreads volume across more distinct values. That means it can
-  // land on an option that needs a dependent child setting this toolkit
-  // doesn't build (confirmed for real: a Chrome content-setting option
-  // rejected with "doesnt contain required dependent settings"). One bad
-  // option shouldn't sink the whole batch, so failures here are skipped
-  // and counted rather than thrown — volume's job is a lot of policies,
-  // not every attempted one succeeding.
+  // — it spreads volume across more distinct values. Options that need a
+  // sub-setting of their own are left out of the cycle: this toolkit
+  // doesn't build those, and Graph refuses the policy without them
+  // (confirmed for real: a Chrome content-setting option rejected with
+  // "doesnt contain required dependent settings"). Anything else that
+  // fails is skipped and counted rather than thrown — volume's job is a
+  // lot of policies, not every attempted one succeeding.
   let created = 0;
   let skipped = 0;
   for (let i = 0; i < count; i++) {
     const definition = definitions[i % definitions.length];
-    if (!definition.options?.length) continue;
-    const option = definition.options[i % definition.options.length];
+    const usable = (definition.options ?? []).filter((o) => !(o.dependedOnBy ?? []).some((d) => d.required));
+    if (!usable.length) continue;
+    const option = usable[i % usable.length];
     try {
       const policy = await createConfigurationPolicy(client, {
         name: `volume ${i + 1}/${count} (${definition.displayName})`,
