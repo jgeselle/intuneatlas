@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { baselineVerdicts, resolveStaticPath, startServer, type StartServerOptions } from "../../src/server/staticServer.js";
+import { appPath, baselineVerdicts, resolveStaticPath, startServer, type StartServerOptions } from "../../src/server/staticServer.js";
 import type { ViewerIdentity, WebSessionManager } from "../../src/auth/webSession.js";
 
 // ------------------------------------------------------------------------
@@ -659,5 +659,53 @@ test("changes: a rule of review comes back as a refusal with its reason, not a s
     assert.deepEqual(await res.json(), { error: "Add a reason before marking the change reviewed." });
   } finally {
     server.close();
+  }
+});
+
+// ------------------------------------------------------------------------
+// A shared link survives signing in
+// ------------------------------------------------------------------------
+
+test("sign-in: someone opening a shared link before signing in ends up at that link afterwards", async () => {
+  const port = 18901;
+  let returnTo: string | undefined;
+  const { server } = await startServer({
+    report: null,
+    host: "0.0.0.0",
+    startPort: port,
+    session: mockSession({
+      loginRedirectUrl: async (_redirect: string, back?: string) => {
+        returnTo = back;
+        return "https://login.example.com/authorize";
+      },
+      completeLogin: async () => ({ sessionId: "s1", identity: { id: "oid", name: "A", email: "a@x.com", role: "viewer" }, returnTo }),
+    }),
+  });
+  const link = "/?page=settings&setting=device_vendor_msft_policy_config_camera_allowcamera%3A%3Awindows10";
+  try {
+    const first = await fetch(`http://127.0.0.1:${port}${link}`, { redirect: "manual" });
+    assert.equal(first.status, 302);
+    const login = first.headers.get("location")!;
+    assert.equal(login, "/auth/login?return=" + encodeURIComponent(link));
+
+    const toEntra = await fetch(`http://127.0.0.1:${port}${login}`, { redirect: "manual" });
+    assert.equal(toEntra.headers.get("location"), "https://login.example.com/authorize");
+    assert.equal(returnTo, link);
+
+    const back = await fetch(`http://127.0.0.1:${port}/auth/callback?code=c&state=s`, { redirect: "manual" });
+    assert.equal(back.headers.get("location"), link);
+
+    // The bare address needs nothing remembered.
+    const plain = await fetch(`http://127.0.0.1:${port}/`, { redirect: "manual" });
+    assert.equal(plain.headers.get("location"), "/auth/login");
+  } finally {
+    server.close();
+  }
+});
+
+test("appPath: only a path on this server is gone back to — never another site, never sign-in itself", () => {
+  assert.equal(appPath("/?page=changes"), "/?page=changes");
+  for (const bad of ["https://evil.example/", "//evil.example/x", "/\\evil.example", "evil", "/auth/login?return=/", "/x\nSet-Cookie: a=b", "", undefined, null]) {
+    assert.equal(appPath(bad as string | undefined), undefined, String(bad));
   }
 });

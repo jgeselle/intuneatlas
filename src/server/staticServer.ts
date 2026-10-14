@@ -213,8 +213,9 @@ export async function startServer(options: StartServerOptions): Promise<{ url: s
 
   const server = createServer(async (req, res) => {
     try {
-      if (req.method === "GET" && req.url === "/auth/login") {
-        const url = await session.loginRedirectUrl(`${requestOrigin(req)}/auth/callback`);
+      if (req.method === "GET" && (req.url === "/auth/login" || req.url?.startsWith("/auth/login?"))) {
+        const returnTo = appPath(new URL(req.url, "http://x").searchParams.get("return"));
+        const url = await session.loginRedirectUrl(`${requestOrigin(req)}/auth/callback`, returnTo);
         res.writeHead(302, { Location: url });
         res.end();
         return;
@@ -250,7 +251,9 @@ export async function startServer(options: StartServerOptions): Promise<{ url: s
       }
       if (!viewer) {
         if (req.method === "GET") {
-          res.writeHead(302, { Location: "/auth/login" });
+          // A shared link survives signing in: the sign-in comes back to it.
+          const back = appPath(req.url);
+          res.writeHead(302, { Location: back && back !== "/" ? "/auth/login?return=" + encodeURIComponent(back) : "/auth/login" });
           res.end();
         } else {
           res.writeHead(401, { "Content-Type": "application/json" });
@@ -386,8 +389,8 @@ async function handleCallback(
   }
 
   try {
-    const { sessionId } = await session.completeLogin({ code, state, redirectUri: `${requestOrigin(req)}/auth/callback` });
-    res.writeHead(302, { Location: "/", "Set-Cookie": session.sessionCookie(sessionId, requestOrigin(req).startsWith("https://")) });
+    const { sessionId, returnTo } = await session.completeLogin({ code, state, redirectUri: `${requestOrigin(req)}/auth/callback` });
+    res.writeHead(302, { Location: appPath(returnTo) ?? "/", "Set-Cookie": session.sessionCookie(sessionId, requestOrigin(req).startsWith("https://")) });
     res.end();
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -442,6 +445,19 @@ export function resolveStaticPath(dist: string, requestPath: string): string {
 
   const isAsset = extname(filePath) !== "" && !escapesDist;
   return isAsset ? fullPath : join(dist, "index.html");
+}
+
+/**
+ * A place in this app to go back to after signing in — a path on this
+ * server and nothing else. Anything that could leave it (a full URL,
+ * "//elsewhere", a backslash browsers read as a slash) or loop back into
+ * sign-in is refused, so the redirect can't be turned into a way out.
+ */
+export function appPath(value: string | null | undefined): string | undefined {
+  if (!value || value.length > 2048) return undefined;
+  if (!value.startsWith("/") || value.startsWith("//") || value.includes("\\") || /[\u0000-\u001f]/.test(value)) return undefined;
+  if (value.startsWith("/auth/")) return undefined;
+  return value;
 }
 
 async function serveStatic(

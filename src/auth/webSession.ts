@@ -57,6 +57,8 @@ interface Session {
 interface PendingLogin {
   codeVerifier: string;
   createdAt: number;
+  /** Where in the app the sign-in started — a shared link — to go back to once it's done. */
+  returnTo?: string;
 }
 
 const SESSION_COOKIE = "intuneatlas_session";
@@ -64,10 +66,10 @@ const PENDING_LOGIN_TTL_MS = 10 * 60 * 1000;
 const SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 7;
 
 export interface WebSessionManager {
-  /** Builds the Entra /authorize redirect URL and remembers the PKCE verifier under a fresh state. */
-  loginRedirectUrl(redirectUri: string): Promise<string>;
+  /** Builds the Entra /authorize redirect URL and remembers the PKCE verifier (and where to go back to) under a fresh state. */
+  loginRedirectUrl(redirectUri: string, returnTo?: string): Promise<string>;
   /** Exchanges the callback's code for tokens and starts a session. Throws if state is missing/expired. */
-  completeLogin(params: { code: string; state: string; redirectUri: string }): Promise<{ sessionId: string; identity: ViewerIdentity }>;
+  completeLogin(params: { code: string; state: string; redirectUri: string }): Promise<{ sessionId: string; identity: ViewerIdentity; returnTo?: string }>;
   /**
    * Tries to sign in from the OS-persisted cache alone, no browser round
    * trip — used so a returning solo user doesn't get re-prompted on every
@@ -157,11 +159,11 @@ export async function createWebSessionManager(tenantId: string, clientId: string
   }
 
   return {
-    async loginRedirectUrl(redirectUri) {
+    async loginRedirectUrl(redirectUri, returnTo) {
       prunePendingLogins();
       const { verifier, challenge } = await crypto.generatePkceCodes();
       const state = randomBytes(16).toString("hex");
-      pendingLogins.set(state, { codeVerifier: verifier, createdAt: Date.now() });
+      pendingLogins.set(state, { codeVerifier: verifier, createdAt: Date.now(), ...(returnTo ? { returnTo } : {}) });
 
       return msal.getAuthCodeUrl({
         scopes: DELEGATED_SCOPES,
@@ -195,7 +197,7 @@ export async function createWebSessionManager(tenantId: string, clientId: string
       if (!result?.account) {
         throw new Error("Sign-in didn't return an account.");
       }
-      return startSession(result.account);
+      return { ...startSession(result.account), ...(pending.returnTo ? { returnTo: pending.returnTo } : {}) };
     },
 
     async trySilentLogin() {

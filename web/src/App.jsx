@@ -16,6 +16,7 @@ import { SettingDrawer } from "./components/SettingDrawer.jsx";
 import { SimplePolicyDrawer } from "./components/SimplePolicyDrawer.jsx";
 import { isComplianceSetting } from "./lib/format.js";
 import { runScan } from "./lib/scan.js";
+import { readRoute, routeSearch } from "./lib/route.js";
 import { ReminderBell } from "./components/Reminders.jsx";
 import { isDue } from "./lib/reminders.js";
 import { Overview } from "./views/Overview.jsx";
@@ -97,7 +98,9 @@ export default function App({ initialReport, session }) {
 
 function Dashboard({ initialReport, session }) {
   const [report, setReport] = useState(initialReport);
-  const [view, setView] = useState("overview");
+  // Where the page was opened — a reload, or a link someone shared — names the page, panel and group to start on.
+  const [initialRoute] = useState(() => readRoute());
+  const [view, setView] = useState(initialRoute.view);
   // A page can be opened already filtered — the Overview's shortcut into the Settings list. Any other way there starts unfiltered.
   const [arriveWith, setArriveWith] = useState(undefined);
   function go(page, state) {
@@ -115,7 +118,8 @@ function Dashboard({ initialReport, session }) {
   // and baseline verdicts differ per group, it isn't a filter over the
   // tenant-wide list). Every page reads from it while a group is chosen.
   // Remembered across reloads, per tenant — a group id means nothing in another tenant.
-  const [scopeGroup, setScopeGroupState] = useState(() => readStoredScope(initialReport?.tenant));
+  // A link that names a place also names its group (or none): it shows what was shared, not whatever group the reader last chose.
+  const [scopeGroup, setScopeGroupState] = useState(() => (initialRoute.named ? initialRoute.group : readStoredScope(initialReport?.tenant)));
   const [scoped, setScoped] = useState(null);
   function setScopeGroup(group) {
     setScopeGroupState(group);
@@ -128,7 +132,28 @@ function Dashboard({ initialReport, session }) {
   }
   const [notes, setNotes] = useState(initialReport?.notes ?? {});
   const [changes, setChanges] = useState(initialReport?.changes ?? {});
-  const [open, setOpen] = useState(null);
+  const [open, setOpen] = useState(initialRoute.open);
+
+  // The address follows the page, the open panel and the group. Each move is a step back can undo;
+  // going back (or forward) puts the app where that address says, without adding another step.
+  const routed = useRef(false);
+  useEffect(() => {
+    const search = routeSearch({ view, open, group: scopeGroup });
+    // The first time it only writes down where the app started (a remembered group, say) — that's no step to go back over.
+    const step = routed.current ? "pushState" : "replaceState";
+    routed.current = true;
+    if (search !== window.location.search) window.history[step](null, "", window.location.pathname + search);
+  }, [view, open, scopeGroup]);
+  useEffect(() => {
+    const onPop = () => {
+      const route = readRoute();
+      setView(route.view);
+      setOpen(route.open);
+      setScopeGroupState(route.group);
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
   const [reminders, setReminders] = useState([]);
   const canNote = session?.role === "contributor" || session?.role === "admin";
   const dueReminders = reminders.filter((r) => isDue(r)).length;
