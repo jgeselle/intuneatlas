@@ -586,7 +586,8 @@ function Dashboard({ initialReport, session }) {
         className={
           "keep-brand flex shrink-0 flex-col bg-teal-900 transition-[width] duration-150 ease-out " +
           (railCollapsed
-            ? "overflow-hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-40 " +
+            // The collapse is a wide-screen thing only — on a phone this is the top bar, which must not clip the menus hanging from it.
+            ? "lg:fixed lg:inset-y-0 lg:left-0 lg:z-40 lg:overflow-hidden " +
               (railWide ? "lg:w-60 lg:shadow-2xl" : "lg:w-16")
             // Not collapsed: still a plain flex sibling of `main`, which
             // stretches it to match main's full height by default — fine
