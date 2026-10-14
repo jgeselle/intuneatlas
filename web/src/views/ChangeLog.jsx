@@ -383,21 +383,26 @@ const LOG_LIMIT = 1000;
  */
 function ChangeLog({ changes, onUpdateField, onRevert, onPush, viewer, onOpen, canOpen, query = "", setQuery = () => {}, scannedAt }) {
   const [filter, setFilter] = useState("All");
+  // undefined while loading, null when it couldn't be loaded.
   const [events, setEvents] = useState(undefined);
+  const [attempt, setAttempt] = useState(0);
   const [shown, setShown] = useState(LOG_PAGE);
 
   // The log lives on the server and grows with each scan and push.
   const pushedCount = Object.keys(changes).length;
+  // On a shared instance the first request after a while also asks Intune what this viewer may see,
+  // which takes a few seconds — hence a visible "loading", and a way to try again if it fails.
   useEffect(() => {
     let stale = false;
+    setEvents(undefined);
     fetch("/api/history?all=1")
-      .then((res) => (res.ok ? res.json() : { events: [] }))
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error(String(res.status)))))
       .then((body) => !stale && setEvents(body.events ?? []))
-      .catch(() => !stale && setEvents([]));
+      .catch(() => !stale && setEvents(null));
     return () => {
       stale = true;
     };
-  }, [scannedAt, pushedCount]);
+  }, [scannedAt, pushedCount, attempt]);
 
   // A change made before changes recorded their setting is keyed by the setting itself.
   const settingKeyOf = (change) => change.settingKey || change.targetKey;
@@ -422,7 +427,7 @@ function ChangeLog({ changes, onUpdateField, onRevert, onPush, viewer, onOpen, c
 
   const log = useMemo(
     () =>
-      (events ?? []).filter(
+      (events || []).filter(
         (e) =>
           (filter === "All" || (filter === "Pushed" ? e.kind === "pushed" : filter === "Seen in scans" && e.kind !== "pushed")) &&
           matches(e.settingName, e.policyName, e.from, e.to, e.reason, e.pushedBy),
@@ -441,11 +446,12 @@ function ChangeLog({ changes, onUpdateField, onRevert, onPush, viewer, onOpen, c
 
   // The server sends the latest LOG_LIMIT events; a count that reached it says so.
   const capped = (n) => (n === undefined ? undefined : n > 0 && events.length >= LOG_LIMIT ? n + "+" : n);
+  const loaded = Array.isArray(events) ? events : undefined;
   const counts = {
     All: undefined,
     Staged: Object.keys(changes).length,
-    Pushed: capped(events?.filter((e) => e.kind === "pushed").length),
-    "Seen in scans": capped(events?.filter((e) => e.kind !== "pushed").length),
+    Pushed: capped(loaded?.filter((e) => e.kind === "pushed").length),
+    "Seen in scans": capped(loaded?.filter((e) => e.kind !== "pushed").length),
   };
   const showStaged = filter === "All" || filter === "Staged";
   const showLog = filter !== "Staged";
@@ -508,7 +514,16 @@ function ChangeLog({ changes, onUpdateField, onRevert, onPush, viewer, onOpen, c
       {showLog && (
         <section className="space-y-3">
           {filter === "All" && <h2 className="font-sans text-xs font-semibold uppercase tracking-wide text-stone-500">History</h2>}
-          {events === undefined ? null : log.length === 0 ? (
+          {events === undefined ? (
+            <p className="animate-pulse rounded-lg border border-dashed border-stone-300 px-4 py-6 text-center text-sm text-stone-500">Loading the history…</p>
+          ) : events === null ? (
+            <div className="rounded-lg border border-dashed border-stone-300 px-4 py-6 text-center text-sm text-stone-500">
+              Couldn't load the history.{" "}
+              <button type="button" onClick={() => setAttempt((n) => n + 1)} className="font-medium text-stone-700 underline hover:text-stone-900">
+                Try again
+              </button>
+            </div>
+          ) : log.length === 0 ? (
             <Empty>{words.length ? "Nothing in the history matches" : "No changes recorded"}</Empty>
           ) : (
             <div className="space-y-4">
