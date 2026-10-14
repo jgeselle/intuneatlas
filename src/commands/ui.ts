@@ -210,7 +210,12 @@ async function evaluateForViewer(
       editable: !baselinePath && existsSync(join(userBaselinesDir(), ...pack.path.split("/"))),
     })),
     activeBaselinePacks: activePacks ?? null,
-    ...(viewer.visibilityError ? { visibilityError: viewer.visibilityError } : {}),
+    // Said, rather than left as an empty page: an IntuneAtlas role without an Intune role shows nothing.
+    ...(viewer.visibilityError
+      ? { visibilityError: viewer.visibilityError }
+      : viewer.visiblePolicies?.size === 0
+        ? { visibilityError: "Your Intune role doesn't let you see any policies in this tenant, so there's nothing to show here." }
+        : {}),
     ...(baselinePath ? {} : { baselineFolder: userBaselinesDir() }),
   };
 }
