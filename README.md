@@ -176,7 +176,9 @@ This is a solo, unpaid, MIT-licensed project — not a company, not a
 product with an SLA. I maintain it because I use it, on a best-effort
 basis; there's no guaranteed response time on issues or feature requests.
 Found a security issue? Please see [`SECURITY.md`](./SECURITY.md) rather
-than opening a public issue.
+than opening a public issue. Anything else: open an issue, or write to
+[hello@intuneatlas.com](mailto:hello@intuneatlas.com). Everyone taking
+part is asked to follow the [code of conduct](./CODE_OF_CONDUCT.md).
 
 ## Roadmap
 

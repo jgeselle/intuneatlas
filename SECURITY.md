@@ -18,9 +18,8 @@ Report it privately through GitHub instead: open the
 repository and choose **Report a vulnerability**. Only the maintainer
 can see the report until a fix is published.
 
-If that option isn't available to you, open an issue that only asks how
-to get in touch about a security matter, without any details of the
-problem.
+If that option isn't available to you, email
+[security@intuneatlas.com](mailto:security@intuneatlas.com) instead.
 
 A useful report includes:
 
