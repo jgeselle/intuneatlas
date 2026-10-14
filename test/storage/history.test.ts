@@ -13,7 +13,7 @@ process.env.HOME = home;
 process.env.USERPROFILE = home;
 const { getDb } = await import("../../src/storage/db.js");
 const { recordScan } = await import("../../src/storage/scans.js");
-const { getSettingHistory, recordPushedChange } = await import("../../src/storage/history.js");
+const { getRecentHistory, getSettingHistory, recordPushedChange } = await import("../../src/storage/history.js");
 after(() => {
   getDb().close();
   rmSync(home, { recursive: true, force: true });
@@ -149,4 +149,24 @@ test("history: a pushed removal is confirmed by the scan that finds the policy n
   // One entry for it — the push, now confirmed — not a second, anonymous "no longer sets it".
   assert.deepEqual([latest.kind, latest.to, latest.confirmedAt], ["pushed", "Not configured", "2026-01-13T12:00:00.000Z"]);
   assert.equal(getSettingHistory("contoso", "tamper").filter((e) => e.kind === "removed").length, 0);
+});
+
+test("history: the whole tenant's in one list, newest first, each event named by its setting", () => {
+  recordScan(scan("northwind", "2026-02-01T08:00:00.000Z", [{ ...entry("cam::windows10", [["n1", "Block"]]), name: "Allow Camera" }]));
+  recordScan(scan("northwind", "2026-02-02T08:00:00.000Z", [{ ...entry("cam::windows10", [["n1", "Allow"]]), name: "Allow Camera" }, { ...entry("bt::windows10", [["n2", "Off"]]), name: "Bluetooth" }]));
+  // A setting no longer in the tenant keeps the name it had in the last scan that had it.
+  recordScan(scan("northwind", "2026-02-03T08:00:00.000Z", [{ ...entry("cam::windows10", [["n1", "Allow"]]), name: "Allow Camera" }]));
+
+  const log = getRecentHistory("northwind");
+  assert.deepEqual(
+    log.map((e) => [e.at.slice(0, 10), e.settingKey, e.settingName, e.kind]),
+    [
+      ["2026-02-03", "bt::windows10", "Bluetooth", "removed"],
+      ["2026-02-02", "bt::windows10", "Bluetooth", "added"],
+      ["2026-02-02", "cam::windows10", "Allow Camera", "changed"],
+    ],
+  );
+  assert.equal(getRecentHistory("northwind", 1).length, 1);
+  // Another tenant's history isn't in it.
+  assert.ok(log.every((e) => !e.policyName.includes("p1")));
 });

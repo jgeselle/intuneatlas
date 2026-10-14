@@ -181,12 +181,8 @@ export function ensureHistoryBackfilled(): void {
 }
 
 /** One setting's history in a tenant, newest first. */
-export function getSettingHistory(tenant: string, settingKey: string, limit = 100): HistoryEntry[] {
-  ensureHistoryBackfilled();
-  const rows = getDb()
-    .prepare(`SELECT * FROM setting_history WHERE tenant = ? AND setting_key = ? ORDER BY occurred_at DESC, id DESC LIMIT ?`)
-    .all(tenant, settingKey, limit) as unknown as HistoryRow[];
-  return rows.map((row) => ({
+function toEntry(row: HistoryRow): HistoryEntry {
+  return {
     id: row.id,
     at: row.occurred_at,
     since: row.since,
@@ -200,5 +196,30 @@ export function getSettingHistory(tenant: string, settingKey: string, limit = 10
     ...(row.reviewed_by ? { reviewedBy: row.reviewed_by } : {}),
     ...(row.reason ? { reason: row.reason } : {}),
     ...(row.confirmed_at ? { confirmedAt: row.confirmed_at } : {}),
-  }));
+  };
+}
+
+export function getSettingHistory(tenant: string, settingKey: string, limit = 100): HistoryEntry[] {
+  ensureHistoryBackfilled();
+  const rows = getDb()
+    .prepare(`SELECT * FROM setting_history WHERE tenant = ? AND setting_key = ? ORDER BY occurred_at DESC, id DESC LIMIT ?`)
+    .all(tenant, settingKey, limit) as unknown as HistoryRow[];
+  return rows.map(toEntry);
+}
+
+/**
+ * What has happened across the whole tenant, newest first: every
+ * setting's history in one list, each event with its setting's key and
+ * name. The name comes from the latest scan that had the setting, so a
+ * setting no longer in the tenant keeps the name it had.
+ */
+export function getRecentHistory(tenant: string, limit = 1000): Array<HistoryEntry & { settingKey: string; settingName: string }> {
+  ensureHistoryBackfilled();
+  const rows = getDb()
+    .prepare(
+      `SELECT h.*, (SELECT s.name FROM settings_snapshot s WHERE s.key = h.setting_key ORDER BY s.scan_id DESC LIMIT 1) AS setting_name
+       FROM setting_history h WHERE h.tenant = ? ORDER BY h.occurred_at DESC, h.id DESC LIMIT ?`,
+    )
+    .all(tenant, limit) as unknown as Array<HistoryRow & { setting_key: string; setting_name: string | null }>;
+  return rows.map((row) => ({ ...toEntry(row), settingKey: row.setting_key, settingName: row.setting_name ?? row.setting_key.split("::")[0] }));
 }

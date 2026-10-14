@@ -562,7 +562,7 @@ function Dashboard({ initialReport, session }) {
     { id: "configuration", label: "Settings", icon: Sliders, count: configurationSettings.length },
     { id: "compliance", label: "Compliance", icon: ShieldCheck, count: complianceSettings.length },
     { id: "enrollment", label: "Enrollment", icon: DeviceMobile, count: enrollmentConfigurations.length },
-    { id: "changes", label: "Change log", icon: ListChecks, count: Object.keys(changes).length },
+    { id: "changes", label: "Changes", icon: ListChecks, count: Object.keys(changes).length },
     { id: "baselines", label: "Baselines", icon: Stack, count: (report.baselinePacks ?? []).length },
   ];
 
@@ -807,6 +807,8 @@ function Dashboard({ initialReport, session }) {
               viewer={session}
               onOpen={(key) => setOpen({ type: "setting", key })}
               canOpen={(key) => Boolean(findSetting(key))}
+              scannedAt={report.scannedAt}
+              {...searchOf("changes")}
             />
           )}
         </div>

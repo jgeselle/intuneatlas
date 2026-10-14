@@ -20,7 +20,7 @@ import { addNote, deleteNote, getAllNotes, getNoteById, type Note } from "../sto
 import { fetchVisiblePolicies, restrictToPolicies } from "../scan/visibility.js";
 import { addReminder, completeReminder, deleteReminder, getReminder, listReminders, snoozeReminder } from "../storage/reminders.js";
 import { applyPush } from "../push/apply.js";
-import { getSettingHistory } from "../storage/history.js";
+import { getRecentHistory, getSettingHistory } from "../storage/history.js";
 import { getLatestScan, recordScan } from "../storage/scans.js";
 import { clearSelectedPacks, getSelectedPacks, setSelectedPacks } from "../storage/baselineSelections.js";
 import {
@@ -90,6 +90,7 @@ export async function runUi(options: UiOptions): Promise<void> {
     onEvaluateForViewer: (report, viewer) => evaluateForViewer(report as RawEnrichedReport, viewer, baselinePath),
     onScopeReport: (report, groupId) => scopeToGroup(report as RawEnrichedReport, groupId),
     onHistoryRequest: (settingKey) => getSettingHistory(tenantId, settingKey),
+    onRecentHistory: () => getRecentHistory(tenantId),
     // With --baseline the baselines come from a folder of the operator's choosing; that isn't the app's to write to.
     ...(baselinePath
       ? {}

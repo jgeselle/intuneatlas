@@ -31,8 +31,8 @@ function LineDiff({ from, to }) {
         <div
           key={i}
           className={
-            "break-words rounded border px-2 py-1 " +
-            (kind === "removed" ? "border-stone-200 bg-stone-50 text-stone-500 line-through decoration-stone-300" : "border-teal-200 bg-teal-50 font-medium text-teal-800")
+            "rounded border px-2 py-1 [overflow-wrap:anywhere] " +
+            (kind === "removed" ? "border-stone-200 bg-stone-50 text-stone-500 line-through decoration-stone-300" : "border-teal-200 bg-teal-50 font-medium text-teal-800 dark:text-teal-700")
           }
         >
           {line}
@@ -58,12 +58,48 @@ function LineDiff({ from, to }) {
  */
 function Diff({ from, to }) {
   if (String(from).includes("\n") || String(to).includes("\n")) return <LineDiff from={from} to={to} />;
+  // Too long to sit side by side: one above the other, each the full width, rather than an arrow left on a line of its own.
+  if (String(from).length + String(to).length > 90) {
+    return (
+      <div className="min-w-0 space-y-1 text-sm">
+        <FoldedValue className="block border-stone-200 bg-stone-50 text-stone-500" textClassName="line-through decoration-stone-300">
+          {from}
+        </FoldedValue>
+        <FoldedValue className="block border-teal-200 bg-teal-50 font-medium text-teal-800 dark:text-teal-700">{to}</FoldedValue>
+      </div>
+    );
+  }
   return (
-    <div className="flex flex-wrap items-center gap-2 text-sm">
-      <span className="rounded border border-stone-200 bg-stone-50 px-2 py-1 text-stone-500 line-through decoration-stone-300">{from}</span>
+    <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm">
+      <FoldedValue className="border-stone-200 bg-stone-50 text-stone-500" textClassName="line-through decoration-stone-300">
+        {from}
+      </FoldedValue>
       <CaretRight className="h-4 w-4 shrink-0 text-stone-400" />
-      <span className="rounded border border-teal-200 bg-teal-50 px-2 py-1 font-medium text-teal-800">{to}</span>
+      <FoldedValue className="border-teal-200 bg-teal-50 font-medium text-teal-800 dark:text-teal-700">{to}</FoldedValue>
     </div>
+  );
+}
+
+/**
+ * A value in a box that never makes the page wider: it wraps anywhere —
+ * an encoded file or a long path has no spaces to wrap at — and one too
+ * long to read in passing shows its start, with the rest on request.
+ */
+const FOLD_AT = 160;
+function FoldedValue({ children, className, textClassName = "" }) {
+  const [open, setOpen] = useState(false);
+  const text = String(children ?? "");
+  const long = text.length > FOLD_AT;
+  return (
+    <span className={"min-w-0 max-w-full rounded border px-2 py-1 [overflow-wrap:anywhere] " + className}>
+      {/* The strike-through is on the text alone — a button inside it would be struck through too. */}
+      <span className={textClassName}>{long && !open ? text.slice(0, FOLD_AT) + "…" : text}</span>
+      {long && (
+        <button type="button" onClick={() => setOpen((o) => !o)} className="ml-1.5 text-xs font-medium text-stone-500 hover:underline focus:outline-none">
+          {open ? "Show less" : "Show all"}
+        </button>
+      )}
+    </span>
   );
 }
 
@@ -132,7 +168,7 @@ function Differences({ differences }) {
               {d.actual === null ? "Not set" : clip(d.actual)}
             </span>
             <CaretRight className="h-4 w-4 shrink-0 text-stone-400" />
-            <span className="min-w-0 break-words rounded border border-teal-200 bg-teal-50 px-2 py-1 font-medium text-teal-800">{clip(d.expected)}</span>
+            <span className="min-w-0 break-words rounded border border-teal-200 bg-teal-50 px-2 py-1 font-medium text-teal-800 dark:text-teal-700">{clip(d.expected)}</span>
           </div>
         </li>
       ))}

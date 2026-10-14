@@ -139,6 +139,8 @@ export interface StartServerOptions {
   onScopeReport?: (report: unknown, groupId: string) => unknown | Promise<unknown>;
   /** One setting's history — what scans have seen change in it — newest first. Asked for when a setting is opened, not sent with the report. */
   onHistoryRequest?: (settingKey: string) => unknown[] | Promise<unknown[]>;
+  /** Every setting's history in one list, newest first — the log on the Changes page. */
+  onRecentHistory?: () => unknown[] | Promise<unknown[]>;
   baselines?: {
     add: (input: AddPackInput) => Promise<string>;
     rename: (pack: string, name: string) => Promise<void>;
@@ -290,7 +292,7 @@ export async function startServer(options: StartServerOptions): Promise<{ url: s
       }
 
       if (req.method === "GET" && req.url?.startsWith("/api/history?")) {
-        await handleHistory(req, res, options.onHistoryRequest, viewer);
+        await handleHistory(req, res, options.onHistoryRequest, viewer, options.onRecentHistory);
         return;
       }
 
@@ -614,6 +616,7 @@ async function handleHistory(
   res: ServerResponse,
   onHistoryRequest: StartServerOptions["onHistoryRequest"],
   viewer: ViewerIdentity,
+  onRecentHistory?: StartServerOptions["onRecentHistory"],
 ): Promise<void> {
   const json = (status: number, body: unknown) => {
     res.writeHead(status, { "Content-Type": "application/json" });
@@ -621,10 +624,13 @@ async function handleHistory(
   };
   if (!onHistoryRequest) return json(501, { error: "History isn't available from this session." });
   if (!can(viewer.role, "view")) return json(403, { error: "Your role doesn't include viewing the report." });
-  const key = new URL(req.url ?? "", "http://localhost").searchParams.get("key") ?? "";
-  if (!key) return json(400, { error: "Name a setting." });
+  const params = new URL(req.url ?? "", "http://localhost").searchParams;
+  const key = params.get("key") ?? "";
+  // No setting named: the whole tenant's, where the server has it.
+  const whole = !key && params.get("all") === "1" && onRecentHistory;
+  if (!key && !whole) return json(400, { error: "Name a setting." });
   try {
-    const events = (await onHistoryRequest(key)) as Array<{ policyId?: string }>;
+    const events = (await (whole ? onRecentHistory() : onHistoryRequest(key))) as Array<{ policyId?: string }>;
     const visible = viewer.visiblePolicies;
     json(200, { events: visible ? events.filter((e) => !e.policyId || visible.has(e.policyId)) : events });
   } catch (err) {

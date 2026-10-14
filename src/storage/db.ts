@@ -50,6 +50,8 @@ export function getDb(): DatabaseSync {
       definition_json TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_settings_snapshot_scan ON settings_snapshot(scan_id);
+    -- The tenant-wide log names each event's setting by its latest snapshot.
+    CREATE INDEX IF NOT EXISTS idx_settings_snapshot_key ON settings_snapshot(key, scan_id);
 
     CREATE TABLE IF NOT EXISTS policy_snapshot (
       id INTEGER PRIMARY KEY AUTOINCREMENT,

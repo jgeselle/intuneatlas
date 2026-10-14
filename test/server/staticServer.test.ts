@@ -583,6 +583,7 @@ test("visibility: asked once with the viewer's own token, then handed with them 
       return r;
     },
     onHistoryRequest: () => [{ policyId: "seattle", kind: "added" }, { policyId: "hq", kind: "added" }, { kind: "pushed" }],
+    onRecentHistory: () => [{ policyId: "hq", settingKey: "bluetooth::windows10" }, { policyId: "seattle", settingKey: "camera::windows10" }],
     onStageChange: () => ({ targetKey: "x" }),
     reminders: {
       list: () => [{ targetKey: "camera::windows10" }, { targetKey: "bluetooth::windows10" }],
@@ -599,6 +600,8 @@ test("visibility: asked once with the viewer's own token, then handed with them 
     const history = (await get("/api/history?key=camera::windows10")) as { events: unknown[] };
     assert.deepEqual(history.events, [{ policyId: "seattle", kind: "added" }, { kind: "pushed" }], "events on a policy they can't see are left out");
     assert.deepEqual(await get("/api/reminders"), [{ targetKey: "camera::windows10" }]);
+    // The tenant-wide log too.
+    assert.deepEqual(((await get("/api/history?all=1")) as { events: unknown[] }).events, [{ policyId: "seattle", settingKey: "camera::windows10" }]);
     const stage = await fetch(`http://127.0.0.1:${port}/api/changes`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ targetKey: "k", targetName: "n", policyId: "hq", ruleId: "manual", from: "a", to: "b" }) });
     assert.equal(stage.status, 403, "nothing can be staged on a policy their role doesn't show them");
 
