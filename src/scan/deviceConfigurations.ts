@@ -1,3 +1,4 @@
+import { X509Certificate } from "node:crypto";
 import { graphGetAll } from "../graph.js";
 import { mapAssignmentTargets } from "./assignments.js";
 import { resolveSettingDefinition } from "./settingDefinitions.js";
@@ -66,6 +67,19 @@ export const LEGACY_MAPPINGS: LegacyMapping[] = [
 ];
 
 export const WINDOWS10_GENERAL_CONFIGURATION = "#microsoft.graph.windows10GeneralConfiguration";
+export const WINDOWS10_CUSTOM_CONFIGURATION = "#microsoft.graph.windows10CustomConfiguration";
+
+/** Where a custom OMA-URI row's settings are keyed: by the path itself, which is all that identifies it. */
+export const OMA_URI_PREFIX = "omauri:";
+
+interface GraphOmaSetting {
+  "@odata.type": string;
+  displayName?: string | null;
+  omaUri?: string | null;
+  value?: unknown;
+  isEncrypted?: boolean | null;
+  fileName?: string | null;
+}
 
 interface GraphDeviceConfiguration {
   id: string;
@@ -88,7 +102,7 @@ export async function fetchLegacyDeviceConfigurations(token: string): Promise<Ra
 
   const relevant = configs.filter((c) => c["@odata.type"] === WINDOWS10_GENERAL_CONFIGURATION);
 
-  const policies: RawPolicy[] = [];
+  const policies: RawPolicy[] = configs.filter((c) => c["@odata.type"] === WINDOWS10_CUSTOM_CONFIGURATION).flatMap(customProfile);
   for (const config of relevant) {
     const settings: RawSetting[] = [];
 
@@ -126,4 +140,64 @@ export async function fetchLegacyDeviceConfigurations(token: string): Promise<Ra
   }
 
   return policies;
+}
+
+/**
+ * A custom profile: rows of OMA-URI path and value, set by hand — Office's
+ * trusted publishers, say, one row per certificate with its thumbprint in
+ * the path. Each row is a setting of its own, keyed by its path (in
+ * lower case: Windows doesn't tell paths apart by case), so two profiles
+ * writing the same path land on the same setting.
+ *
+ * Confirmed live: Intune encrypts text, XML and file values (a
+ * certificate is a file value) and hands them back only to an app allowed
+ * to change configuration — a read-only scan sees "****". Such a row is
+ * shown with its file name or as encrypted; numbers and true/false come
+ * back as they are. They can't be edited here.
+ */
+function customProfile(config: GraphDeviceConfiguration): RawPolicy[] {
+  const rows = Array.isArray(config.omaSettings) ? (config.omaSettings as GraphOmaSetting[]) : [];
+  const settings: RawSetting[] = rows
+    .filter((row) => typeof row.omaUri === "string" && row.omaUri.trim() !== "")
+    .map((row) => {
+      const path = row.omaUri!.trim();
+      return {
+        settingDefinitionId: `${OMA_URI_PREFIX}${path.toLowerCase()}`,
+        name: row.displayName?.trim() || path.split("/").filter(Boolean).pop() || path,
+        cspPath: path,
+        category: "Custom OMA-URI",
+        value: omaValue(row),
+      };
+    });
+  if (settings.length === 0) return [];
+  return [{ id: config.id, name: config.displayName, platform: "windows10", assignments: mapAssignmentTargets(config.assignments), settings }];
+}
+
+/**
+ * Beta says so in `isEncrypted`; v1.0, which the scan reads profiles
+ * from, doesn't have the property and only sends the mask — "****", or
+ * for a file value "****" in base64 (both confirmed live).
+ */
+function isMasked(row: GraphOmaSetting, file: boolean): boolean {
+  if (row.isEncrypted) return true;
+  if (typeof row.value !== "string") return false;
+  return row.value === "****" || (file && Buffer.from(row.value, "base64").toString("latin1") === "****");
+}
+
+function omaValue(row: GraphOmaSetting): string {
+  const file = row["@odata.type"].endsWith("omaSettingBase64") || row["@odata.type"].endsWith("omaSettingStringXml");
+  if (isMasked(row, file)) return file && row.fileName ? `${row.fileName} (encrypted)` : "Encrypted";
+  if (file && typeof row.value === "string") return certificateSummary(row.value) ?? (row.fileName || "File");
+  return row.value === undefined || row.value === null ? "" : String(row.value);
+}
+
+/** A file value that is a certificate, by whom it's for and when it runs out. */
+function certificateSummary(base64: string): string | undefined {
+  try {
+    const certificate = new X509Certificate(Buffer.from(base64, "base64"));
+    const subject = /CN=([^\n,]+)/.exec(certificate.subject)?.[1] ?? certificate.subject;
+    return `Certificate: ${subject}, expires ${new Date(certificate.validTo).toISOString().slice(0, 10)}`;
+  } catch {
+    return undefined;
+  }
 }

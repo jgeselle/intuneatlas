@@ -64,4 +64,9 @@ function isComplianceSetting(entry) {
   return Boolean(entry.definitionId?.startsWith("compliance."));
 }
 
-export { initialsOf, sinceLabel, platformLabel, refLabel, isComplianceSetting };
+/** A row of a custom OMA-URI profile — read only: Intune hands its text and file values back encrypted (see deviceConfigurations.ts). */
+function isCustomOmaSetting(entry) {
+  return Boolean(entry?.key?.startsWith("omauri:"));
+}
+
+export { initialsOf, sinceLabel, platformLabel, refLabel, isComplianceSetting, isCustomOmaSetting };

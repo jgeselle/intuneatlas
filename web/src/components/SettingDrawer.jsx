@@ -3,7 +3,7 @@ import { WarningCircle, CheckCircle, MinusCircle } from "@phosphor-icons/react";
 import { DrawerShell } from "./DrawerShell.jsx";
 import { Chip, SeverityChip, Differences, RefPath, NotesSection, HistoryList, ValueDisplay, Empty } from "./bits.jsx";
 import { STATE_STYLE } from "../lib/styles.js";
-import { platformLabel, refLabel, isComplianceSetting } from "../lib/format.js";
+import { platformLabel, refLabel, isComplianceSetting, isCustomOmaSetting } from "../lib/format.js";
 import { rangeLabel } from "../lib/schema.js";
 import { renderNode, nodeFromText, validateNode, normalizeNode, applyExpected } from "../lib/settingValue.js";
 import { ValueEditor } from "./ValueEditor.jsx";
@@ -406,7 +406,7 @@ function SettingDrawer({ entry, notes, onAddNote, onDeleteNote, onClose, changes
   const checks = entry.checks ?? [];
   const schemas = entry.schemas;
   const canNote = viewer?.role === "contributor" || viewer?.role === "admin";
-  const canStage = viewer?.role === "contributor" || viewer?.role === "admin";
+  const canStage = (viewer?.role === "contributor" || viewer?.role === "admin") && !isCustomOmaSetting(entry);
   const canRevert = (change) => viewer?.role === "admin" || (viewer?.role === "contributor" && change.stagedBy === viewer?.id);
 
   const setDraft = (n, value) => setDrafts((d) => d.map((v, i) => (i === n ? value : v)));
