@@ -361,20 +361,6 @@
   .state.part{color:var(--amber)}
   .state.none{color:var(--faint)}
 
-  /* contribute list */
-  .issues{margin-top:26px;display:grid;gap:10px}
-  .issue{
-    display:flex;flex-wrap:wrap;align-items:center;gap:10px;
-    padding:13px 15px;border:1px solid var(--line);border-radius:9px;background:#fff;
-    font-size:.875rem;text-decoration:none;color:var(--text);
-  }
-  .issue:hover{border-color:var(--line-2)}
-  .issue .num{font-family:var(--mono);font-size:.75rem;color:var(--faint);flex:none}
-  .issue .tag{
-    font-family:var(--mono);font-size:.625rem;padding:2px 7px;border-radius:999px;
-    border:1px solid #B0F4CB;background:#F3FDF6;color:var(--green-2);margin-left:auto;flex:none;
-  }
-  .issue .tag.help{border-color:#FCD34D;background:var(--amber-bg);color:var(--amber)}
 
   /* notice */
   /* a remark that belongs to its section, set like a margin note: a dashed rule, a small mono label,
@@ -734,44 +720,44 @@
     <div class="wrap">
       <div class="sec-head">
         <p class="kicker">Project status</p>
-        <h2>Alpha, and honest about it.</h2>
+        <h2>Where things stand</h2>
         <p class="lede">
-          Windows coverage is solid because that's where the contributors' fleets are. Apple and Android are thinner.
-          Here's exactly where things stand at <span id="live-version-2">v0.0.3</span>.
+          IntuneAtlas is still early. Windows is the most complete; support for Apple and Android devices is more
+          limited. This is the state of each area in <span id="live-version-2">v0.0.3</span>.
         </p>
       </div>
 
       <ul class="status">
         <li>
-          <span class="what">Windows configuration &amp; update rings<em>Full CSP path resolution, conflict detection, settings catalog</em></span>
+          <span class="what">Windows configuration &amp; update rings<em>Settings Catalog policies, with each setting's full path and conflicts between policies</em></span>
           <span class="state good">stable</span>
         </li>
         <li>
-          <span class="what">Compliance policies &amp; tenant defaults<em>Every platform, Linux included, setting by setting, with actions for noncompliance. Including the secureByDefault check that catches unmanaged devices</em></span>
+          <span class="what">Compliance policies &amp; tenant settings<em>All platforms, Linux included, setting by setting, with the actions for noncompliance</em></span>
           <span class="state good">stable</span>
         </li>
         <li>
-          <span class="what">Enrollment, ADE tokens, certificate expiry<em>Expiry warnings for ADE and APNs</em></span>
+          <span class="what">Enrollment, ADE tokens, certificate expiry<em>Shows when ADE and APNs certificates are due to expire</em></span>
           <span class="state good">stable</span>
         </li>
         <li>
-          <span class="what">Custom OMA-URI profiles<em>Every row a setting, by its OMA-URI. Intune encrypts text and certificate values, so those show by file name only, and the rows are read-only</em></span>
+          <span class="what">Custom OMA-URI profiles<em>Each row is shown as a setting. Values Intune encrypts appear by file name only, and these rows can't be edited</em></span>
           <span class="state part">new</span>
         </li>
         <li>
-          <span class="what">macOS &amp; iOS payloads<em>Indexes and reports, but payload key mapping is incomplete, so some settings show a raw identifier</em></span>
+          <span class="what">macOS &amp; iOS<em>Scanned and shown, though some settings still appear under their technical name</em></span>
           <span class="state part">partial</span>
         </li>
         <li>
-          <span class="what">Android Enterprise<em>Work profile restrictions only. Fully managed and dedicated devices are not mapped yet</em></span>
+          <span class="what">Android Enterprise<em>Work profile restrictions. Fully managed and dedicated devices aren't covered yet</em></span>
           <span class="state part">partial</span>
         </li>
         <li>
-          <span class="what">Write-back / push staged changes<em>One reviewed change at a time, with a write permission you add yourself. Refused if the tenant value moved on; recorded in the setting's history. Rollback does not exist yet</em></span>
+          <span class="what">Pushing changes to Intune<em>One reviewed change at a time, with a write permission you add yourself. A push is refused if the value in Intune has changed since it was staged. There's no undo yet</em></span>
           <span class="state part">new</span>
         </li>
         <li>
-          <span class="what">App protection &amp; Conditional Access policies<em>Out of scope for now. Different object model, would deserve its own index</em></span>
+          <span class="what">App protection &amp; Conditional Access<em>Not planned for now; they work quite differently from device configuration</em></span>
           <span class="state none">not planned</span>
         </li>
       </ul>
@@ -779,10 +765,9 @@
       <div class="notice">
         <span class="kicker">Disclaimer</span>
         <p>
-          Not affiliated with, endorsed by, or supported by Microsoft. Intune and Microsoft Graph are Microsoft
-          trademarks. This project reads a tenant through the documented Graph API, and writes to it only when an
-          Admin pushes a reviewed change. If a scan ever
-          surprises you, open an issue and paste the redacted report.
+          IntuneAtlas isn't affiliated with or endorsed by Microsoft. Intune and Microsoft Graph are trademarks of
+          Microsoft. The app reads your tenant through the documented Graph API and only writes to it when an Admin
+          pushes a reviewed change. If a scan shows something you didn't expect, please open an issue.
         </p>
       </div>
     </div>
@@ -793,42 +778,14 @@
     <div class="wrap">
       <div class="sec-head">
         <p class="kicker">Contribute</p>
-        <h2>Baseline annotations and platform coverage, mostly.</h2>
+        <h2>Help is welcome</h2>
         <p class="lede">
-          Two contributor paths. Annotating a baseline needs tenant experience and no TypeScript; extending platform
-          coverage needs the opposite. Both are wanted.
+          Bug reports, ideas and pull requests are all appreciated. If something looks wrong for your tenant, an
+          issue describing what you expected and what you saw is the most useful place to start.
         </p>
-      </div>
-
-      <div class="issues">
-        <a class="issue" href="#contribute">
-          <span class="num">#212</span>
-          <span>Map remaining com.apple.applicationaccess payload keys to friendly names</span>
-          <span class="tag help">good first issue</span>
-        </a>
-        <a class="issue" href="#contribute">
-          <span class="num">#198</span>
-          <span>Android fully-managed device restrictions are not indexed</span>
-          <span class="tag">platform</span>
-        </a>
-        <a class="issue" href="#contribute">
-          <span class="num">#186</span>
-          <span>Add CIS Level 2 rules for Windows 11 24H2 attack surface reduction</span>
-          <span class="tag help">good first issue</span>
-        </a>
-        <a class="issue" href="#contribute">
-          <span class="num">#174</span>
-          <span>Rollback for deployed changes behind --experimental-write</span>
-          <span class="tag">core</span>
-        </a>
-      </div>
-
-      <div class="notice">
-        <span class="kicker">Citations</span>
-        <p>
-          Every rationale needs a citation: a benchmark section, vendor guidance, or a documented tenant
-          observation. "It's more secure" isn't reviewable, and an annotation nobody can trace gets removed the first
-          time it flags something on someone's fleet that turns out to be fine.
+        <p style="margin-top:18px;display:flex;flex-wrap:wrap;gap:10px">
+          <a class="btn-soft" href="https://github.com/jgeselle/intuneatlas/issues" target="_blank" rel="noopener noreferrer">Open an issue</a>
+          <a class="btn-soft" href="https://github.com/jgeselle/intuneatlas" target="_blank" rel="noopener noreferrer">View on GitHub</a>
         </p>
       </div>
     </div>
