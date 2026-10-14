@@ -133,13 +133,16 @@ function AccountMenu({ session, tenant, up = false, full = false, textClassName 
 
         <Appearance />
 
-        <a
-          href="/auth/logout"
-          className="mt-3 flex w-full items-center gap-2 rounded-md border-t border-stone-200 px-2 pt-3 pb-1.5 text-xs font-medium text-stone-600 hover:bg-stone-50 focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500"
-        >
-          <SignOut className="h-3.5 w-3.5" />
-          Sign out
-        </a>
+        {/* A divider like the sections above, and the link inside it: its text lines up with theirs, and its hover reaches a little past on both sides. */}
+        <div className="mt-3 border-t border-stone-100 pt-2">
+          <a
+            href="/auth/logout"
+            className="-mx-2 flex items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-100 focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500"
+          >
+            <SignOut className="h-3.5 w-3.5" />
+            Sign out
+          </a>
+        </div>
       </div>
         </>,
       )}
