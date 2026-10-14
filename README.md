@@ -2,16 +2,15 @@
 
 **[intuneatlas.com](https://intuneatlas.com)**
 
-Flatten every Intune profile into one settings index, matched by the real
-setting — not just a shared name.
+All of your Intune settings in one place, across every policy that sets
+them.
 
-The Intune portal is organised around policies. Devices apply a merged set of
-settings. IntuneAtlas reads a tenant read-only, rebuilds that merge, and
-serves it as something you can actually search: every setting once, grouped
-by category, with each policy that sets it and its value — and with
-conflicts, coverage gaps and baseline drift surfaced instead of buried in
-per-policy views. Configuration policies and compliance policies both, for
-the whole tenant or for one group.
+The Intune portal is organised around policies, while devices apply the
+combined settings of every policy that reaches them. IntuneAtlas reads your
+tenant and lists each setting once, grouped by category, with every policy
+that sets it and its value. Conflicts between policies, settings that reach
+no devices, and differences from a baseline are shown alongside. It covers
+configuration and compliance policies, for the whole tenant or for one group.
 
 <p>
   <img src="./screenshots/overview.png" width="49%" alt="Overview: counts of settings, compliance policies and conflicts, and a list of settings to fix first" />
@@ -22,10 +21,9 @@ the whole tenant or for one group.
   <img src="./screenshots/compliance.png" width="49%" alt="Compliance: what compliance policies demand, setting by setting, checked against a baseline" />
 </p>
 
-**Status: early, but real.** Scanning, baselines, per-group views, a
-review-gated change log and pushing a reviewed change to Intune are real —
-see the roadmap below for what isn't. Backed by a real test suite, not just
-typechecking — see [`test/`](./test).
+**Status: early.** Scanning, baselines, per-group views, reviewed changes and
+pushing them to Intune all work today; the roadmap below lists what's still
+missing. The core logic is covered by the tests in [`test/`](./test).
 
 ## Getting started
 
@@ -37,12 +35,12 @@ curl -fsSL https://intuneatlas.com/install.sh | bash    # Linux
 intuneatlas ui --tenant <your-tenant>.onmicrosoft.com
 ```
 
-That's it for a solo run.
+That's all you need to run it on your own machine.
 
 **For a team, host it on Azure.** One template deploys IntuneAtlas as a
 Container App in your own subscription: its own HTTPS address, everyone
 signing in with their own Microsoft account, roles for who may stage, review
-and push. No server or certificate to look after.
+and push. There's no server or certificate for you to maintain.
 
 [![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fjgeselle%2Fintuneatlas%2Fmain%2Finfra%2Fazure%2Fazuredeploy.json)
 
@@ -78,10 +76,10 @@ Every setting is in exactly one of six states:
 - **Below baseline** — the setting falls short of a baseline you've loaded:
   the Open Intune Baseline, a CIS export, or your own gold-standard policies.
 - **Missing** — a baseline expects a setting that no policy configures.
-- **Not assigned** — a policy sets it but targets no group, so it silently
-  affects nothing.
+- **Not assigned** — a policy sets it, but the policy isn't assigned to any
+  group, so it doesn't reach any devices.
 - **Meets baseline** / **Not checked** — passing, or not covered by any
-  active baseline. These two stay out of the way.
+  active baseline. These two are kept in the background.
 
 Around that:
 
@@ -109,8 +107,8 @@ Around that:
   scan; `intuneatlas check --group <group> --baseline <folder-or-url>` holds
   it against a baseline — a folder of the Open Intune Baseline on GitHub, say
   — and exits non-zero when something needs attention.
-- **Documented.** A note explaining a deliberate deviation is attached to the
-  setting itself, so context survives the person who wrote it.
+- **Notes.** A note can be attached to any setting, for example to explain a
+  deliberate difference from a baseline, so the reason stays with it.
 - **Reminders.** Any setting can carry a reminder — once, or every few
   months — such as renewing a trusted publisher's code-signing certificate.
   They're shared by everyone on the instance, and a bell shows what's due.
@@ -137,32 +135,32 @@ stored values: severity, rationale, a reference, "this number or less", or
 
 ## Trust model
 
-This is a tool you point at your own Intune tenant, so it's worth being
-explicit about what's actually verifiable, rather than asking for trust:
+IntuneAtlas works with your own Intune tenant, so here is how it handles
+access, and how you can check it yourself:
 
-- **No shared trust surface.** There's no bundled client ID or shared
-  service anywhere — every install registers its own Entra app and signs in
-  with it. A compromise of this project's own infrastructure (there isn't
-  much of it) can't compromise your tenant, because nothing of yours ever
-  runs through anything shared.
-- **Build provenance, not just a signature.** Every release carries a
-  [Sigstore](https://www.sigstore.dev/)-signed attestation (plus an SBOM)
-  tying the binary to the exact commit and workflow it came from — verify
-  it yourself: `gh attestation verify <file> --repo jgeselle/intuneatlas`.
-  Windows still shows a SmartScreen warning on first run either way — that's
-  publisher reputation, a separate thing only a paid cert changes.
+- **Your own app registration.** There's no shared client ID or central
+  service. Every installation registers its own Entra app and signs in with
+  it, so nothing from your tenant passes through anything run by this
+  project.
+- **Signed build provenance.** Every release comes with a
+  [Sigstore](https://www.sigstore.dev/)-signed attestation and an SBOM that
+  link the binary to the commit and workflow it was built from. You can
+  check it with `gh attestation verify <file> --repo jgeselle/intuneatlas`.
+  Windows still shows a SmartScreen warning the first time it runs; that
+  depends on publisher reputation, which only a paid code-signing
+  certificate would change.
 - **Read-only unless you decide otherwise.** Sign-in asks for read
   permissions only, and a scan only reads. The one thing that writes is
-  pushing a reviewed change from the change log, and that needs
+  pushing a reviewed change from the Changes page, and that needs
   `DeviceManagementConfiguration.ReadWrite.All` — a permission you add to
   your own app registration only if you want push. Without it the app cannot
   change anything in your tenant. Every write the tool can make lives in
   [`src/push`](./src/push); nothing else sends anything but a GET to Graph.
   See [`test/`](./test) for the suite covering both the merge logic that
   decides what you see and what a push sends.
-- **Access is enforced server-side, not just hidden in the UI.** Entra App
-  Roles (Viewer / Contributor / Admin) gate every mutating action, in the
-  web UI and the CLI alike — see the
+- **Roles are checked on the server.** Entra App Roles (Viewer /
+  Contributor / Admin) decide who may change anything, in the web UI and
+  the CLI alike — see the
   [Getting started guide](https://intuneatlas.com/docs/) for assigning them.
 - **Nobody sees more than Intune shows them.** On a shared instance each
   person who signs in sees only the policies their own Intune role and scope
@@ -172,9 +170,9 @@ explicit about what's actually verifiable, rather than asking for trust:
 
 ## Maintenance expectations
 
-This is a solo, unpaid, MIT-licensed project — not a company, not a
-product with an SLA. I maintain it because I use it, on a best-effort
-basis; there's no guaranteed response time on issues or feature requests.
+IntuneAtlas is an open-source project I maintain in my own time, alongside
+using it myself. I'll respond to issues and requests when I can, but there's
+no guaranteed response time.
 Found a security issue? Please see [`SECURITY.md`](./SECURITY.md) rather
 than opening a public issue. Anything else: open an issue, or write to
 [hello@intuneatlas.com](mailto:hello@intuneatlas.com). Everyone taking
@@ -189,14 +187,14 @@ part is asked to follow the [code of conduct](./CODE_OF_CONDUCT.md).
 - [x] Values with Intune's own options, ranges, lists and sub-settings, editable in place
 - [x] `intuneatlas ui` — web UI over the generated index, solo or shared with a team (`--host`), everyone signing in with their own Microsoft account
 - [x] Baselines as exported Intune policies (Settings Catalog and compliance), matched by setting ID, with optional per-setting annotations — added, renamed and removed from the web UI
-- [x] Review-gated change log (stage a change in an existing or a new policy, require a reason and a signed-in reviewer)
+- [x] Reviewed changes: stage a change in an existing or a new policy, with a required reason and a signed-in reviewer
 - [x] Packaging: standalone Windows binary (SEA), PowerShell installer, winget manifest template
 - [x] `ui --persist` / `--stop` — a shared instance that survives reboots (Scheduled Task on Windows, systemd on Linux)
 - [x] Entra App Roles (Viewer / Contributor / Admin), enforced server-side across the UI and CLI
 - [x] Sigstore build provenance + SBOM attestations on every released binary — see [Trust model](#trust-model)
 - [x] Per-setting history of what changed between scans
 - [x] Taking a setting out of a policy, staged and pushed like any change
-- [x] Pushing a reviewed change to Intune from the change log — Settings Catalog policies (template-based ones such as endpoint security included), compliance policies and the tenant-wide compliance settings; recorded in the setting's history with who and why
+- [x] Pushing a reviewed change to Intune from the Changes page — Settings Catalog policies (template-based ones such as endpoint security included), compliance policies and the tenant-wide compliance settings; recorded in the setting's history with who and why
 - [ ] Enrollment configurations as settings — they are listed by name and assignment only
 - [ ] Legacy (template-based) device configuration profiles beyond a handful of Windows Device Restrictions settings
 - [x] `intuneatlas search` and `intuneatlas check` — the last scan searched, or checked against a baseline (a folder or a URL) for one group, from the terminal, with an exit code for scheduled jobs
@@ -208,5 +206,5 @@ part is asked to follow the [code of conduct](./CODE_OF_CONDUCT.md).
 
 [MIT](./LICENSE) © 2026 IntuneAtlas contributors
 
-Not affiliated with, endorsed by, or supported by Microsoft. Intune and
-Microsoft Graph are Microsoft trademarks.
+IntuneAtlas isn't affiliated with or endorsed by Microsoft. Intune and
+Microsoft Graph are trademarks of Microsoft.
