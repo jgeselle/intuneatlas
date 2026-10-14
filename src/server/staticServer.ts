@@ -139,8 +139,11 @@ export interface StartServerOptions {
   onScopeReport?: (report: unknown, groupId: string) => unknown | Promise<unknown>;
   /** One setting's history — what scans have seen change in it — newest first. Asked for when a setting is opened, not sent with the report. */
   onHistoryRequest?: (settingKey: string) => unknown[] | Promise<unknown[]>;
-  /** Every setting's history in one list, newest first — the log on the Changes page. */
-  onRecentHistory?: () => unknown[] | Promise<unknown[]>;
+  /**
+   * Every setting's history in one list, newest first — the log on the Changes page — a page at a
+   * time, narrowed by kind, words and the policies the viewer may see; with the counts per kind.
+   */
+  onRecentHistory?: (query: RecentHistoryQuery) => RecentHistoryAnswer | Promise<RecentHistoryAnswer>;
   baselines?: {
     add: (input: AddPackInput) => Promise<string>;
     rename: (pack: string, name: string) => Promise<void>;
@@ -646,8 +649,23 @@ async function handleHistory(
   const whole = !key && params.get("all") === "1" && onRecentHistory;
   if (!key && !whole) return json(400, { error: "Name a setting." });
   try {
-    const events = (await (whole ? onRecentHistory() : onHistoryRequest(key))) as Array<{ policyId?: string }>;
     const visible = viewer.visiblePolicies;
+    if (whole) {
+      // The tenant-wide log comes a page at a time, already narrowed — kind, words, and what this viewer
+      // may see — so a page, the next one and the counts agree. `next` is where the following page starts.
+      const limit = Math.min(Math.max(Number(params.get("limit")) || 100, 1), 1000);
+      const offset = Math.max(Number(params.get("offset")) || 0, 0);
+      const kind = params.get("kind");
+      const answer = await onRecentHistory({
+        limit,
+        offset,
+        ...(kind === "pushed" || kind === "seen" ? { kind } : {}),
+        words: (params.get("q") ?? "").toLowerCase().split(/\s+/).filter(Boolean).slice(0, 10),
+        ...(visible ? { policyIds: [...visible.keys()] } : {}),
+      });
+      return json(200, { events: answer.events, counts: answer.counts, next: answer.events.length === limit ? offset + limit : null });
+    }
+    const events = (await onHistoryRequest(key)) as Array<{ policyId?: string }>;
     json(200, { events: visible ? events.filter((e) => !e.policyId || visible.has(e.policyId)) : events });
   } catch (err) {
     console.error("[history]", err);
@@ -843,6 +861,18 @@ async function handleNoteRequest(
   }
 }
 
+export interface RecentHistoryQuery {
+  limit: number;
+  offset: number;
+  kind?: "pushed" | "seen";
+  words: string[];
+  policyIds?: string[];
+}
+export interface RecentHistoryAnswer {
+  events: unknown[];
+  counts: { pushed: number; seen: number };
+}
+
 export interface ReminderStore {
   list(): unknown[];
   get(id: number): { createdById: string; targetKey?: string } | undefined;
@@ -861,13 +891,16 @@ export interface ReminderStore {
  */
 /**
  * Whether a viewer may see a setting at all: one of the policies setting it is one they can see.
- * Every setting, where nothing narrows what they see.
+ * A setting no policy in the tenant sets — one a baseline expects (Missing), or one gone since —
+ * shows nothing of the tenant, so anyone may see it. Every setting, where nothing narrows what
+ * they see.
  */
 function settingVisible(report: unknown, viewer: ViewerIdentity, key: string): boolean {
   const visible = viewer.visiblePolicies;
   if (!visible) return true;
   const entry = (report as { settings?: Array<{ key: string; sources: Array<{ policyId: string }> }> } | null)?.settings?.find((e) => e.key === key);
-  return Boolean(entry?.sources.some((s) => visible.has(s.policyId)));
+  if (!entry || entry.sources.length === 0) return true;
+  return entry.sources.some((s) => visible.has(s.policyId));
 }
 
 async function handleReminders(

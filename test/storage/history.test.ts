@@ -13,7 +13,7 @@ process.env.HOME = home;
 process.env.USERPROFILE = home;
 const { getDb } = await import("../../src/storage/db.js");
 const { recordScan } = await import("../../src/storage/scans.js");
-const { getRecentHistory, getSettingHistory, recordPushedChange } = await import("../../src/storage/history.js");
+const { countRecentHistory, getRecentHistory, getSettingHistory, recordPushedChange } = await import("../../src/storage/history.js");
 after(() => {
   getDb().close();
   rmSync(home, { recursive: true, force: true });
@@ -166,7 +166,40 @@ test("history: the whole tenant's in one list, newest first, each event named by
       ["2026-02-02", "cam::windows10", "Allow Camera", "changed"],
     ],
   );
-  assert.equal(getRecentHistory("northwind", 1).length, 1);
+  assert.equal(getRecentHistory("northwind", { limit: 1 }).length, 1);
+  // A page further on starts where the one before ended.
+  assert.deepEqual(getRecentHistory("northwind", { limit: 2, offset: 1 }).map((e) => e.kind), ["added", "changed"]);
   // Another tenant's history isn't in it.
   assert.ok(log.every((e) => !e.policyName.includes("p1")));
+});
+
+test("history: long values are cut short in the tenant-wide log, and kept whole in the setting's own", () => {
+  const long = "x".repeat(500);
+  recordScan(scan("tailspin", "2026-03-01T08:00:00.000Z", [entry("blob::windows10", [["t1", "short"]])]));
+  recordScan(scan("tailspin", "2026-03-02T08:00:00.000Z", [entry("blob::windows10", [["t1", long]])]));
+  const [logged] = getRecentHistory("tailspin");
+  assert.equal(logged.to!.length, 201);
+  assert.ok(logged.to!.endsWith("…"));
+  assert.equal(getSettingHistory("tailspin", "blob::windows10")[0].to, long);
+});
+
+test("history: the tenant-wide log is searched, filtered and narrowed to a viewer's policies in the query, with counts to match", () => {
+  recordScan(scan("woodgrove", "2026-04-01T08:00:00.000Z", [{ ...entry("cam::windows10", [["w1", "Block"]]), name: "Allow Camera" }, { ...entry("bt::windows10", [["w2", "Off"]]), name: "Bluetooth" }]));
+  recordScan(scan("woodgrove", "2026-04-02T08:00:00.000Z", [{ ...entry("cam::windows10", [["w1", "Allow"]]), name: "Allow Camera" }, { ...entry("bt::windows10", [["w2", "On_100%"]]), name: "Bluetooth" }]));
+  recordPushedChange({ tenant: "woodgrove", settingKey: "cam::windows10", policyId: "w1", policyName: "Policy w1", from: "Allow", to: "Block", pushedBy: "Sam", stagedBy: "Sam", reviewedBy: "Kim", reason: "Kiosks again" });
+
+  const names = (q: Parameters<typeof getRecentHistory>[1]) => getRecentHistory("woodgrove", q).map((e) => `${e.settingName}:${e.kind}`);
+  assert.deepEqual(names({ kind: "pushed" }), ["Allow Camera:pushed"]);
+  assert.deepEqual(names({ kind: "seen" }).sort(), ["Allow Camera:changed", "Bluetooth:changed"]);
+  // Every word has to be found somewhere: the setting's name, the policy, a value, the reason or a person.
+  assert.deepEqual(names({ words: ["camera", "kiosks"] }), ["Allow Camera:pushed"]);
+  assert.deepEqual(names({ words: ["kim"] }), ["Allow Camera:pushed"]);
+  // What's typed means itself — % and _ aren't wildcards.
+  assert.deepEqual(names({ words: ["on_100%"] }), ["Bluetooth:changed"]);
+  assert.deepEqual(names({ words: ["o%f"] }), []);
+  // A viewer who may see only w2 sees only its events — on the page and in the counts.
+  assert.deepEqual(names({ policyIds: ["w2"] }), ["Bluetooth:changed"]);
+  assert.deepEqual(countRecentHistory("woodgrove", { policyIds: ["w2"] }), { pushed: 0, seen: 1 });
+  assert.deepEqual(countRecentHistory("woodgrove", {}), { pushed: 1, seen: 2 });
+  assert.deepEqual(countRecentHistory("woodgrove", { words: ["camera"] }), { pushed: 1, seen: 1 });
 });

@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Check, MagnifyingGlass, PaperPlaneTilt, PencilSimple } from "@phosphor-icons/react";
 import { Chip, Diff, PageSubtitle, Empty, RevertButton } from "../components/bits.jsx";
+import { heldHistoryLog, loadHistoryLog, loadMoreHistory } from "../lib/historyLog.js";
 
 /**
  * The step that writes to the tenant, kept deliberate: the button asks
@@ -371,9 +372,6 @@ function dayLabel(iso) {
 }
 
 const FILTERS = ["All", "Staged", "Pushed", "Seen in scans"];
-const LOG_PAGE = 100;
-/** How many events the server sends at most (getRecentHistory in src/storage/history.ts). */
-const LOG_LIMIT = 1000;
 
 /**
  * Everything that changes, in one place: what's staged and waiting —
@@ -381,36 +379,49 @@ const LOG_LIMIT = 1000;
  * newest first: changes pushed from here, and every change a scan saw,
  * wherever it was made. Filtered by kind and by words.
  */
-function ChangeLog({ changes, onUpdateField, onRevert, onPush, viewer, onOpen, canOpen, query = "", setQuery = () => {}, scannedAt }) {
+function ChangeLog({ changes, onUpdateField, onRevert, onPush, viewer, onOpen, canOpen, query = "", setQuery = () => {}, historyStamp }) {
   const [filter, setFilter] = useState("All");
+  // The words, a moment after typing stops — each change of them is a question to the server.
+  const [words, setWords] = useState(query.trim());
+  useEffect(() => {
+    const t = window.setTimeout(() => setWords(query.trim()), 250);
+    return () => window.clearTimeout(t);
+  }, [query]);
+  // What the server is asked for: the history narrowed to a kind and the words. "Staged" shows no history,
+  // but its counts still come from the whole of it.
+  const logFilter = { kind: filter === "Pushed" ? "pushed" : filter === "Seen in scans" ? "seen" : undefined, q: words };
+  const filterKey = logFilter.kind + "|" + words;
   // undefined while loading, null when it couldn't be loaded.
-  const [events, setEvents] = useState(undefined);
+  const [answer, setAnswer] = useState(() => heldHistoryLog(historyStamp, logFilter));
+  const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
-  const [shown, setShown] = useState(LOG_PAGE);
+  const [loadingMore, setLoadingMore] = useState(false);
 
-  // The log lives on the server and grows with each scan and push.
-  const pushedCount = Object.keys(changes).length;
-  // On a shared instance the first request after a while also asks Intune what this viewer may see,
-  // which takes a few seconds — hence a visible "loading", and a way to try again if it fails.
+  // Kept per sync or push and per filter (lib/historyLog.js): a kept answer shows at once and is asked for
+  // again underneath, quietly — on a shared instance someone else may have pushed since. On a shared
+  // instance the first request after a while also asks Intune what this viewer may see, which takes a
+  // few seconds — hence a visible "loading" when nothing is kept, and a way to try again if it fails.
   useEffect(() => {
     let stale = false;
-    setEvents(undefined);
-    fetch("/api/history?all=1")
-      .then((res) => (res.ok ? res.json() : Promise.reject(new Error(String(res.status)))))
-      .then((body) => !stale && setEvents(body.events ?? []))
-      .catch(() => !stale && setEvents(null));
+    const held = heldHistoryLog(historyStamp, logFilter);
+    setAnswer(held);
+    setFailed(false);
+    loadHistoryLog(historyStamp, logFilter, Boolean(held))
+      .then((loaded) => !stale && setAnswer(loaded))
+      .catch(() => !stale && !held && setFailed(true));
     return () => {
       stale = true;
     };
-  }, [scannedAt, pushedCount, attempt]);
+  }, [historyStamp, filterKey, attempt]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // A change made before changes recorded their setting is keyed by the setting itself.
   const settingKeyOf = (change) => change.settingKey || change.targetKey;
   // Only where there is a setting to open: one that has since left the tenant has no panel.
   const openerFor = (key) => (onOpen && canOpen?.(key) ? () => onOpen(key) : undefined);
 
-  const words = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  const matches = (...texts) => words.every((w) => texts.some((t) => String(t ?? "").toLowerCase().includes(w)));
+  // Staged changes are all here already, so they're searched here; the history on the server.
+  const typed = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const matches = (...texts) => typed.every((w) => texts.some((t) => String(t ?? "").toLowerCase().includes(w)));
 
   const staged = Object.values(changes)
     .filter((c) => matches(c.targetName, c.policyName, c.from, c.to, c.reason, c.stagedByName))
@@ -425,33 +436,23 @@ function ChangeLog({ changes, onUpdateField, onRevert, onPush, viewer, onOpen, c
     else newPolicies.push([change.policyName, [change]]);
   }
 
-  const log = useMemo(
-    () =>
-      (events || []).filter(
-        (e) =>
-          (filter === "All" || (filter === "Pushed" ? e.kind === "pushed" : filter === "Seen in scans" && e.kind !== "pushed")) &&
-          matches(e.settingName, e.policyName, e.from, e.to, e.reason, e.pushedBy),
-      ),
-    [events, filter, query], // eslint-disable-line react-hooks/exhaustive-deps
-  );
-  // A day's heading counts all of that day's entries, also the ones not shown yet.
+  const log = filter === "Staged" ? [] : answer?.events ?? [];
+  const next = answer?.next ?? null;
+  // A day's heading counts that day's entries loaded so far; the oldest day loaded is marked as possibly going on.
   const perDay = new Map();
   for (const event of log) perDay.set(day(event.at), (perDay.get(day(event.at)) ?? 0) + 1);
   const days = [];
-  for (const event of log.slice(0, shown)) {
+  for (const event of log) {
     const last = days[days.length - 1];
     if (last && last.key === day(event.at)) last.events.push(event);
     else days.push({ key: day(event.at), label: dayLabel(event.at), total: perDay.get(day(event.at)), events: [event] });
   }
 
-  // The server sends the latest LOG_LIMIT events; a count that reached it says so.
-  const capped = (n) => (n === undefined ? undefined : n > 0 && events.length >= LOG_LIMIT ? n + "+" : n);
-  const loaded = Array.isArray(events) ? events : undefined;
   const counts = {
     All: undefined,
     Staged: Object.keys(changes).length,
-    Pushed: capped(loaded?.filter((e) => e.kind === "pushed").length),
-    "Seen in scans": capped(loaded?.filter((e) => e.kind !== "pushed").length),
+    Pushed: answer?.counts.pushed,
+    "Seen in scans": answer?.counts.seen,
   };
   const showStaged = filter === "All" || filter === "Staged";
   const showLog = filter !== "Staged";
@@ -477,10 +478,7 @@ function ChangeLog({ changes, onUpdateField, onRevert, onPush, viewer, onOpen, c
           {FILTERS.map((f) => (
             <button
               key={f}
-              onClick={() => {
-                setFilter(f);
-                setShown(LOG_PAGE);
-              }}
+              onClick={() => setFilter(f)}
               className={
                 "shrink-0 rounded-md px-3 py-1.5 text-xs font-medium focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500 " +
                 (filter === f ? "bg-stone-900 text-white dark:text-stone-50" : "bg-surface text-stone-600 ring-1 ring-inset ring-stone-300 hover:bg-stone-50")
@@ -497,7 +495,7 @@ function ChangeLog({ changes, onUpdateField, onRevert, onPush, viewer, onOpen, c
         <section className="space-y-3">
           {filter === "All" && <h2 className="font-sans text-xs font-semibold uppercase tracking-wide text-stone-500">Staged · {staged.length}</h2>}
           {staged.length === 0 ? (
-            <Empty>{words.length ? "No staged change matches" : "Nothing staged"}</Empty>
+            <Empty>{typed.length ? "No staged change matches" : "Nothing staged"}</Empty>
           ) : (
             <ul className="space-y-3">
               {newPolicies.map(([name, group]) => (
@@ -514,23 +512,28 @@ function ChangeLog({ changes, onUpdateField, onRevert, onPush, viewer, onOpen, c
       {showLog && (
         <section className="space-y-3">
           {filter === "All" && <h2 className="font-sans text-xs font-semibold uppercase tracking-wide text-stone-500">History</h2>}
-          {events === undefined ? (
-            <p className="animate-pulse rounded-lg border border-dashed border-stone-300 px-4 py-6 text-center text-sm text-stone-500">Loading the history…</p>
-          ) : events === null ? (
+          {failed && !answer ? (
             <div className="rounded-lg border border-dashed border-stone-300 px-4 py-6 text-center text-sm text-stone-500">
               Couldn't load the history.{" "}
               <button type="button" onClick={() => setAttempt((n) => n + 1)} className="font-medium text-stone-700 underline hover:text-stone-900">
                 Try again
               </button>
             </div>
+          ) : answer === undefined ? (
+            <p className="animate-pulse rounded-lg border border-dashed border-stone-300 px-4 py-6 text-center text-sm text-stone-500">Loading the history…</p>
           ) : log.length === 0 ? (
-            <Empty>{words.length ? "Nothing in the history matches" : "No changes recorded"}</Empty>
+            <Empty>{words ? "Nothing in the history matches" : "No changes recorded"}</Empty>
           ) : (
             <div className="space-y-4">
               {days.map((d) => (
                 <div key={d.key}>
                   <h3 className="mb-1.5 font-sans text-xs font-medium text-stone-500">
-                    {d.label} <span className="tabular-nums text-stone-400">· {d.total}</span>
+                    {d.label}{" "}
+                    <span className="tabular-nums text-stone-400">
+                      · {d.total}
+                      {/* The oldest day loaded may go on in a page not loaded yet. */}
+                      {next !== null && d.key === day(log[log.length - 1].at) ? "+" : ""}
+                    </span>
                   </h3>
                   <ol className="divide-y divide-stone-100 overflow-hidden rounded-lg border border-stone-200 bg-surface">
                     {d.events.map((event) => (
@@ -539,9 +542,25 @@ function ChangeLog({ changes, onUpdateField, onRevert, onPush, viewer, onOpen, c
                   </ol>
                 </div>
               ))}
-              {log.length > shown && (
-                <button type="button" onClick={() => setShown((n) => n + LOG_PAGE)} className={quietButton + " ring-1 ring-inset ring-stone-300"}>
-                  Show more ({log.length - shown} older)
+              {/* Only what's shown is loaded; older entries are asked for a page at a time. */}
+              {next !== null && (
+                <button
+                  type="button"
+                  disabled={loadingMore}
+                  onClick={async () => {
+                    setLoadingMore(true);
+                    try {
+                      const more = await loadMoreHistory(historyStamp, logFilter);
+                      if (more) setAnswer(more);
+                    } catch {
+                      // Stays as it is; the button is still there to try again.
+                    } finally {
+                      setLoadingMore(false);
+                    }
+                  }}
+                  className={quietButton + " ring-1 ring-inset ring-stone-300"}
+                >
+                  {loadingMore ? "Loading…" : "Show older"}
                 </button>
               )}
             </div>

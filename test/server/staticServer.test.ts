@@ -567,6 +567,7 @@ test("visibility: asked once with the viewer's own token, then handed with them 
   const port = 18881;
   const identity: ViewerIdentity = { id: "oid-seattle", name: "Sam", email: "s@x.com", role: "contributor" };
   const tokensAsked: string[] = [];
+  const recentAsked: Array<string[] | undefined> = [];
   const seen: Array<ReadonlyMap<string, string> | undefined> = [];
   const report = { scannedAt: "2026-10-14T09:00:00Z", settings: [{ key: "camera::windows10", sources: [{ policyId: "seattle" }] }, { key: "bluetooth::windows10", sources: [{ policyId: "hq" }] }] };
   const { server } = await startServer({
@@ -586,12 +587,15 @@ test("visibility: asked once with the viewer's own token, then handed with them 
       return r;
     },
     onHistoryRequest: () => [{ policyId: "seattle", kind: "added" }, { policyId: "hq", kind: "added" }, { kind: "pushed" }],
-    onRecentHistory: () => [{ policyId: "hq", settingKey: "bluetooth::windows10" }, { policyId: "seattle", settingKey: "camera::windows10" }],
+    onRecentHistory: (query) => {
+      recentAsked.push(query.policyIds);
+      return { events: [{ policyId: "seattle", settingKey: "camera::windows10" }], counts: { pushed: 0, seen: 1 } };
+    },
     onStageChange: () => ({ targetKey: "x" }),
     reminders: {
       list: () => [{ targetKey: "camera::windows10" }, { targetKey: "bluetooth::windows10" }],
       get: () => undefined,
-      add: () => [],
+      add: (input) => [{ targetKey: input.targetKey }],
       complete: () => [],
       snooze: () => [],
       remove: () => [],
@@ -603,8 +607,15 @@ test("visibility: asked once with the viewer's own token, then handed with them 
     const history = (await get("/api/history?key=camera::windows10")) as { events: unknown[] };
     assert.deepEqual(history.events, [{ policyId: "seattle", kind: "added" }, { kind: "pushed" }], "events on a policy they can't see are left out");
     assert.deepEqual(await get("/api/reminders"), [{ targetKey: "camera::windows10" }]);
+    // A setting no policy sets — a Missing one, say — shows nothing of the tenant: a reminder on it is fine.
+    const remind = (targetKey: string) =>
+      fetch(`http://127.0.0.1:${port}/api/reminders`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ targetKey, targetName: "x", dueOn: "2027-01-01" }) });
+    assert.equal((await remind("uncovered::device_vendor_msft_policy_config_x::macOS")).status, 200);
+    assert.equal((await remind("bluetooth::windows10")).status, 403, "but not on one only a policy they can't see sets");
     // The tenant-wide log too.
-    assert.deepEqual(((await get("/api/history?all=1")) as { events: unknown[] }).events, [{ policyId: "seattle", settingKey: "camera::windows10" }]);
+    // The tenant-wide log is narrowed in the query itself, to the policies this viewer may see.
+    assert.deepEqual(await get("/api/history?all=1&limit=2"), { events: [{ policyId: "seattle", settingKey: "camera::windows10" }], counts: { pushed: 0, seen: 1 }, next: null });
+    assert.deepEqual(recentAsked, [["seattle"]]);
     const stage = await fetch(`http://127.0.0.1:${port}/api/changes`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ targetKey: "k", targetName: "n", policyId: "hq", ruleId: "manual", from: "a", to: "b" }) });
     assert.equal(stage.status, 403, "nothing can be staged on a policy their role doesn't show them");
 
@@ -707,5 +718,36 @@ test("appPath: only a path on this server is gone back to — never another site
   assert.equal(appPath("/?page=changes"), "/?page=changes");
   for (const bad of ["https://evil.example/", "//evil.example/x", "/\\evil.example", "evil", "/auth/login?return=/", "/x\nSet-Cookie: a=b", "", undefined, null]) {
     assert.equal(appPath(bad as string | undefined), undefined, String(bad));
+  }
+});
+
+test("history: the tenant-wide log comes a page at a time with what to narrow it by, and says where the next one starts", async () => {
+  const port = 18911;
+  const all = Array.from({ length: 5 }, (_, i) => ({ id: i, kind: "added" }));
+  const asked: unknown[] = [];
+  const { server } = await startServer({
+    report: null,
+    host: "127.0.0.1",
+    startPort: port,
+    session: mockSession({ getSession: async () => ({ id: "oid", name: "A", email: "a@x.com", role: "viewer" }) }),
+    onHistoryRequest: () => [],
+    onRecentHistory: (query) => {
+      asked.push(query);
+      return { events: all.slice(query.offset, query.offset + query.limit), counts: { pushed: 0, seen: 5 } };
+    },
+  });
+  const get = async (q: string) => (await fetch(`http://127.0.0.1:${port}/api/history?all=1${q}`)).json() as Promise<{ events: unknown[]; next: number | null }>;
+  try {
+    assert.deepEqual((await get("&limit=2")).next, 2);
+    assert.deepEqual(await get("&limit=2&offset=4"), { events: [{ id: 4, kind: "added" }], counts: { pushed: 0, seen: 5 }, next: null });
+    // No limit given: a page of 100; a silly one is held to 1000. The kind and the words go through; an unknown kind doesn't.
+    await get("&kind=pushed&q=Allow%20%20Camera");
+    await get("&limit=99999&kind=bogus");
+    assert.deepEqual(asked.slice(2), [
+      { limit: 100, offset: 0, kind: "pushed", words: ["allow", "camera"] },
+      { limit: 1000, offset: 0, words: [] },
+    ]);
+  } finally {
+    server.close();
   }
 });

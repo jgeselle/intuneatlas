@@ -212,14 +212,82 @@ export function getSettingHistory(tenant: string, settingKey: string, limit = 10
  * setting's history in one list, each event with its setting's key and
  * name. The name comes from the latest scan that had the setting, so a
  * setting no longer in the tenant keeps the name it had.
+ *
+ * Read a page at a time, already narrowed — by kind (pushed from here, or
+ * seen by a scan), by words (each one in the setting's name, the policy,
+ * a value, the reason or who pushed it), and to the policies a viewer may
+ * see — so the page, "show older" and the counts all agree, however long
+ * the history is.
  */
-export function getRecentHistory(tenant: string, limit = 1000): Array<HistoryEntry & { settingKey: string; settingName: string }> {
+const LOG_VALUE_LENGTH = 200;
+
+export interface HistoryQuery {
+  limit?: number;
+  offset?: number;
+  kind?: "pushed" | "seen";
+  words?: string[];
+  /** Only events of these policies (a viewer's); every event when absent. */
+  policyIds?: string[];
+}
+
+function narrowed(tenant: string, query: HistoryQuery): { sql: string; params: Array<string | number> } {
+  const where = ["h.tenant = ?"];
+  const params: Array<string | number> = [tenant];
+  if (query.kind === "pushed") where.push("h.kind = 'pushed'");
+  if (query.kind === "seen") where.push("h.kind <> 'pushed'");
+  if (query.policyIds) {
+    where.push("h.policy_id IN (SELECT value FROM json_each(?))");
+    params.push(JSON.stringify(query.policyIds));
+  }
+  for (const word of query.words ?? []) {
+    // A literal match, case-insensitively: % and _ in what was typed mean themselves.
+    const like = "%" + word.toLowerCase().replace(/[\\%_]/g, (c) => "\\" + c) + "%";
+    where.push(
+      "(" +
+        ["h.setting_name", "h.policy_name", "h.from_value", "h.to_value", "h.reason", "h.actor_name", "h.reviewed_by"]
+          .map((column) => `lower(coalesce(${column}, '')) LIKE ? ESCAPE '\\'`)
+          .join(" OR ") +
+        ")",
+    );
+    for (let i = 0; i < 7; i++) params.push(like);
+  }
+  return {
+    sql: `WITH h AS (
+            SELECT h.*, (SELECT s.name FROM settings_snapshot s WHERE s.key = h.setting_key ORDER BY s.scan_id DESC LIMIT 1) AS setting_name
+            FROM setting_history h WHERE h.tenant = ?
+          )
+          SELECT * FROM h WHERE ${where.join(" AND ")}`,
+    params: [tenant, ...params],
+  };
+}
+
+export function getRecentHistory(tenant: string, query: HistoryQuery = {}): Array<HistoryEntry & { settingKey: string; settingName: string }> {
   ensureHistoryBackfilled();
+  const { sql, params } = narrowed(tenant, query);
   const rows = getDb()
-    .prepare(
-      `SELECT h.*, (SELECT s.name FROM settings_snapshot s WHERE s.key = h.setting_key ORDER BY s.scan_id DESC LIMIT 1) AS setting_name
-       FROM setting_history h WHERE h.tenant = ? ORDER BY h.occurred_at DESC, h.id DESC LIMIT ?`,
-    )
-    .all(tenant, limit) as unknown as Array<HistoryRow & { setting_key: string; setting_name: string | null }>;
-  return rows.map((row) => ({ ...toEntry(row), settingKey: row.setting_key, settingName: row.setting_name ?? row.setting_key.split("::")[0] }));
+    .prepare(`${sql} ORDER BY h.occurred_at DESC, h.id DESC LIMIT ? OFFSET ?`)
+    .all(...params, query.limit ?? 100, query.offset ?? 0) as unknown as Array<HistoryRow & { setting_key: string; setting_name: string | null }>;
+  // A row of the log shows the start of a value; the whole of it is in the setting's own history.
+  // Some values are encoded files or long rule lists, and would make the log many times its size.
+  const brief = (value: string | undefined) => (value !== undefined && value.length > LOG_VALUE_LENGTH ? value.slice(0, LOG_VALUE_LENGTH) + "…" : value);
+  return rows.map((row) => {
+    const entry = toEntry(row);
+    return {
+      ...entry,
+      ...(entry.from !== undefined ? { from: brief(entry.from) } : {}),
+      ...(entry.to !== undefined ? { to: brief(entry.to) } : {}),
+      settingKey: row.setting_key,
+      settingName: row.setting_name ?? row.setting_key.split("::")[0],
+    };
+  });
+}
+
+/** How many events there are of each kind, for the same words and policies — the counts on the filters. */
+export function countRecentHistory(tenant: string, query: Omit<HistoryQuery, "kind" | "limit" | "offset"> = {}): { pushed: number; seen: number } {
+  ensureHistoryBackfilled();
+  const { sql, params } = narrowed(tenant, query);
+  const row = getDb()
+    .prepare(`SELECT coalesce(sum(kind = 'pushed'), 0) AS pushed, coalesce(sum(kind <> 'pushed'), 0) AS seen FROM (${sql})`)
+    .get(...params) as { pushed: number; seen: number };
+  return { pushed: Number(row.pushed), seen: Number(row.seen) };
 }

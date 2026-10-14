@@ -17,6 +17,7 @@ import { SimplePolicyDrawer } from "./components/SimplePolicyDrawer.jsx";
 import { isComplianceSetting } from "./lib/format.js";
 import { runScan } from "./lib/scan.js";
 import { readRoute, routeSearch } from "./lib/route.js";
+import { loadHistoryLog } from "./lib/historyLog.js";
 import { ReminderBell } from "./components/Reminders.jsx";
 import { isDue } from "./lib/reminders.js";
 import { Overview } from "./views/Overview.jsx";
@@ -155,6 +156,13 @@ function Dashboard({ initialReport, session }) {
     return () => window.removeEventListener("popstate", onPop);
   }, []);
   const [reminders, setReminders] = useState([]);
+  // The tenant-wide history changes only with a sync or a push: loaded once in the background
+  // when the app opens, so the Changes page has it to hand (see lib/historyLog.js).
+  const [pushes, setPushes] = useState(0);
+  const historyStamp = report.scannedAt + "#" + pushes;
+  useEffect(() => {
+    loadHistoryLog(historyStamp, {}).catch(() => {});
+  }, [historyStamp]);
   const canNote = session?.role === "contributor" || session?.role === "admin";
   const dueReminders = reminders.filter((r) => isDue(r)).length;
   const [toast, setToast] = useState(null);
@@ -559,6 +567,7 @@ function Dashboard({ initialReport, session }) {
         return next;
       });
       if (body.report) setReport(body.report);
+      setPushes((n) => n + 1);
       flash(body.created ? "Created " + body.policyName + " · not assigned" : "Pushed to " + body.policyName);
       return undefined;
     } catch (err) {
@@ -832,7 +841,7 @@ function Dashboard({ initialReport, session }) {
               viewer={session}
               onOpen={(key) => setOpen({ type: "setting", key })}
               canOpen={(key) => Boolean(findSetting(key))}
-              scannedAt={report.scannedAt}
+              historyStamp={historyStamp}
               {...searchOf("changes")}
             />
           )}
