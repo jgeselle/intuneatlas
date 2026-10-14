@@ -1,10 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { CaretDown, SignOut } from "@phosphor-icons/react";
 import { initialsOf } from "../lib/format.js";
 import { setThemeChoice, themeChoice } from "../lib/theme.js";
 
 function AccountMenu({ session, tenant, up = false, full = false, textClassName = "", onOpenChange }) {
   const [open, setOpen] = useState(false);
+  const [place, setPlace] = useState(null);
+  const trigger = useRef(null);
   // Which build is running — put into the page by the server, like the session.
   const version = window.__INTUNEATLAS_VERSION__;
 
@@ -14,6 +17,20 @@ function AccountMenu({ session, tenant, up = false, full = false, textClassName 
   useEffect(() => {
     onOpenChange?.(open);
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // In the sidebar footer (`up`) the panel is wider than the sidebar, which would clip it — so it's put
+  // in the page and lined up from there: from the sidebar's left edge, just above this button.
+  useLayoutEffect(() => {
+    if (!open || !up) return;
+    const measure = () => {
+      const button = trigger.current?.getBoundingClientRect();
+      const aside = trigger.current?.closest("aside")?.getBoundingClientRect();
+      if (button) setPlace({ bottom: window.innerHeight - button.top + 8, left: (aside?.left ?? 0) + 12 });
+    };
+    measure();
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
+  }, [open, up]);
 
   useEffect(() => {
     if (!open) return;
@@ -29,6 +46,7 @@ function AccountMenu({ session, tenant, up = false, full = false, textClassName 
   return (
     <div className="relative">
       <button
+        ref={trigger}
         onClick={() => setOpen((o) => !o)}
         aria-haspopup="true"
         aria-expanded={open}
@@ -63,17 +81,18 @@ function AccountMenu({ session, tenant, up = false, full = false, textClassName 
         />
       </button>
 
+      {portalIf(
+        up,
+        <>
       {open && <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />}
       {/* Always mounted (not `{open && ...}`) so the close transition below
           can actually play instead of the panel just vanishing. */}
       <div
+        style={up ? (place ?? { bottom: 0, left: 0 }) : undefined}
         className={
-          "absolute z-40 rounded-lg border border-stone-200 bg-surface p-3 shadow-xl transition duration-150 ease-out " +
-          // "up" opens from the sidebar footer, which is narrower than a
-          // fixed width — stretch to match the rail instead of
-          // overflowing past its edge. The other placement has open
-          // room to its left, so a fixed width there is fine.
-          (up ? "bottom-full left-0 right-0 mb-2 origin-bottom " : "right-0 mt-2 w-64 origin-top-right ") +
+          "z-40 w-[min(21rem,calc(100vw-1.5rem))] rounded-lg border border-stone-200 bg-surface p-3 text-stone-900 shadow-xl transition duration-150 ease-out " +
+          // "up" opens from the sidebar footer, out over the page; the top-bar placement hangs below its button.
+          (up ? "fixed origin-bottom-left " : "absolute right-0 mt-2 origin-top-right ") +
           (open
             ? "translate-y-0 scale-100 opacity-100"
             : "pointer-events-none scale-95 opacity-0 " + (up ? "translate-y-1.5" : "-translate-y-1.5"))
@@ -122,8 +141,15 @@ function AccountMenu({ session, tenant, up = false, full = false, textClassName 
           Sign out
         </a>
       </div>
+        </>,
+      )}
     </div>
   );
+}
+
+/** In the page, out of the sidebar's clipping, where `inPage` — in place otherwise. */
+function portalIf(inPage, children) {
+  return inPage ? createPortal(children, document.body) : children;
 }
 
 const APPEARANCES = [
