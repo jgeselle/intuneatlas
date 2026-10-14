@@ -1,50 +1,86 @@
 # Security policy
 
+## Supported versions
+
+Security fixes go into the latest release only. That covers the
+standalone binaries on the
+[Releases page](https://github.com/jgeselle/intuneatlas/releases) and
+the container image `ghcr.io/jgeselle/intuneatlas`. If you run an older
+version, please update before reporting, in case the problem is already
+fixed.
+
 ## Reporting a vulnerability
 
-Please **don't open a public issue** for a security report — use GitHub's
-private vulnerability reporting instead: go to the
-[Security tab](https://github.com/jgeselle/intuneatlas/security) on this
-repo and click **Report a vulnerability**. That opens a private draft
-security advisory visible only to the maintainer, with no public trace
-until (if) it's resolved and disclosed.
+Please **don't open a public issue** for a security problem.
 
-If that's not available for some reason, opening a normal issue with as
-few details as possible (just "I have a security report, how do I reach
-you") is a reasonable fallback — please don't post exploit details in it.
+Report it privately through GitHub instead: open the
+[Security tab](https://github.com/jgeselle/intuneatlas/security) of this
+repository and choose **Report a vulnerability**. Only the maintainer
+can see the report until a fix is published.
+
+If that option isn't available to you, open an issue that only asks how
+to get in touch about a security matter, without any details of the
+problem.
+
+A useful report includes:
+
+- the IntuneAtlas version, and how it runs (on your own machine, shared
+  on your own server, or on Azure Container Apps);
+- what someone could do, and what they would need first (for example,
+  a signed-in Viewer, or no sign-in at all);
+- the steps to reproduce it, as small as you can make them.
+
+Please leave real tenant data, tokens and secrets out of the report.
+
+## What happens next
+
+This is a project maintained by one person in their own time, so these
+are aims rather than guarantees:
+
+- an acknowledgement within 7 days;
+- an assessment, and a plan for a fix, as soon as reasonably possible;
+- a fixed release, followed by a published security advisory.
+
+Please keep the problem private until a fix is released, or for 90 days
+after your report, whichever comes first, unless we agree on something
+else. With your permission you'll be credited in the advisory.
 
 ## What's in scope
 
-IntuneAtlas is a read-only CLI + self-hosted local/shared web UI. Things
-worth reporting:
+IntuneAtlas reads a Microsoft Intune tenant through Microsoft Graph and,
+when an Admin pushes a reviewed change, writes to it. Worth reporting:
 
-- Anything that lets a signed-in user do more than their assigned Entra
-  App Role should allow (see the [Trust model](./README.md#trust-model)
-  in the README).
-- Anything that lets an *unauthenticated* request reach data or actions
-  that should require sign-in.
-- Path traversal, injection, or anything else that reaches outside the
-  app's own intended data (the local SQLite store, the OS token cache,
-  the served static files).
-- Supply-chain concerns — e.g. something wrong with the build provenance
-  attestations, or a dependency-level issue.
+- anything that lets a signed-in person do more than their IntuneAtlas
+  role (Viewer, Contributor, Admin) allows, such as staging, reviewing
+  or pushing without the right role;
+- anything that lets someone see policies their own Intune role doesn't
+  show them on a shared instance;
+- anything that writes to the tenant other than the reviewed change
+  being pushed, or writes without that push;
+- anything that lets a request without a sign-in reach data or actions
+  that need one;
+- cross-site scripting or injection, including through names and values
+  read from a tenant, path traversal, and redirects to other sites after
+  sign-in;
+- problems with how sign-in sessions and tokens are kept;
+- the release process and its supply chain: the published binaries, the
+  container image, the build attestations, and the Azure deployment
+  template in this repository.
 
 ## What's likely out of scope
 
-- Denial of service against a shared `--host` instance you're running
-  yourself — that's a deployment/network concern (see the reverse-proxy
-  note in the README), not something the app itself can fully solve.
-- Findings that require an attacker to already hold your Entra client
-  secret (`--client-secret`) — see the README's trust model for why that
-  credential's blast radius is inherent to app-only auth, not an
-  IntuneAtlas bug.
-- Anything in a fork or a modified build not distributed from this repo's
-  own releases.
+- Denial of service against an instance you run yourself; that belongs
+  to the network in front of it.
+- Anything that needs the app registration's client secret, or admin
+  rights over the server or the Azure resources it runs in, to begin
+  with.
+- Problems in Microsoft Intune, Microsoft Graph or Microsoft Entra
+  themselves. Please report those to the
+  [Microsoft Security Response Center](https://msrc.microsoft.com/).
+- Forks, and builds not published from this repository.
 
-## Response expectations
+## Testing
 
-This is a solo, unpaid, best-effort project (see
-[Maintenance expectations](./README.md#maintenance-expectations) in the
-README) — there's no SLA. I'll acknowledge reports as soon as I
-reasonably can and fix genuine issues; please give a reasonable amount of
-time to respond before any public disclosure.
+Only test against a tenant and an instance that you own or are allowed
+to test. Please don't access, change or delete data that isn't yours,
+and stop as soon as you've shown the problem.
