@@ -724,6 +724,12 @@ function Dashboard({ initialReport, session }) {
             only — a transform here would skew the virtualized settings
             list's position measurements while it plays. */}
         <div key={view} className="mx-auto max-w-6xl animate-fade-in px-4 py-6 sm:px-6 lg:py-8">
+          {/* Shown in place of everything else the scan holds — see scan/visibility.ts on the server. */}
+          {report.visibilityError && (
+            <p role="alert" className="mb-5 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+              {report.visibilityError}
+            </p>
+          )}
           {view === "overview" && (
             <Overview
               settingIndex={settingIndex}

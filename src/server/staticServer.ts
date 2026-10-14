@@ -86,6 +86,12 @@ export interface StartServerOptions {
   getNoteById?: (id: number) => { authorId: string } | undefined;
   /** Reminders on settings (see storage/reminders.ts) — absent where they can't be kept. */
   reminders?: ReminderStore;
+  /**
+   * Which policies a viewer may see, asked of Graph with their own token
+   * (see scan/visibility.ts). With it, everything a viewer is sent is
+   * narrowed to those; without it, every viewer sees the whole scan.
+   */
+  policyVisibility?: (graphToken: string) => Promise<ReadonlyMap<string, string>>;
   /** Stages a change; must return the created record including its targetKey. */
   onStageChange?: (body: StageChangeRequestBody, viewer: ViewerIdentity) => WithTargetKey;
   /** Updates reason/reviewer on a staged change; must return the updated record including its targetKey. */
@@ -179,6 +185,30 @@ export async function startServer(options: StartServerOptions): Promise<{ url: s
 
   const scanJobs = createScanJobs();
 
+  // What each viewer may see, kept a few minutes — a page load makes several requests, each of which
+  // needs it. Forgotten whenever there's a new scan: new policies are visible to someone.
+  const VISIBILITY_TTL_MS = 10 * 60_000;
+  const visibilityCache = new Map<string, { at: number; scanned: unknown; value: ReadonlyMap<string, string> }>();
+  async function withVisibility(req: IncomingMessage, viewer: ViewerIdentity): Promise<ViewerIdentity> {
+    if (!options.policyVisibility) return viewer;
+    const scanned = (currentReport as { scannedAt?: unknown } | null)?.scannedAt;
+    const held = visibilityCache.get(viewer.id);
+    if (held && held.scanned === scanned && Date.now() - held.at < VISIBILITY_TTL_MS) return { ...viewer, visiblePolicies: held.value };
+    try {
+      const token = await session.getGraphToken(req.headers.cookie);
+      if (!token) return { ...viewer, visiblePolicies: new Map(), visibilityError: "Your sign-in expired — refresh the page to sign in again." };
+      const value = await options.policyVisibility(token);
+      visibilityCache.set(viewer.id, { at: Date.now(), scanned, value });
+      return { ...viewer, visiblePolicies: value };
+    } catch (err) {
+      logRequestError(err);
+      // Seeing nothing, not everything: the scan was made with someone else's rights.
+      if (held) return { ...viewer, visiblePolicies: held.value };
+      const reason = err instanceof Error ? err.message.split("\n")[0] : String(err);
+      return { ...viewer, visiblePolicies: new Map(), visibilityError: `Couldn't check which policies your Intune role lets you see (${reason}).` };
+    }
+  }
+
   const server = createServer(async (req, res) => {
     try {
       if (req.method === "GET" && req.url === "/auth/login") {
@@ -226,6 +256,9 @@ export async function startServer(options: StartServerOptions): Promise<{ url: s
         }
         return;
       }
+
+      // The page and the API carry tenant data; scripts, styles and images don't.
+      if (req.url === "/" || req.url?.startsWith("/?") || req.url?.startsWith("/api/")) viewer = await withVisibility(req, viewer);
 
       if (req.method === "POST" && req.url === "/api/scan") {
         await handleScanRequest(req, res, options.onScanRequest, session, viewer, scanJobs, (report) => {
@@ -278,7 +311,7 @@ export async function startServer(options: StartServerOptions): Promise<{ url: s
       }
 
       if (req.url === "/api/reminders" || req.url?.startsWith("/api/reminders/")) {
-        await handleReminders(req, res, options.reminders, viewer);
+        await handleReminders(req, res, options.reminders, viewer, (key) => settingVisible(currentReport, viewer, key));
         return;
       }
 
@@ -591,7 +624,9 @@ async function handleHistory(
   const key = new URL(req.url ?? "", "http://localhost").searchParams.get("key") ?? "";
   if (!key) return json(400, { error: "Name a setting." });
   try {
-    json(200, { events: await onHistoryRequest(key) });
+    const events = (await onHistoryRequest(key)) as Array<{ policyId?: string }>;
+    const visible = viewer.visiblePolicies;
+    json(200, { events: visible ? events.filter((e) => !e.policyId || visible.has(e.policyId)) : events });
   } catch (err) {
     console.error("[history]", err);
     json(500, { error: "Couldn't read this setting's history." });
@@ -788,7 +823,7 @@ async function handleNoteRequest(
 
 export interface ReminderStore {
   list(): unknown[];
-  get(id: number): { createdById: string } | undefined;
+  get(id: number): { createdById: string; targetKey?: string } | undefined;
   add(input: { targetKey: string; targetName: string; note: string; dueOn: string; repeatMonths: number | null }, viewer: ViewerIdentity): unknown[];
   complete(id: number): unknown[];
   snooze(id: number): unknown[];
@@ -802,17 +837,36 @@ export interface ReminderStore {
  * the whole list again — it's short, and the bell and the drawer both
  * show it.
  */
-async function handleReminders(req: IncomingMessage, res: ServerResponse, store: ReminderStore | undefined, viewer: ViewerIdentity): Promise<void> {
+/**
+ * Whether a viewer may see a setting at all: one of the policies setting it is one they can see.
+ * Every setting, where nothing narrows what they see.
+ */
+function settingVisible(report: unknown, viewer: ViewerIdentity, key: string): boolean {
+  const visible = viewer.visiblePolicies;
+  if (!visible) return true;
+  const entry = (report as { settings?: Array<{ key: string; sources: Array<{ policyId: string }> }> } | null)?.settings?.find((e) => e.key === key);
+  return Boolean(entry?.sources.some((s) => visible.has(s.policyId)));
+}
+
+async function handleReminders(
+  req: IncomingMessage,
+  res: ServerResponse,
+  store: ReminderStore | undefined,
+  viewer: ViewerIdentity,
+  canSee: (settingKey: string) => boolean,
+): Promise<void> {
   const json = (status: number, body: unknown) => {
     res.writeHead(status, { "Content-Type": "application/json" });
     res.end(JSON.stringify(body));
   };
+  // Every answer is the list again — of the reminders on settings this viewer may see.
+  const listJson = (list: unknown[]) => json(200, (list as Array<{ targetKey: string }>).filter((r) => canSee(r.targetKey)));
   if (!store) return json(501, { error: "Reminders aren't available from this session." });
   if (!can(viewer.role, "view")) return json(403, { error: "Your role doesn't include viewing the report." });
 
   try {
     if (req.url === "/api/reminders") {
-      if (req.method === "GET") return json(200, store.list());
+      if (req.method === "GET") return listJson(store.list());
       if (req.method !== "POST") return json(405, { error: "Method not allowed." });
       if (!can(viewer.role, "note")) return json(403, { error: "Your role doesn't include adding reminders." });
       const body = JSON.parse(await readRequestBody(req)) as Record<string, unknown>;
@@ -822,24 +876,25 @@ async function handleReminders(req: IncomingMessage, res: ServerResponse, store:
       if (typeof body.dueOn !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(body.dueOn) || Number.isNaN(Date.parse(body.dueOn))) return json(400, { error: "Choose a date." });
       if (repeat !== null && !(Number.isInteger(repeat) && repeat >= 1 && repeat <= 120)) return json(400, { error: "Repeat every 1 to 120 months, or not at all." });
       if (note.length > 1000) return json(400, { error: "Keep the note under 1,000 characters." });
-      return json(200, store.add({ targetKey: body.targetKey, targetName: body.targetName, note, dueOn: body.dueOn, repeatMonths: repeat }, viewer));
+      if (!canSee(body.targetKey)) return json(403, { error: "Your Intune role doesn't let you see that setting." });
+      return listJson(store.add({ targetKey: body.targetKey, targetName: body.targetName, note, dueOn: body.dueOn, repeatMonths: repeat }, viewer));
     }
 
     const match = req.url?.match(/^\/api\/reminders\/(\d+)(?:\/(done|snooze))?$/);
     if (!match) return json(404, { error: "Not found." });
     const id = Number(match[1]);
-    const existing = store.get(id);
-    if (!existing) return json(404, { error: "That reminder no longer exists." });
+    const existing = store.get(id) as ({ createdById: string; targetKey?: string } | undefined);
+    if (!existing || (existing.targetKey !== undefined && !canSee(existing.targetKey))) return json(404, { error: "That reminder no longer exists." });
 
     if (match[2] && req.method === "POST") {
       if (!can(viewer.role, "note")) return json(403, { error: "Your role doesn't include changing reminders." });
-      return json(200, match[2] === "done" ? store.complete(id) : store.snooze(id));
+      return listJson(match[2] === "done" ? store.complete(id) : store.snooze(id));
     }
     if (!match[2] && req.method === "DELETE") {
       if (!can(viewer.role, "deleteNote", { ownerId: existing.createdById, viewerId: viewer.id })) {
         return json(403, { error: "You can only delete reminders you made yourself, unless you're an Admin." });
       }
-      return json(200, store.remove(id));
+      return listJson(store.remove(id));
     }
     json(405, { error: "Method not allowed." });
   } catch (err) {
@@ -903,6 +958,11 @@ async function handleStageChange(
 
   try {
     const body = JSON.parse(await readRequestBody(req)) as StageChangeRequestBody;
+    if (body.policyId && viewer.visiblePolicies && !viewer.visiblePolicies.has(body.policyId)) {
+      res.writeHead(403, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "Your Intune role doesn't let you see that policy." }));
+      return;
+    }
     if (!body.targetKey || !body.targetName || !body.ruleId || body.from === undefined || body.to === undefined) {
       res.writeHead(400, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: "targetKey, targetName, ruleId, from, and to are required" }));

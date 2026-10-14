@@ -23,6 +23,15 @@ export interface ViewerIdentity {
   name: string;
   email: string;
   role: Role | null;
+  /**
+   * The policies this viewer's own Intune role lets them see, by id —
+   * filled in per request by the server where it checks (see
+   * scan/visibility.ts). Absent means unrestricted: the one-person local
+   * mode, or a server started without the check.
+   */
+  visiblePolicies?: ReadonlyMap<string, string>;
+  /** Why the check couldn't be made, when it couldn't — the viewer then sees nothing rather than everything. */
+  visibilityError?: string;
 }
 
 /**

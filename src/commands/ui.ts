@@ -17,6 +17,7 @@ import {
 } from "../server/staticServer.js";
 import type { ViewerIdentity } from "../auth/webSession.js";
 import { addNote, deleteNote, getAllNotes, getNoteById, type Note } from "../storage/notes.js";
+import { fetchVisiblePolicies, restrictToPolicies } from "../scan/visibility.js";
 import { addReminder, completeReminder, deleteReminder, getReminder, listReminders, snoozeReminder } from "../storage/reminders.js";
 import { applyPush } from "../push/apply.js";
 import { getSettingHistory } from "../storage/history.js";
@@ -47,7 +48,7 @@ export interface UiOptions {
 /** Raw — settings carry no baseline judgment yet, notes/changes are tenant-wide and shared. */
 type RawEnrichedReport = ScanReport & { notes: Record<string, Note[]>; changes: Record<string, StagedChange> };
 /** What actually gets served — judged for one specific viewer's own active-baseline selection. */
-type ViewerReport = RawEnrichedReport & { baselinePacks: BaselinePack[]; activeBaselinePacks: string[] | null; baselineFolder?: string };
+type ViewerReport = RawEnrichedReport & { baselinePacks: BaselinePack[]; activeBaselinePacks: string[] | null; baselineFolder?: string; visibilityError?: string };
 
 export async function runUi(options: UiOptions): Promise<void> {
   // The environment variables are for where there is no command line to speak of — a container:
@@ -106,6 +107,9 @@ export async function runUi(options: UiOptions): Promise<void> {
     onNoteRequest: (body, viewer) => addNote(body.targetKey, viewer.id, viewer.name, body.text),
     onDeleteNote: (id: number) => deleteNote(id),
     getNoteById: (id: number) => getNoteById(id),
+    // A shared instance shows each viewer only what their own Intune role shows them. On this machine
+    // alone (loopback) there's one person, who made the scan: nothing to narrow.
+    ...(LOOPBACK_HOSTS.has(host) ? {} : { policyVisibility: fetchVisiblePolicies }),
     reminders: {
       list: listReminders,
       get: getReminder,
@@ -178,6 +182,13 @@ async function runViewerTriggeredScan(tenantId: string, graphToken: string, base
  * attaches the full discovered pack list too so the picker always has
  * something to show regardless of what's currently selected.
  */
+/** The report and its notes as far as a viewer's Intune role reaches (see scan/visibility.ts). */
+function narrowForViewer(report: RawEnrichedReport, visible: ReadonlyMap<string, string>): RawEnrichedReport {
+  const narrowed = restrictToPolicies(report, visible as ReadonlyMap<string, never>, report.groups);
+  const keys = new Set<string>([...narrowed.settings.map((e) => e.key), ...visible.keys()]);
+  return { ...narrowed, notes: Object.fromEntries(Object.entries(narrowed.notes).filter(([key]) => keys.has(key))) };
+}
+
 async function evaluateForViewer(
   report: RawEnrichedReport,
   viewer: ViewerIdentity,
@@ -185,6 +196,8 @@ async function evaluateForViewer(
 ): Promise<ViewerReport> {
   const baselineRules = await loadBaselines(baselineDirs(baselinePath));
   const activePacks = getSelectedPacks(viewer.id);
+  // Narrowed first, so baselines judge only what this viewer may see.
+  if (viewer.visiblePolicies) report = narrowForViewer(report, viewer.visiblePolicies);
   // The lookup table has done its job once the report is judged; the browser never reads it.
   const { baselineDefinitions: _lookups, ...evaluated } = applyBaselinesToReport(report, baselineRules, activePacks);
   return {
@@ -197,6 +210,7 @@ async function evaluateForViewer(
       editable: !baselinePath && existsSync(join(userBaselinesDir(), ...pack.path.split("/"))),
     })),
     activeBaselinePacks: activePacks ?? null,
+    ...(viewer.visibilityError ? { visibilityError: viewer.visibilityError } : {}),
     ...(baselinePath ? {} : { baselineFolder: userBaselinesDir() }),
   };
 }

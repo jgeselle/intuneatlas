@@ -558,3 +558,78 @@ test("reminders: everyone sees them; who may add, complete and delete one follow
     server.close();
   }
 });
+
+// ------------------------------------------------------------------------
+// Each viewer sees the shared scan only as far as their own Intune role reaches
+// ------------------------------------------------------------------------
+
+test("visibility: asked once with the viewer's own token, then handed with them to everything that answers", async () => {
+  const port = 18881;
+  const identity: ViewerIdentity = { id: "oid-seattle", name: "Sam", email: "s@x.com", role: "contributor" };
+  const tokensAsked: string[] = [];
+  const seen: Array<ReadonlyMap<string, string> | undefined> = [];
+  const report = { scannedAt: "2026-10-14T09:00:00Z", settings: [{ key: "camera::windows10", sources: [{ policyId: "seattle" }] }, { key: "bluetooth::windows10", sources: [{ policyId: "hq" }] }] };
+  const { server } = await startServer({
+    report,
+    host: "127.0.0.1",
+    startPort: port,
+    session: mockSession({ getSession: async () => identity, getGraphToken: async () => "sam-token" }),
+    policyVisibility: async (token) => {
+      tokensAsked.push(token);
+      return new Map([["seattle", "catalog"]]);
+    },
+    onEvaluateForViewer: async (r, viewer) => {
+      seen.push(viewer.visiblePolicies);
+      return r;
+    },
+    onHistoryRequest: () => [{ policyId: "seattle", kind: "added" }, { policyId: "hq", kind: "added" }, { kind: "pushed" }],
+    onStageChange: () => ({ targetKey: "x" }),
+    reminders: {
+      list: () => [{ targetKey: "camera::windows10" }, { targetKey: "bluetooth::windows10" }],
+      get: () => undefined,
+      add: () => [],
+      complete: () => [],
+      snooze: () => [],
+      remove: () => [],
+    },
+  });
+  const get = async (path: string) => (await fetch(`http://127.0.0.1:${port}${path}`)).json() as Promise<unknown>;
+  try {
+    await fetch(`http://127.0.0.1:${port}/`);
+    const history = (await get("/api/history?key=camera::windows10")) as { events: unknown[] };
+    assert.deepEqual(history.events, [{ policyId: "seattle", kind: "added" }, { kind: "pushed" }], "events on a policy they can't see are left out");
+    assert.deepEqual(await get("/api/reminders"), [{ targetKey: "camera::windows10" }]);
+    const stage = await fetch(`http://127.0.0.1:${port}/api/changes`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ targetKey: "k", targetName: "n", policyId: "hq", ruleId: "manual", from: "a", to: "b" }) });
+    assert.equal(stage.status, 403, "nothing can be staged on a policy their role doesn't show them");
+
+    assert.deepEqual(tokensAsked, ["sam-token"], "asked once, with their own token");
+    assert.ok(seen.length > 0 && seen.every((v) => v?.has("seattle") && !v.has("hq")));
+  } finally {
+    server.close();
+  }
+});
+
+test("visibility: when it can't be checked, the viewer sees nothing and is told why", async () => {
+  const port = 18882;
+  let evaluatedWith: { visiblePolicies?: ReadonlyMap<string, string>; visibilityError?: string } | undefined;
+  const { server } = await startServer({
+    report: { scannedAt: "x", settings: [] },
+    host: "127.0.0.1",
+    startPort: port,
+    session: mockSession({ getSession: async () => ({ id: "oid", name: "A", email: "a@x.com", role: "viewer" }), getGraphToken: async () => "t" }),
+    policyVisibility: async () => {
+      throw new Error("Couldn't reach Microsoft Graph (ETIMEDOUT) after 6 tries");
+    },
+    onEvaluateForViewer: async (r, viewer) => {
+      evaluatedWith = viewer;
+      return r;
+    },
+  });
+  try {
+    await fetch(`http://127.0.0.1:${port}/`);
+    assert.equal(evaluatedWith?.visiblePolicies?.size, 0);
+    assert.match(evaluatedWith?.visibilityError ?? "", /^Couldn't check which policies your Intune role lets you see \(Couldn't reach Microsoft Graph \(ETIMEDOUT\)/);
+  } finally {
+    server.close();
+  }
+});
