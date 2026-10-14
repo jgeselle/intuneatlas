@@ -49,7 +49,7 @@ function Overview({ settingIndex, compliancePolicies, enrollmentConfigurations, 
       </div>
 
       <div className="grid gap-4 lg:grid-cols-5">
-        <section className="rounded-lg border border-stone-200 bg-white lg:col-span-3">
+        <section className="rounded-lg border border-stone-200 bg-surface lg:col-span-3">
           <div className="flex items-center justify-between border-b border-stone-200 px-4 py-3">
             <h2 className="text-sm font-semibold">Fix these first</h2>
             {belowBaseline > 0 && (
@@ -86,7 +86,7 @@ function Overview({ settingIndex, compliancePolicies, enrollmentConfigurations, 
         </section>
 
         <section className="space-y-4 lg:col-span-2">
-          <div className="rounded-lg border border-stone-200 bg-white p-4">
+          <div className="rounded-lg border border-stone-200 bg-surface p-4">
             <h2 className="text-sm font-semibold">Recent changes</h2>
             {changeList.length === 0 ? (
               <Empty bare>Nothing staged</Empty>

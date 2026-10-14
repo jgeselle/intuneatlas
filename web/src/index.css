@@ -5,6 +5,11 @@
 @import "@fontsource-variable/space-grotesk/wght.css";
 @import "@fontsource/instrument-serif/latin-400.css";
 
+/* Dark mode is a `data-theme="dark"` on <html>, set from the viewer's
+   choice or their system's (see lib/theme.js). `dark:` utilities are for
+   the few places the palette swap below can't get right on its own. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 @theme {
   /* Body: Inter. Headings + wordmark: Space Grotesk. `font-display`
      (Instrument Serif) is currently unused, kept available on purpose. */
@@ -25,6 +30,11 @@
   --color-teal-800: oklch(0.33 0.065 158);
   --color-teal-900: oklch(0.26 0.05 158);
   --color-teal-950: oklch(0.19 0.04 158);
+
+  /* Cards, panels, inputs, menus: white in light mode. A token of its own
+     rather than `white`, which also means "text on a green button" and
+     has to stay white in both modes. */
+  --color-surface: #fff;
 
   /* Motion. Enter animations only, short, and limited to opacity plus a
      few px of travel; the drawer and toast are the two things that also
@@ -84,6 +94,77 @@
       transform: translateY(4px);
     }
   }
+}
+
+/* Dark mode, mostly by swapping the palette: every `stone-*` class reads
+   its colour from these variables, so the scale is turned around (50 is
+   the darkest background, 900 the lightest text) and nearly every page
+   follows without a class of its own. The greens are turned around too,
+   for tints and links in the content; the sidebar was always dark and
+   keeps its own greens (`.keep-brand` below). Accents keep their hue. */
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --color-surface: oklch(0.215 0.005 70);
+
+  --color-stone-50: oklch(0.175 0.004 70);
+  --color-stone-100: oklch(0.25 0.005 70);
+  --color-stone-200: oklch(0.3 0.006 70);
+  --color-stone-300: oklch(0.38 0.007 70);
+  --color-stone-400: oklch(0.53 0.008 70);
+  --color-stone-500: oklch(0.66 0.009 70);
+  --color-stone-600: oklch(0.75 0.009 70);
+  --color-stone-700: oklch(0.84 0.007 70);
+  --color-stone-800: oklch(0.9 0.005 70);
+  --color-stone-900: oklch(0.95 0.004 70);
+  --color-stone-950: oklch(0.98 0.002 70);
+
+  --color-teal-50: oklch(0.26 0.035 158);
+  --color-teal-100: oklch(0.3 0.045 158);
+  --color-teal-200: oklch(0.37 0.06 158);
+  --color-teal-300: oklch(0.47 0.075 158);
+  --color-teal-400: oklch(0.58 0.09 158);
+  --color-teal-500: oklch(0.67 0.1 158);
+  --color-teal-600: oklch(0.75 0.1 158);
+  --color-teal-700: oklch(0.81 0.09 158);
+  /* Solid green buttons (white text) and the odd dark-green label — kept a mid green that serves both. */
+  --color-teal-800: oklch(0.5 0.095 158);
+  --color-teal-900: oklch(0.88 0.06 158);
+  --color-teal-950: oklch(0.94 0.035 158);
+
+  --color-red-50: oklch(0.245 0.035 25);
+  --color-red-200: oklch(0.36 0.08 25);
+  --color-red-500: oklch(0.64 0.18 25);
+  --color-red-600: oklch(0.57 0.19 25);
+  /* Red text in the light theme; the one solid red button sets its own dark colours. */
+  --color-red-700: oklch(0.74 0.14 25);
+  --color-red-800: oklch(0.8 0.11 25);
+  --color-red-900: oklch(0.86 0.08 25);
+
+  --color-amber-50: oklch(0.25 0.03 75);
+  --color-amber-200: oklch(0.37 0.06 75);
+  --color-amber-700: oklch(0.8 0.12 75);
+  --color-amber-800: oklch(0.84 0.11 75);
+
+  --color-purple-50: oklch(0.25 0.035 305);
+  --color-purple-200: oklch(0.37 0.07 305);
+  --color-purple-700: oklch(0.8 0.1 305);
+}
+
+/* The sidebar is dark green in both modes: inside it the greens are the
+   light-mode ones, whatever the theme. */
+[data-theme="dark"] .keep-brand {
+  --color-teal-50: oklch(0.975 0.015 158);
+  --color-teal-100: oklch(0.94 0.035 158);
+  --color-teal-200: oklch(0.88 0.06 158);
+  --color-teal-300: oklch(0.8 0.085 158);
+  --color-teal-400: oklch(0.69 0.1 158);
+  --color-teal-500: oklch(0.58 0.105 158);
+  --color-teal-600: oklch(0.49 0.095 158);
+  --color-teal-700: oklch(0.41 0.08 158);
+  --color-teal-800: oklch(0.33 0.065 158);
+  --color-teal-900: oklch(0.26 0.05 158);
+  --color-teal-950: oklch(0.19 0.04 158);
 }
 
 @layer base {

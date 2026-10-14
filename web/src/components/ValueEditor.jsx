@@ -3,7 +3,7 @@ import { defaultNode } from "../lib/settingValue.js";
 import { Dropdown } from "./Dropdown.jsx";
 
 const FIELD =
-  "w-full rounded-md border border-stone-300 bg-white px-2.5 py-1.5 text-sm focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600";
+  "w-full rounded-md border border-stone-300 bg-surface px-2.5 py-1.5 text-sm focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600";
 const SMALL_BUTTON =
   "inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-stone-600 ring-1 ring-inset ring-stone-300 hover:bg-stone-50 focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500 disabled:text-stone-300 disabled:ring-stone-200";
 const ICON_BUTTON =

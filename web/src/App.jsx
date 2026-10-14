@@ -535,7 +535,7 @@ function Dashboard({ initialReport, session }) {
         onMouseEnter={onRailMouseEnter}
         onMouseLeave={onRailMouseLeave}
         className={
-          "flex shrink-0 flex-col bg-teal-900 transition-[width] duration-150 ease-out " +
+          "keep-brand flex shrink-0 flex-col bg-teal-900 transition-[width] duration-150 ease-out " +
           (railCollapsed
             ? "overflow-hidden lg:fixed lg:inset-y-0 lg:left-0 lg:z-40 " +
               (railWide ? "lg:w-60 lg:shadow-2xl" : "lg:w-16")
@@ -766,7 +766,7 @@ function Dashboard({ initialReport, session }) {
 
       {toast && (
         <div className="pointer-events-none fixed bottom-4 left-1/2 z-50 -translate-x-1/2">
-          <div className="animate-toast rounded-md bg-stone-900 px-4 py-2 text-sm text-white shadow-lg">{toast}</div>
+          <div className="animate-toast rounded-md bg-stone-900 px-4 py-2 text-sm text-white shadow-lg dark:text-stone-50">{toast}</div>
         </div>
       )}
     </div>

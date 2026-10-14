@@ -99,7 +99,7 @@ function PageSubtitle({ scope, children }) {
  */
 function Empty({ children, bare = false, compact = false }) {
   const size = compact ? "px-3 py-4 text-xs" : bare ? "px-4 py-10 text-sm" : "px-4 py-12 text-sm";
-  const outline = bare ? "" : "rounded-lg border border-dashed border-stone-300 " + (compact ? "bg-stone-50 " : "bg-white ");
+  const outline = bare ? "" : "rounded-lg border border-dashed border-stone-300 " + (compact ? "bg-stone-50 " : "bg-surface ");
   return <p className={outline + size + " text-center text-stone-500"}>{children}</p>;
 }
 
@@ -295,7 +295,7 @@ function NotesSection({ notes = [], onAdd, onDelete, readOnly = false, viewer })
             onChange={(e) => setDraft(e.target.value)}
             rows={2}
             placeholder="Add a note"
-            className="w-full resize-none rounded-md border border-stone-300 bg-white p-2.5 text-xs placeholder-stone-400 focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600"
+            className="w-full resize-none rounded-md border border-stone-300 bg-surface p-2.5 text-xs placeholder-stone-400 focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600"
           />
           <button
             onClick={submit}
@@ -348,7 +348,7 @@ function HistoryList({ events }) {
       ) : (
         <ol className="mt-2 space-y-2">
           {events.map((event) => (
-            <li key={event.id} className="rounded-md border border-stone-200 bg-white px-3 py-2.5 text-xs">
+            <li key={event.id} className="rounded-md border border-stone-200 bg-surface px-3 py-2.5 text-xs">
               <div className="flex items-baseline justify-between gap-3">
                 <span className="min-w-0 truncate font-medium text-stone-800" title={event.policyName}>
                   {event.policyName}
@@ -401,7 +401,7 @@ function HistoryList({ events }) {
  */
 function Stat({ label, value, sub, icon: Icon }) {
   return (
-    <div className="rounded-lg border border-stone-200 bg-white p-4">
+    <div className="rounded-lg border border-stone-200 bg-surface p-4">
       <div className="flex items-center gap-1.5 text-stone-500">
         {Icon ? <Icon weight="bold" aria-hidden="true" className="h-3.5 w-3.5 shrink-0" /> : null}
         <div className="text-xs font-semibold">{label}</div>

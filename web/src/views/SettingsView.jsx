@@ -108,7 +108,7 @@ function SettingsView({
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={searchPlaceholder}
-              className="w-full rounded-md border border-stone-300 bg-white py-2 pl-9 pr-3 text-sm placeholder-stone-400 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+              className="w-full rounded-md border border-stone-300 bg-surface py-2 pl-9 pr-3 text-sm placeholder-stone-400 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
             />
           </div>
         </div>
@@ -119,7 +119,7 @@ function SettingsView({
               onClick={() => setState(s)}
               className={
                 "shrink-0 rounded-md px-3 py-1.5 text-xs font-medium focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500 " +
-                (state === s ? "bg-stone-900 text-white" : "bg-white text-stone-600 ring-1 ring-inset ring-stone-300 hover:bg-stone-50")
+                (state === s ? "bg-stone-900 text-white dark:text-stone-50" : "bg-surface text-stone-600 ring-1 ring-inset ring-stone-300 hover:bg-stone-50")
               }
             >
               {s}
@@ -133,7 +133,7 @@ function SettingsView({
               onClick={() => setPlatform(p)}
               className={
                 "shrink-0 rounded-md px-3 py-1.5 text-xs font-medium focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500 " +
-                (platform === p ? "bg-teal-700 text-white" : "bg-white text-stone-600 ring-1 ring-inset ring-stone-300 hover:bg-stone-50")
+                (platform === p ? "bg-teal-700 text-white dark:text-stone-50" : "bg-surface text-stone-600 ring-1 ring-inset ring-stone-300 hover:bg-stone-50")
               }
             >
               {p === "All" ? "All" : platformLabel(p)}
@@ -168,7 +168,7 @@ function SettingsView({
                   <div className="pb-2">
                     <button
                       onClick={() => onOpen(item.entry.key)}
-                      className="flex w-full items-center gap-3 rounded-lg border border-stone-200 bg-white px-4 py-3 text-left hover:bg-stone-50 focus:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-teal-500"
+                      className="flex w-full items-center gap-3 rounded-lg border border-stone-200 bg-surface px-4 py-3 text-left hover:bg-stone-50 focus:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-teal-500"
                     >
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5">

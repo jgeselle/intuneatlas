@@ -155,7 +155,7 @@ function PolicyValueCard({ title, nameField, subtitle, isNew = false, alert = fa
           onChange={(e) => nameField.onChange(e.target.value)}
           aria-label="New policy name"
           placeholder="New policy name"
-          className="w-full rounded-md border border-stone-300 bg-white px-2.5 py-1.5 text-xs font-medium text-stone-700 placeholder-stone-400 focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600"
+          className="w-full rounded-md border border-stone-300 bg-surface px-2.5 py-1.5 text-xs font-medium text-stone-700 placeholder-stone-400 focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600"
         />
       ) : (
         <div className={"truncate text-xs font-medium " + (alert ? "text-red-900" : "text-stone-700")} title={title}>
@@ -173,7 +173,7 @@ function PolicyValueCard({ title, nameField, subtitle, isNew = false, alert = fa
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               placeholder="Reason (optional)"
-              className="mt-2.5 w-full rounded-md border border-stone-300 bg-white px-2.5 py-1.5 text-xs placeholder-stone-400 focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600"
+              className="mt-2.5 w-full rounded-md border border-stone-300 bg-surface px-2.5 py-1.5 text-xs placeholder-stone-400 focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600"
             />
             <div className="mt-2 flex items-center gap-2">
               <button
@@ -182,7 +182,7 @@ function PolicyValueCard({ title, nameField, subtitle, isNew = false, alert = fa
                   onStageRemoval(reason);
                   setRemoving(false);
                 }}
-                className="rounded-md bg-teal-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-teal-700 active:scale-[0.97] focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500"
+                className="rounded-md bg-teal-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-teal-700 dark:hover:bg-teal-400 active:scale-[0.97] focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500"
               >
                 Stage removal
               </button>
@@ -210,14 +210,14 @@ function PolicyValueCard({ title, nameField, subtitle, isNew = false, alert = fa
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
                   placeholder="Reason (optional)"
-                  className="w-full rounded-md border border-stone-300 bg-white px-2.5 py-1.5 text-xs placeholder-stone-400 focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600"
+                  className="w-full rounded-md border border-stone-300 bg-surface px-2.5 py-1.5 text-xs placeholder-stone-400 focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600"
                 />
                 <div className="mt-2 flex items-center gap-2">
                   <button
                     type="button"
                     onClick={() => onStage(draft, reason)}
                     disabled={Boolean(error)}
-                    className="rounded-md bg-teal-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-teal-700 active:scale-[0.97] focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500 disabled:bg-stone-200 disabled:text-stone-400"
+                    className="rounded-md bg-teal-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-teal-700 dark:hover:bg-teal-400 active:scale-[0.97] focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500 disabled:bg-stone-200 disabled:text-stone-400"
                   >
                     {change ? "Update staged change" : "Stage change"}
                   </button>

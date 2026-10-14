@@ -22,11 +22,11 @@ function SimplePolicyList({ kindLabel, items, query, setQuery, onOpen, scope }) 
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search by name"
-          className="w-full rounded-md border border-stone-300 bg-white py-2 pl-9 pr-3 text-sm placeholder-stone-400 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
+          className="w-full rounded-md border border-stone-300 bg-surface py-2 pl-9 pr-3 text-sm placeholder-stone-400 focus:border-teal-500 focus:outline-none focus:ring-1 focus:ring-teal-500"
         />
       </div>
 
-      <div className="overflow-hidden rounded-lg border border-stone-200 bg-white">
+      <div className="overflow-hidden rounded-lg border border-stone-200 bg-surface">
         <table className="w-full text-left text-sm">
           <thead className="border-b border-stone-200 bg-stone-50 text-xs uppercase tracking-wide text-stone-500">
             <tr>

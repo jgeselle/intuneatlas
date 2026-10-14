@@ -34,7 +34,7 @@ function PushButton({ label, confirmText, confirmLabel, onPush }) {
             type="button"
             onClick={push}
             disabled={busy}
-            className="inline-flex items-center gap-1.5 rounded-md bg-teal-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-teal-700 focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500 disabled:bg-stone-300"
+            className="inline-flex items-center gap-1.5 rounded-md bg-teal-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-teal-700 dark:hover:bg-teal-400 focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500 disabled:bg-stone-300"
           >
             <PaperPlaneTilt className="h-3.5 w-3.5" />
             {busy ? "Pushing…" : confirmLabel}
@@ -75,7 +75,7 @@ function ChangeCard({ change, onUpdateField, onRevert, onPush, viewer, inGroup =
   const canEdit = viewer.role === "admin" || (viewer.role === "contributor" && change.stagedBy === viewer.id);
 
   return (
-    <li className="animate-rise-in rounded-lg border border-stone-200 bg-white p-4">
+    <li className="animate-rise-in rounded-lg border border-stone-200 bg-surface p-4">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
@@ -126,7 +126,7 @@ function ChangeCard({ change, onUpdateField, onRevert, onPush, viewer, inGroup =
             rows={2}
             disabled={!canEdit}
             placeholder="Reason"
-            className="mt-1 w-full resize-none rounded-md border border-stone-300 bg-white p-2 text-xs placeholder-stone-400 focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600 disabled:bg-stone-50 disabled:text-stone-400"
+            className="mt-1 w-full resize-none rounded-md border border-stone-300 bg-surface p-2 text-xs placeholder-stone-400 focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600 disabled:bg-stone-50 disabled:text-stone-400"
           />
         </label>
         <div>
@@ -215,12 +215,12 @@ function NewPolicyGroup({ name, changes, onUpdateField, onRevert, onPush, viewer
               autoFocus
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
-              className="min-w-0 flex-1 rounded-md border border-stone-300 bg-white px-2.5 py-1.5 text-sm focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600"
+              className="min-w-0 flex-1 rounded-md border border-stone-300 bg-surface px-2.5 py-1.5 text-sm focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600"
             />
             <button
               type="submit"
               disabled={!draft.trim()}
-              className="rounded-md bg-teal-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-teal-700 focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500 disabled:bg-stone-200 disabled:text-stone-400"
+              className="rounded-md bg-teal-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-teal-700 dark:hover:bg-teal-400 focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500 disabled:bg-stone-200 disabled:text-stone-400"
             >
               Save
             </button>

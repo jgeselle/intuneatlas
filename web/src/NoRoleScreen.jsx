@@ -2,7 +2,7 @@
 function NoRoleScreen({ session }) {
   return (
     <div className="flex min-h-screen items-center justify-center bg-stone-50 px-4">
-      <div className="w-full max-w-sm animate-rise-in rounded-lg border border-stone-200 bg-white p-6">
+      <div className="w-full max-w-sm animate-rise-in rounded-lg border border-stone-200 bg-surface p-6">
         <div className="font-heading text-xl font-semibold leading-none tracking-tight text-teal-800">IntuneAtlas</div>
         <h1 className="mt-4 text-lg font-semibold">No role assigned</h1>
         <p className="mt-1 text-sm text-stone-500">

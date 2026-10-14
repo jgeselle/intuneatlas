@@ -145,7 +145,7 @@ function Dropdown({ value, options, onChange, placeholder = "Select…", ariaLab
         className={
           inline
             ? "flex max-w-full items-center gap-1 rounded text-left hover:text-stone-900 focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-600 " + (open ? "text-stone-900" : "")
-            : "flex w-full items-center gap-2 rounded-md border bg-white py-1.5 pl-2.5 pr-2 text-left text-sm focus:outline-none focus:ring-1 focus:ring-teal-600 " +
+            : "flex w-full items-center gap-2 rounded-md border bg-surface py-1.5 pl-2.5 pr-2 text-left text-sm focus:outline-none focus:ring-1 focus:ring-teal-600 " +
               (open ? "border-teal-600 ring-1 ring-teal-600" : "border-stone-300 focus:border-teal-600")
         }
       >
@@ -158,7 +158,7 @@ function Dropdown({ value, options, onChange, placeholder = "Select…", ariaLab
       {open && (
         <div
           className={
-            "absolute left-0 z-30 animate-fade-in overflow-hidden rounded-md border border-stone-200 bg-white shadow-lg " +
+            "absolute left-0 z-30 animate-fade-in overflow-hidden rounded-md border border-stone-200 bg-surface shadow-lg " +
             (searchable ? "w-[28rem] max-w-[calc(100vw-2rem)] " : inline ? "w-72 max-w-[calc(100vw-2rem)] " : "right-0 ") +
             (above ? "bottom-full mb-1" : "top-full mt-1")
           }

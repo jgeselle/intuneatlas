@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App.jsx";
 import "./index.css";
+import "./lib/theme.js";
 
 // Injected by the CLI's static server (src/server/staticServer.ts) before
 // </head> when it serves index.html — either a real report or `null` when

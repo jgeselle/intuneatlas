@@ -38,11 +38,11 @@ function DrawerShell({ eyebrow, title, chips, detail, onClose, children }) {
       />
       <div
         className={
-          "relative flex h-full w-full max-w-md flex-col overflow-y-auto overscroll-contain border-l border-stone-200 bg-white shadow-2xl " +
+          "relative flex h-full w-full max-w-md flex-col overflow-y-auto overscroll-contain border-l border-stone-200 bg-surface shadow-2xl " +
           (closing ? "animate-drawer-out" : "animate-drawer-in")
         }
       >
-        <div className="sticky top-0 z-10 border-b border-stone-200 bg-white px-5 py-4">
+        <div className="sticky top-0 z-10 border-b border-stone-200 bg-surface px-5 py-4">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <div className="text-xs uppercase tracking-wide text-stone-500">{eyebrow}</div>

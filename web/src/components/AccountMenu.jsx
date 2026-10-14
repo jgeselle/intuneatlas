@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { CaretDown, SignOut } from "@phosphor-icons/react";
 import { initialsOf } from "../lib/format.js";
+import { setThemeChoice, themeChoice } from "../lib/theme.js";
 
 function AccountMenu({ session, tenant, up = false, full = false, textClassName = "", onOpenChange }) {
   const [open, setOpen] = useState(false);
@@ -67,7 +68,7 @@ function AccountMenu({ session, tenant, up = false, full = false, textClassName 
           can actually play instead of the panel just vanishing. */}
       <div
         className={
-          "absolute z-40 rounded-lg border border-stone-200 bg-white p-3 shadow-xl transition duration-150 ease-out " +
+          "absolute z-40 rounded-lg border border-stone-200 bg-surface p-3 shadow-xl transition duration-150 ease-out " +
           // "up" opens from the sidebar footer, which is narrower than a
           // fixed width — stretch to match the rail instead of
           // overflowing past its edge. The other placement has open
@@ -111,6 +112,8 @@ function AccountMenu({ session, tenant, up = false, full = false, textClassName 
           </dl>
         )}
 
+        <Appearance />
+
         <a
           href="/auth/logout"
           className="mt-3 flex w-full items-center gap-2 rounded-md border-t border-stone-200 px-2 pt-3 pb-1.5 text-xs font-medium text-stone-600 hover:bg-stone-50 focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500"
@@ -118,6 +121,41 @@ function AccountMenu({ session, tenant, up = false, full = false, textClassName 
           <SignOut className="h-3.5 w-3.5" />
           Sign out
         </a>
+      </div>
+    </div>
+  );
+}
+
+const APPEARANCES = [
+  ["system", "System"],
+  ["light", "Light"],
+  ["dark", "Dark"],
+];
+
+function Appearance() {
+  const [choice, setChoice] = useState(themeChoice);
+  return (
+    <div className="mt-3 border-t border-stone-100 pt-3 text-xs">
+      <div className="text-stone-500">Appearance</div>
+      <div className="mt-1.5 grid grid-cols-3 rounded-md bg-stone-100 p-0.5" role="radiogroup" aria-label="Appearance">
+        {APPEARANCES.map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            role="radio"
+            aria-checked={choice === value}
+            onClick={() => {
+              setThemeChoice(value);
+              setChoice(value);
+            }}
+            className={
+              "rounded px-2 py-1 focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500 " +
+              (choice === value ? "bg-surface font-medium text-stone-900 shadow-sm" : "text-stone-500 hover:text-stone-700")
+            }
+          >
+            {label}
+          </button>
+        ))}
       </div>
     </div>
   );

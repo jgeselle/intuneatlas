@@ -4,11 +4,11 @@ import { PageSubtitle, Empty } from "../components/bits.jsx";
 import { platformLabel } from "../lib/format.js";
 
 const FIELD =
-  "w-full rounded-md border border-stone-300 bg-white px-2.5 py-1.5 text-sm placeholder-stone-400 focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600";
+  "w-full rounded-md border border-stone-300 bg-surface px-2.5 py-1.5 text-sm placeholder-stone-400 focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600";
 const BUTTON =
   "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium text-stone-600 ring-1 ring-inset ring-stone-300 hover:bg-stone-50 focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500 disabled:text-stone-300 disabled:ring-stone-200";
 const PRIMARY =
-  "inline-flex items-center gap-1.5 rounded-md bg-teal-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-teal-700 active:scale-[0.97] focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500 disabled:bg-stone-200 disabled:text-stone-400";
+  "inline-flex items-center gap-1.5 rounded-md bg-teal-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-teal-700 dark:hover:bg-teal-400 active:scale-[0.97] focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500 disabled:bg-stone-200 disabled:text-stone-400";
 
 /** How the tenant stands against one baseline, counted from the checks each setting carries for it. */
 function standing(settingIndex, packPath) {
@@ -79,7 +79,7 @@ function AddBaseline({ onAdd }) {
   }
 
   return (
-    <form onSubmit={submit} className="rounded-lg border border-stone-200 bg-white p-4">
+    <form onSubmit={submit} className="rounded-lg border border-stone-200 bg-surface p-4">
       <h2 className="text-sm font-semibold">Add a baseline</h2>
       <p className="mt-1 text-xs leading-relaxed text-stone-500">
         A folder of Settings Catalog policies exported from Intune as JSON. Other files in the folder are ignored.
@@ -138,7 +138,7 @@ function PackCard({ pack, active, counts, canManage, onToggle, onRename, onRemov
   }
 
   return (
-    <li className="animate-rise-in rounded-lg border border-stone-200 bg-white p-4">
+    <li className="animate-rise-in rounded-lg border border-stone-200 bg-surface p-4">
       <div className="flex items-start gap-3">
         <input
           type="checkbox"
@@ -213,7 +213,7 @@ function PackCard({ pack, active, counts, canManage, onToggle, onRename, onRemov
                     await onRemove(pack.path);
                     setConfirming(false);
                   }}
-                  className="inline-flex items-center rounded-md bg-red-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-600 focus:outline-none focus-visible:ring-1 focus-visible:ring-red-500"
+                  className="inline-flex items-center rounded-md bg-red-700 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-500 focus:outline-none focus-visible:ring-1 focus-visible:ring-red-500"
                 >
                   Remove
                 </button>
