@@ -578,6 +578,9 @@ test("visibility: asked once with the viewer's own token, then handed with them 
       tokensAsked.push(token);
       return new Map([["seattle", "catalog"]]);
     },
+    // The group view hands the report and the viewer to the judging step, like the page does — and,
+    // unlike the page, needs no built web UI, which CI doesn't have.
+    onScopeReport: (r) => r,
     onEvaluateForViewer: async (r, viewer) => {
       seen.push(viewer.visiblePolicies);
       return r;
@@ -596,7 +599,7 @@ test("visibility: asked once with the viewer's own token, then handed with them 
   });
   const get = async (path: string) => (await fetch(`http://127.0.0.1:${port}${path}`)).json() as Promise<unknown>;
   try {
-    await fetch(`http://127.0.0.1:${port}/`);
+    await fetch(`http://127.0.0.1:${port}/api/scope?group=g1`);
     const history = (await get("/api/history?key=camera::windows10")) as { events: unknown[] };
     assert.deepEqual(history.events, [{ policyId: "seattle", kind: "added" }, { kind: "pushed" }], "events on a policy they can't see are left out");
     assert.deepEqual(await get("/api/reminders"), [{ targetKey: "camera::windows10" }]);
