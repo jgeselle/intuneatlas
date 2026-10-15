@@ -147,9 +147,6 @@ access, and how you can check it yourself:
   [Sigstore](https://www.sigstore.dev/)-signed attestation and an SBOM that
   link the binary to the commit and workflow it was built from. You can
   check it with `gh attestation verify <file> --repo jgeselle/intuneatlas`.
-  Windows still shows a SmartScreen warning the first time it runs; that
-  depends on publisher reputation, which only a paid code-signing
-  certificate would change.
 - **Read-only unless you decide otherwise.** Sign-in asks for read
   permissions only, and a scan only reads. The one thing that writes is
   pushing a reviewed change from the Changes page, and that needs
