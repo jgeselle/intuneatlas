@@ -59,8 +59,8 @@ clone instead: `npm install && npm run build && node dist/cli.js ui`.
 | [`index.html`](./index.html) | Static marketing/landing page for the project |
 | [`docs/`](./docs) | The getting started guide and CLI reference served at intuneatlas.com/docs |
 | [`src/`](./src) | The CLI — auth, Graph scanning, settings index, local server |
-| [`web/`](./web) | The local web UI (Vite + React), served by `intuneatlas ui` |
-| [`test/`](./test) | Fixture-driven regression tests for the merge/conflict/baseline logic and the auth/authorization layer |
+| [`web/`](./web) | The local web UI (Vite + React, in TypeScript), served by `intuneatlas ui` |
+| [`test/`](./test) | Fixture-driven regression tests for the merge/conflict/baseline logic, the auth/authorization layer and the web UI's logic |
 | [`Dockerfile`](./Dockerfile), [`infra/azure/`](./infra/azure) | The app as a container image, and a template that deploys it to Azure Container Apps |
 | [`baselines/`](./baselines) | How a baseline folder is laid out — no baselines ship with the app |
 | [`scripts/seed-tenant/`](./scripts/seed-tenant) | Dev-only tooling that seeds a dedicated test tenant — see [`TESTING.md`](./TESTING.md) |
