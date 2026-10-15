@@ -9,12 +9,8 @@ import { scopeToGroup } from "../scan/scope.js";
 import { addPack, removePack, renamePack } from "../baselines/manage.js";
 import { listBaselinePacks, type BaselinePack } from "../baselines/packs.js";
 import { applyBaselinesToReport, baselineDefinitionIds, buildReport, type ScanReport } from "../scan/report.js";
-import {
-  LOOPBACK_HOSTS,
-  startServer,
-  type StageChangeRequestBody,
-  type UpdateChangeRequestBody,
-} from "../server/staticServer.js";
+import { LOOPBACK_HOSTS, startServer } from "../server/staticServer.js";
+import type { StageChangeRequestBody, UpdateChangeRequestBody } from "../server/types.js";
 import type { ViewerIdentity } from "../auth/webSession.js";
 import { addNote, deleteNote, getAllNotes, getNoteById, type Note } from "../storage/notes.js";
 import { fetchVisiblePolicies, restrictToPolicies } from "../scan/visibility.js";

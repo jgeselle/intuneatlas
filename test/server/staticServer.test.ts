@@ -1,6 +1,11 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { appPath, baselineVerdicts, fromThisOrigin, resolveStaticPath, startServer, type StartServerOptions } from "../../src/server/staticServer.js";
+import { appPath } from "../../src/server/auth.js";
+import { baselineVerdicts } from "../../src/server/baselines.js";
+import { fromThisOrigin } from "../../src/server/http.js";
+import { resolveStaticPath } from "../../src/server/static.js";
+import { startServer } from "../../src/server/staticServer.js";
+import type { StartServerOptions } from "../../src/server/types.js";
 import type { ViewerIdentity, WebSessionManager } from "../../src/auth/webSession.js";
 
 // ------------------------------------------------------------------------
