@@ -1,13 +1,24 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { CaretDown, SignOut } from "@phosphor-icons/react";
 import { initialsOf } from "../lib/format.js";
-import { setThemeChoice, themeChoice } from "../lib/theme.js";
+import { setThemeChoice, themeChoice, type ThemeChoice } from "../lib/theme.js";
+import type { Session } from "../types.js";
 
-function AccountMenu({ session, tenant, up = false, full = false, textClassName = "", onOpenChange }) {
+interface AccountMenuProps {
+  session: Session;
+  tenant?: string;
+  /** In the sidebar footer: the panel opens upward, out over the page. */
+  up?: boolean;
+  full?: boolean;
+  textClassName?: string;
+  onOpenChange?: (open: boolean) => void;
+}
+
+function AccountMenu({ session, tenant, up = false, full = false, textClassName = "", onOpenChange }: AccountMenuProps) {
   const [open, setOpen] = useState(false);
-  const [place, setPlace] = useState(null);
-  const trigger = useRef(null);
+  const [place, setPlace] = useState<CSSProperties | null>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
   // Which build is running — put into the page by the server, like the session.
   const version = window.__INTUNEATLAS_VERSION__;
 
@@ -34,7 +45,7 @@ function AccountMenu({ session, tenant, up = false, full = false, textClassName 
 
   useEffect(() => {
     if (!open) return;
-    const onKey = (e) => {
+    const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") setOpen(false);
     };
     window.addEventListener("keydown", onKey);
@@ -151,11 +162,11 @@ function AccountMenu({ session, tenant, up = false, full = false, textClassName 
 }
 
 /** In the page, out of the sidebar's clipping, where `inPage` — in place otherwise. */
-function portalIf(inPage, children) {
+function portalIf(inPage: boolean, children: ReactNode) {
   return inPage ? createPortal(children, document.body) : children;
 }
 
-const APPEARANCES = [
+const APPEARANCES: Array<[ThemeChoice, string]> = [
   ["system", "System"],
   ["light", "Light"],
   ["dark", "Dark"],

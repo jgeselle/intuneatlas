@@ -1,9 +1,22 @@
 import { ShieldCheck, DeviceMobile, Check, Clock, Faders, ArrowsInLineHorizontal } from "@phosphor-icons/react";
-import { PageSubtitle, SeverityChip, Stat, Empty } from "../components/bits.jsx";
+import { PageSubtitle, SeverityChip, Stat, Empty } from "../components/bits.js";
 import { severityRank } from "../lib/styles.js";
 import { isComplianceSetting, platformLabel } from "../lib/format.js";
+import type { Change, RawSimplePolicy, Scope, SettingIndexEntry } from "../types.js";
+import type { View } from "../lib/route.js";
 
-function Overview({ settingIndex, compliancePolicies, enrollmentConfigurations, changes, onGo, onOpen, scope }) {
+interface OverviewProps {
+  settingIndex: SettingIndexEntry[];
+  compliancePolicies: RawSimplePolicy[];
+  enrollmentConfigurations: RawSimplePolicy[];
+  changes: Record<string, Change>;
+  /** Goes to a page, optionally already filtered to one state. */
+  onGo: (page: View, state?: string) => void;
+  onOpen: (key: string) => void;
+  scope?: Scope;
+}
+
+function Overview({ settingIndex, compliancePolicies, enrollmentConfigurations, changes, onGo, onOpen, scope }: OverviewProps) {
   // The counts are of configuration settings, as on the Settings page; what compliance policies
   // demand has its own page. The "fix these first" list below draws on both.
   const configuration = settingIndex.filter((e) => !isComplianceSetting(e));
@@ -22,7 +35,7 @@ function Overview({ settingIndex, compliancePolicies, enrollmentConfigurations, 
     .sort((a, b) => severityRank(a.rec.severity) - severityRank(b.rec.severity));
   const complianceDeployed = compliancePolicies.filter((p) => p.deployed).length;
   const enrollmentDeployed = enrollmentConfigurations.filter((p) => p.deployed).length;
-  const changeList = Object.values(changes).sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+  const changeList = Object.values(changes).sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
 
   return (
     <div className="space-y-6">

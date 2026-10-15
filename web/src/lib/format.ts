@@ -1,4 +1,6 @@
-function initialsOf(name) {
+import type { SettingIndexEntry } from "../types.js";
+
+function initialsOf(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   if (parts.length === 0) return "?";
   const first = parts[0][0];
@@ -6,7 +8,7 @@ function initialsOf(name) {
   return (first + last).toUpperCase();
 }
 
-function sinceLabel(mins) {
+function sinceLabel(mins: number): string {
   if (mins <= 0) return "just now";
   if (mins === 1) return "1 minute ago";
   if (mins < 60) return mins + " minutes ago";
@@ -23,7 +25,7 @@ function sinceLabel(mins) {
  * rather than the prototype's hand-picked labels — this is a best-effort
  * humanizer, not a precise mapping.
  */
-function platformLabel(raw) {
+function platformLabel(raw: string | undefined): string {
   if (!raw) return "Unknown";
   // Graph can report several platforms on one policy as a comma list.
   if (raw.includes(",")) return raw.split(",").map((part) => platformLabel(part.trim())).join(", ");
@@ -45,7 +47,7 @@ function platformLabel(raw) {
     .join(" ");
 }
 
-function refLabel(platform) {
+function refLabel(platform: string | undefined): string {
   const p = (platform || "").toLowerCase();
   if (p.includes("windows")) return "CSP / OMA-URI";
   if (p.includes("ios") || p.includes("macos")) return "Payload key";
@@ -60,12 +62,12 @@ function refLabel(platform) {
  * baselines, same editor); the definition id tells them apart — the
  * server's isComplianceDefinition, src/scan/complianceSettings.ts.
  */
-function isComplianceSetting(entry) {
+function isComplianceSetting(entry: Pick<SettingIndexEntry, "definitionId">): boolean {
   return Boolean(entry.definitionId?.startsWith("compliance."));
 }
 
 /** A row of a custom OMA-URI profile — read only: Intune hands its text and file values back encrypted (see deviceConfigurations.ts). */
-function isCustomOmaSetting(entry) {
+function isCustomOmaSetting(entry: Pick<SettingIndexEntry, "key"> | undefined): boolean {
   return Boolean(entry?.key?.startsWith("omauri:"));
 }
 

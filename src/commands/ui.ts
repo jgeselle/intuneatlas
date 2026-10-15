@@ -44,7 +44,7 @@ export interface UiOptions {
 /** Raw — settings carry no baseline judgment yet, notes/changes are tenant-wide and shared. */
 type RawEnrichedReport = ScanReport & { notes: Record<string, Note[]>; changes: Record<string, StagedChange> };
 /** What actually gets served — judged for one specific viewer's own active-baseline selection. */
-type ViewerReport = RawEnrichedReport & { baselinePacks: BaselinePack[]; activeBaselinePacks: string[] | null; baselineFolder?: string; visibilityError?: string };
+export type ViewerReport = RawEnrichedReport & { baselinePacks: BaselinePack[]; activeBaselinePacks: string[] | null; baselineFolder?: string; visibilityError?: string };
 
 export async function runUi(options: UiOptions): Promise<void> {
   // The environment variables are for where there is no command line to speak of — a container:

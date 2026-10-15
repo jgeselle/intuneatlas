@@ -1,4 +1,8 @@
-const STATE_STYLE = {
+import type { SettingIndexState, SettingRecommendation } from "../types.js";
+
+type Severity = NonNullable<SettingRecommendation["severity"]>;
+
+const STATE_STYLE: Record<SettingIndexState, string> = {
   Conflict: "bg-red-50 text-red-700 ring-red-200",
   "Below baseline": "bg-amber-50 text-amber-800 ring-amber-200",
   "Not assigned": "bg-stone-100 text-stone-500 ring-stone-200",
@@ -8,7 +12,7 @@ const STATE_STYLE = {
   Missing: "bg-purple-50 text-purple-700 ring-purple-200",
 };
 
-const SEVERITY_STYLE = {
+const SEVERITY_STYLE: Record<Severity, { chip: string; label: string; rank: number }> = {
   critical: { chip: "bg-red-50 text-red-700 ring-red-200", label: "Critical", rank: 0 },
   high: { chip: "bg-amber-50 text-amber-800 ring-amber-200", label: "High", rank: 1 },
   medium: { chip: "bg-stone-100 text-stone-700 ring-stone-300", label: "Medium", rank: 2 },
@@ -16,8 +20,8 @@ const SEVERITY_STYLE = {
 };
 
 /** Sort position for a recommendation: by severity where the baseline gives one, unrated ones after. */
-function severityRank(severity) {
-  return SEVERITY_STYLE[severity]?.rank ?? 4;
+function severityRank(severity: Severity | undefined): number {
+  return (severity ? SEVERITY_STYLE[severity] : undefined)?.rank ?? 4;
 }
 
 export { STATE_STYLE, SEVERITY_STYLE, severityRank };

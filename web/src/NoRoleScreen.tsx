@@ -1,5 +1,6 @@
+import type { Session } from "./types.js";
 
-function NoRoleScreen({ session }) {
+function NoRoleScreen({ session }: { session: Session | null }) {
   return (
     <div className="flex min-h-screen items-center justify-center bg-stone-50 px-4">
       <div className="w-full max-w-sm animate-rise-in rounded-lg border border-stone-200 bg-surface p-6">

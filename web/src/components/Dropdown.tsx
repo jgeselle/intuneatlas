@@ -1,5 +1,17 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import { CaretDown, Check, MagnifyingGlass } from "@phosphor-icons/react";
+import type { Option } from "../types.js";
+
+interface DropdownProps {
+  value: string | null;
+  options: Option[];
+  onChange: (value: string) => void;
+  placeholder?: string;
+  ariaLabel?: string;
+  muted?: boolean;
+  inline?: boolean;
+  searchable?: boolean;
+}
 
 /**
  * A dropdown drawn by the app instead of the browser's own <select>. The
@@ -24,14 +36,14 @@ import { CaretDown, Check, MagnifyingGlass } from "@phosphor-icons/react";
  * letter jumps to the next option starting with it; Enter or Space picks;
  * Escape or Tab closes.
  */
-function Dropdown({ value, options, onChange, placeholder = "Select…", ariaLabel, muted = false, inline = false, searchable = false }) {
+function Dropdown({ value, options, onChange, placeholder = "Select…", ariaLabel, muted = false, inline = false, searchable = false }: DropdownProps) {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
   const [above, setAbove] = useState(false);
-  const rootRef = useRef(null);
-  const buttonRef = useRef(null);
-  const listRef = useRef(null);
-  const searchRef = useRef(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
   const [search, setSearch] = useState("");
   const listId = useId();
   const selectedIndex = options.findIndex((o) => o.value === value);
@@ -43,7 +55,7 @@ function Dropdown({ value, options, onChange, placeholder = "Select…", ariaLab
 
   function openList() {
     // Opens upward only when the space below is too small for a useful list and there's more above.
-    const rect = buttonRef.current.getBoundingClientRect();
+    const rect = buttonRef.current!.getBoundingClientRect();
     const below = window.innerHeight - rect.bottom;
     setAbove(below < 240 && rect.top > below);
     setSearch("");
@@ -56,7 +68,7 @@ function Dropdown({ value, options, onChange, placeholder = "Select…", ariaLab
     if (open && searchable) searchRef.current?.focus();
   }, [open]);
 
-  function pick(option) {
+  function pick(option: Option) {
     setOpen(false);
     buttonRef.current?.focus();
     if (option.value !== value) onChange(option.value);
@@ -64,8 +76,8 @@ function Dropdown({ value, options, onChange, placeholder = "Select…", ariaLab
 
   useEffect(() => {
     if (!open) return;
-    const onPointerDown = (e) => {
-      if (!rootRef.current?.contains(e.target)) setOpen(false);
+    const onPointerDown = (e: MouseEvent) => {
+      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
     };
     document.addEventListener("mousedown", onPointerDown);
     return () => document.removeEventListener("mousedown", onPointerDown);
@@ -74,17 +86,18 @@ function Dropdown({ value, options, onChange, placeholder = "Select…", ariaLab
   // Keeps the highlighted option in view as the keyboard moves through a long list. Up and down
   // only, and by hand: scrollIntoView would also pull a sideways-scrolled list back to its start.
   useLayoutEffect(() => {
-    const item = open && listRef.current?.children[active];
-    const box = listRef.current?.parentElement;
-    if (!item || !box) return;
+    const list = listRef.current;
+    const item = open ? (list?.children[active] as HTMLElement | undefined) : undefined;
+    const box = list?.parentElement;
+    if (!list || !item || !box) return;
     // Measured from the scrolling box itself (it is the rows' offset parent), with its own padding kept clear.
-    const pad = listRef.current.offsetTop;
+    const pad = list.offsetTop;
     const top = item.offsetTop;
     if (top - pad < box.scrollTop) box.scrollTop = top - pad;
     else if (top + item.offsetHeight + pad > box.scrollTop + box.clientHeight) box.scrollTop = top + item.offsetHeight + pad - box.clientHeight;
   }, [open, active]);
 
-  function onKeyDown(e) {
+  function onKeyDown(e: KeyboardEvent) {
     if (!open) {
       if (["ArrowDown", "ArrowUp", "Enter", " "].includes(e.key)) {
         e.preventDefault();

@@ -1,10 +1,19 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { X } from "@phosphor-icons/react";
 
 // Matches --animate-drawer-out in index.css.
 const CLOSE_MS = 160;
 
-function DrawerShell({ eyebrow, title, chips, detail, onClose, children }) {
+interface DrawerShellProps {
+  eyebrow: ReactNode;
+  title: string;
+  chips?: ReactNode;
+  detail?: ReactNode;
+  onClose: () => void;
+  children: ReactNode;
+}
+
+function DrawerShell({ eyebrow, title, chips, detail, onClose, children }: DrawerShellProps) {
   // The parent unmounts the drawer the moment onClose runs, which would
   // cut any exit animation off — so closing is two steps: flip `closing`
   // to play the exit, then tell the parent once it's done.
@@ -22,7 +31,7 @@ function DrawerShell({ eyebrow, title, chips, detail, onClose, children }) {
   }, [closing]);
 
   useEffect(() => {
-    const onKey = (e) => {
+    const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") requestClose();
     };
     window.addEventListener("keydown", onKey);

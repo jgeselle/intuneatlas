@@ -3,6 +3,12 @@
  * src/scan/types.ts) in the browser: rendering it to text, building a
  * fresh one from a definition, validating an edited one.
  */
+import type { SettingSchema, SettingValueNode } from "../types.js";
+
+type Schemas = Record<string, SettingSchema> | undefined;
+type Scalar = string | number | boolean;
+/** One kind of node, e.g. NodeOf<"choice">. */
+type NodeOf<K extends SettingValueNode["kind"]> = Extract<SettingValueNode, { kind: K }>;
 
 /**
  * The tree as plain text. MUST stay identical to renderNode in
@@ -10,7 +16,7 @@
  * scan's text and its "to" is this one's, and an edit is detected by
  * comparing the two.
  */
-function renderNode(node) {
+function renderNode(node: SettingValueNode): string {
   switch (node.kind) {
     case "simple":
       return String(node.value);
@@ -30,7 +36,7 @@ function renderNode(node) {
   }
 }
 
-function childLines(children) {
+function childLines(children: SettingValueNode[]): string[] {
   return children.flatMap((child) =>
     renderNode(child)
       .split("\n")
@@ -43,7 +49,7 @@ function childLines(children) {
  * option or default value where the definition names one. Sub-settings
  * are never added on their own — every one of them is optional.
  */
-function defaultNode(schema) {
+function defaultNode(schema: SettingSchema): SettingValueNode {
   const base = { definitionId: schema.definitionId, name: schema.name };
   switch (schema.kind) {
     case "choice": {
@@ -68,12 +74,12 @@ function defaultNode(schema) {
  * from a scan stored before structure was kept), as an editable node —
  * or null if it holds several lines and so can't be one field.
  */
-function nodeFromText(text) {
+function nodeFromText(text: Scalar): SettingValueNode | null {
   if (String(text).includes("\n")) return null;
   return { kind: "simple", definitionId: "", name: "", value: text };
 }
 
-function scalarError(schema, value) {
+function scalarError(schema: SettingSchema | undefined, value: Scalar): string | null {
   const text = String(value).trim();
   if (text === "") return "Enter a value.";
   if (schema?.valueType === "integer") {
@@ -92,16 +98,16 @@ function scalarError(schema, value) {
   return null;
 }
 
-function countError(schema, count, noun) {
+function countError(schema: SettingSchema | undefined, count: number, noun: string): string | null {
   if (schema?.maxCount !== undefined && count > schema.maxCount) return "At most " + schema.maxCount + " " + noun + ".";
   if (schema?.minCount !== undefined && count < schema.minCount) return "At least " + schema.minCount + " " + noun + ".";
   return null;
 }
 
 /** The first thing wrong with an edited value, as "Sub-setting name: problem", or null if it can be staged. */
-function validateNode(node, schemas) {
+function validateNode(node: SettingValueNode, schemas: Schemas): string | null {
   const schema = schemas?.[node.definitionId];
-  const inChildren = (children) => {
+  const inChildren = (children: SettingValueNode[]) => {
     for (const child of children) {
       const error = validateNode(child, schemas);
       if (error) return child.name + ": " + error;
@@ -142,9 +148,9 @@ function validateNode(node, schemas) {
  * Whole numbers are typed as text while editing; this puts them back as
  * numbers (what Graph stores) before a value is staged.
  */
-function normalizeNode(node, schemas) {
+function normalizeNode(node: SettingValueNode, schemas: Schemas): SettingValueNode {
   const schema = schemas?.[node.definitionId];
-  const scalar = (v) => (schema?.valueType === "integer" && /^-?\d+$/.test(String(v).trim()) ? Number(v) : v);
+  const scalar = (v: Scalar) => (schema?.valueType === "integer" && /^-?\d+$/.test(String(v).trim()) ? Number(v) : v);
   switch (node.kind) {
     case "simple":
       return { ...node, value: scalar(node.value) };
@@ -161,7 +167,7 @@ function normalizeNode(node, schemas) {
   }
 }
 
-function withoutChildren(node) {
+function withoutChildren(node: NodeOf<"choice">): NodeOf<"choice"> {
   const { children: _children, ...rest } = node;
   return rest;
 }
@@ -172,9 +178,11 @@ function withoutChildren(node) {
  * of the draft alone: its sub-settings are set, its list items and ticked
  * options are added, and anything else already there stays.
  */
-function applyExpected(draft, expected) {
+function applyExpected(draft: SettingValueNode | null, expected: SettingValueNode): SettingValueNode {
   if (!draft || draft.kind !== expected.kind) return expected;
-  const overlay = (mine, theirs) => {
+  // Same kind as `expected` from here on, which TypeScript can't follow through the switch below.
+  const same = <K extends SettingValueNode["kind"]>(_: NodeOf<K>) => draft as NodeOf<K>;
+  const overlay = (mine: SettingValueNode[], theirs: SettingValueNode[]): SettingValueNode[] => {
     const merged = mine.map((child) => {
       const match = theirs.find((t) => t.definitionId === child.definitionId);
       return match ? applyExpected(child, match) : child;
@@ -184,25 +192,32 @@ function applyExpected(draft, expected) {
 
   switch (expected.kind) {
     case "simple":
-      return { ...draft, value: expected.value };
+      return { ...same(expected), value: expected.value };
     case "choice": {
+      const mine = same(expected);
       // Sub-settings only carry over while the option stays the same.
-      const kept = draft.optionId === expected.optionId ? (draft.children ?? []) : [];
+      const kept = mine.optionId === expected.optionId ? (mine.children ?? []) : [];
       const children = overlay(kept, expected.children ?? []);
-      const { children: _dropped, ...rest } = draft;
+      const { children: _dropped, ...rest } = mine;
       return { ...rest, optionId: expected.optionId, label: expected.label, ...(children.length ? { children } : {}) };
     }
     case "simpleCollection": {
-      const has = (item) => draft.items.some((mine) => String(mine).trim().toLowerCase() === String(item).trim().toLowerCase());
-      return { ...draft, items: [...draft.items, ...expected.items.filter((item) => !has(item))] };
+      const mine = same(expected);
+      const has = (item: Scalar) => mine.items.some((mine) => String(mine).trim().toLowerCase() === String(item).trim().toLowerCase());
+      return { ...mine, items: [...mine.items, ...expected.items.filter((item) => !has(item))] };
     }
-    case "choiceCollection":
-      return { ...draft, items: [...draft.items, ...expected.items.filter((item) => !draft.items.some((mine) => mine.optionId === item.optionId))] };
-    case "group":
-      return { ...draft, children: overlay(draft.children, expected.children) };
+    case "choiceCollection": {
+      const mine = same(expected);
+      return { ...mine, items: [...mine.items, ...expected.items.filter((item) => !mine.items.some((own) => own.optionId === item.optionId))] };
+    }
+    case "group": {
+      const mine = same(expected);
+      return { ...mine, children: overlay(mine.children, expected.children) };
+    }
     case "groupCollection": {
-      const groups = expected.groups.map((group, i) => (draft.groups[i] ? overlay(draft.groups[i], group) : group));
-      return { ...draft, groups: [...groups, ...draft.groups.slice(expected.groups.length)] };
+      const mine = same(expected);
+      const groups = expected.groups.map((group, i) => (mine.groups[i] ? overlay(mine.groups[i], group) : group));
+      return { ...mine, groups: [...groups, ...mine.groups.slice(expected.groups.length)] };
     }
     default:
       return draft;

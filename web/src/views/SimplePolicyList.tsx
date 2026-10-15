@@ -1,8 +1,18 @@
 import { MagnifyingGlass } from "@phosphor-icons/react";
-import { Chip, PageSubtitle, Empty } from "../components/bits.jsx";
+import { Chip, PageSubtitle, Empty } from "../components/bits.js";
 import { platformLabel } from "../lib/format.js";
+import type { RawSimplePolicy, Scope } from "../types.js";
 
-function SimplePolicyList({ kindLabel, items, query, setQuery, onOpen, scope }) {
+interface SimplePolicyListProps {
+  kindLabel: string;
+  items: RawSimplePolicy[];
+  query: string;
+  setQuery: (text: string) => void;
+  onOpen: (id: string) => void;
+  scope?: Scope;
+}
+
+function SimplePolicyList({ kindLabel, items, query, setQuery, onOpen, scope }: SimplePolicyListProps) {
   const shown = items.filter((i) => i.name.toLowerCase().includes(query.toLowerCase()));
   const hasPriority = items.some((i) => i.priority !== undefined);
   const deployedCount = items.filter((i) => i.deployed).length;

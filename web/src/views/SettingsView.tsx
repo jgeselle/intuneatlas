@@ -1,9 +1,29 @@
 import { useMemo, useRef, useState } from "react";
 import { useWindowVirtualizer } from "@tanstack/react-virtual";
 import { MagnifyingGlass, ChatCircle, ListChecks, Faders, TrendDown, ArrowsInLineHorizontal, LinkBreak, CircleDashed } from "@phosphor-icons/react";
-import { Chip, PageSubtitle, Stat, Empty } from "../components/bits.jsx";
+import { Chip, PageSubtitle, Stat, Empty } from "../components/bits.js";
 import { STATE_STYLE } from "../lib/styles.js";
 import { platformLabel } from "../lib/format.js";
+import type { Change, Note, Scope, SettingIndexEntry } from "../types.js";
+
+type ListItem = { type: "header"; category: string } | { type: "row"; entry: SettingIndexEntry };
+
+interface SettingsViewProps {
+  title?: string;
+  searchPlaceholder?: string;
+  conflicts?: boolean;
+  /** A state to start filtered to — "All" or one of the setting states. */
+  initialState?: string;
+  entries: SettingIndexEntry[];
+  notes?: Record<string, Note[]>;
+  changes?: Record<string, Change>;
+  query: string;
+  setQuery: (text: string) => void;
+  platform: string;
+  setPlatform: (platform: string) => void;
+  onOpen: (key: string) => void;
+  scope?: Scope;
+}
 
 const HEADER_ROW_HEIGHT = 33; // category label, ~= mb-2 + line height
 const SETTING_ROW_HEIGHT = 61; // one list row at its common (non-wrapping) height
@@ -28,11 +48,11 @@ function SettingsView({
   setPlatform,
   onOpen,
   scope,
-}) {
+}: SettingsViewProps) {
   const [state, setState] = useState(initialState);
   // How many changes are staged per setting — a setting can have several: one per policy, existing or new.
   const stagedCount = useMemo(() => {
-    const counts = {};
+    const counts: Record<string, number> = {};
     // A change made before changes recorded their setting is keyed by the setting itself.
     for (const change of Object.values(changes)) counts[change.settingKey || change.targetKey] = (counts[change.settingKey || change.targetKey] ?? 0) + 1;
     return counts;
@@ -50,7 +70,7 @@ function SettingsView({
   );
 
   const categories = Array.from(new Set(shown.map((e) => e.category)));
-  const count = (s) => entries.filter((e) => e.state === s).length;
+  const count = (s: string) => entries.filter((e) => e.state === s).length;
   // "Missing" entries are synthetic — a baseline rule with no matching
   // setting anywhere in the tenant, not something actually configured —
   // so they're excluded from what "Managed" claims to count.
@@ -60,7 +80,7 @@ function SettingsView({
   // list — the alternative (virtualizing per-category) can't share a
   // single window scroll position across categories.
   const flatItems = useMemo(() => {
-    const items = [];
+    const items: ListItem[] = [];
     for (const cat of categories) {
       items.push({ type: "header", category: cat });
       for (const e of shown) {
@@ -70,18 +90,21 @@ function SettingsView({
     return items;
   }, [categories, shown]);
 
-  const listRef = useRef(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const virtualizer = useWindowVirtualizer({
     count: flatItems.length,
     estimateSize: (i) => (flatItems[i].type === "header" ? HEADER_ROW_HEIGHT : SETTING_ROW_HEIGHT),
     overscan: 12,
-    getItemKey: (i) => (flatItems[i].type === "header" ? "h:" + flatItems[i].category : flatItems[i].entry.key),
+    getItemKey: (i) => {
+      const item = flatItems[i];
+      return item.type === "header" ? "h:" + item.category : item.entry.key;
+    },
     scrollMargin: listRef.current?.offsetTop ?? 0,
   });
 
   return (
     <div className="space-y-5">
-      {/* Cancels out the page wrapper's own top padding (App.jsx's `py-6
+      {/* Cancels out the page wrapper's own top padding (App.tsx's `py-6
           lg:py-8`) with a matching negative margin, then restores the same
           visual gap as internal padding. Otherwise this element's box starts
           24-32px below the true document top, so `sticky top-0` only takes

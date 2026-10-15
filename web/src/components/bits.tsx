@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
-import { Dropdown } from "./Dropdown.jsx";
+import { useEffect, useState, type ComponentType, type ReactNode } from "react";
+import { Dropdown } from "./Dropdown.js";
 import { ArrowCounterClockwise, Check, CaretRight, Copy, Trash } from "@phosphor-icons/react";
 import { SEVERITY_STYLE } from "../lib/styles.js";
+import type { HistoryEntry, Note, Scope, Session, SettingRecommendation, ValueDifference } from "../types.js";
 
-function Chip({ className = "", children }) {
+function Chip({ className = "", children }: { className?: string; children: ReactNode }) {
   return (
     <span className={"inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset " + className}>
       {children}
@@ -14,7 +15,7 @@ function Chip({ className = "", children }) {
 /** How many changed lines a multi-line comparison shows before folding the rest away. */
 const LINE_DIFF_LIMIT = 10;
 
-function LineDiff({ from, to }) {
+function LineDiff({ from, to }: { from: unknown; to: unknown }) {
   const [expanded, setExpanded] = useState(false);
   const before = String(from).split("\n").filter(Boolean);
   const after = String(to).split("\n").filter(Boolean);
@@ -56,7 +57,7 @@ function LineDiff({ from, to }) {
  * line by line instead — what was removed, what was added — since two
  * multi-line blobs next to each other don't show what actually changed.
  */
-function Diff({ from, to }) {
+function Diff({ from, to }: { from: unknown; to: unknown }) {
   if (String(from).includes("\n") || String(to).includes("\n")) return <LineDiff from={from} to={to} />;
   // Too long to sit side by side: one above the other, each the full width, rather than an arrow left on a line of its own.
   if (String(from).length + String(to).length > 90) {
@@ -86,7 +87,7 @@ function Diff({ from, to }) {
  * long to read in passing shows its start, with the rest on request.
  */
 const FOLD_AT = 160;
-function FoldedValue({ children, className, textClassName = "" }) {
+function FoldedValue({ children, className, textClassName = "" }: { children: unknown; className: string; textClassName?: string }) {
   const [open, setOpen] = useState(false);
   const text = String(children ?? "");
   const long = text.length > FOLD_AT;
@@ -110,7 +111,7 @@ function FoldedValue({ children, className, textClassName = "" }) {
  * group doesn't change and in tenants with no groups to choose from; with
  * neither part there is no subtitle at all. Pages don't describe themselves.
  */
-function PageSubtitle({ scope, children }) {
+function PageSubtitle({ scope, children }: { scope?: Scope; children?: ReactNode }) {
   const hasFact = children !== undefined && children !== null && children !== false && children !== "";
   if (!scope && !hasFact) return null;
   return (
@@ -133,15 +134,15 @@ function PageSubtitle({ scope, children }) {
  * - `compact`: a section of the setting panel — the dashed outline at
  *   the panel's smaller scale.
  */
-function Empty({ children, bare = false, compact = false }) {
+function Empty({ children, bare = false, compact = false }: { children: ReactNode; bare?: boolean; compact?: boolean }) {
   const size = compact ? "px-3 py-4 text-xs" : bare ? "px-4 py-10 text-sm" : "px-4 py-12 text-sm";
   const outline = bare ? "" : "rounded-lg border border-dashed border-stone-300 " + (compact ? "bg-stone-50 " : "bg-surface ");
   return <p className={outline + size + " text-center text-stone-500"}>{children}</p>;
 }
 
 /** A baseline's severity for a setting — nothing at all when the baseline doesn't rate it (a plain exported policy doesn't). */
-function SeverityChip({ severity, className = "" }) {
-  const style = SEVERITY_STYLE[severity];
+function SeverityChip({ severity, className = "" }: { severity: SettingRecommendation["severity"]; className?: string }) {
+  const style = severity ? SEVERITY_STYLE[severity] : undefined;
   return style ? <Chip className={className + " " + style.chip}>{style.label}</Chip> : null;
 }
 
@@ -152,7 +153,7 @@ function SeverityChip({ severity, className = "" }) {
  * baseline is a floor, so whatever else the tenant configures isn't
  * listed as a difference.
  */
-function Differences({ differences }) {
+function Differences({ differences }: { differences: ValueDifference[] }) {
   return (
     <ul className="space-y-2">
       {differences.map((d, i) => (
@@ -177,13 +178,13 @@ function Differences({ differences }) {
 }
 
 /** Some single values are enormous (an encoded XML blob); a comparison row shows enough to recognise it. */
-function clip(text) {
+function clip(text: string): string {
   const s = String(text);
   return s.length > 120 ? s.slice(0, 120) + "…" : s;
 }
 
 /** The setting's reference path with a copy button — part of what identifies the setting, so it sits in the drawer header. */
-function RefPath({ value, label }) {
+function RefPath({ value, label }: { value: string; label?: string }) {
   const [copied, setCopied] = useState(false);
 
   async function copy() {
@@ -225,7 +226,7 @@ function RefPath({ value, label }) {
  * break-words) and truncated-with-toggle past a length that stops being
  * skimmable rather than dumped in full every time.
  */
-function ExpandableText({ text, compact = false }) {
+function ExpandableText({ text, compact = false }: { text: string; compact?: boolean }) {
   const [expanded, setExpanded] = useState(false);
   const isLong = text.length > 180;
   const shown = isLong && !expanded ? text.slice(0, 180) + "…" : text;
@@ -253,7 +254,7 @@ function ExpandableText({ text, compact = false }) {
  * string, so a real conflict between two 1,000+ character group settings
  * is actually legible instead of an unreadable comma-joined blob.
  */
-function ValueDisplay({ value, compact = false }) {
+function ValueDisplay({ value, compact = false }: { value: string | undefined; compact?: boolean }) {
   const lines = String(value ?? "")
     .split("\n")
     .filter((l) => l.length > 0);
@@ -273,7 +274,7 @@ function ValueDisplay({ value, compact = false }) {
 }
 
 /** A note entry in the history feed. */
-function NoteEntry({ note, onDelete, canDelete }) {
+function NoteEntry({ note, onDelete, canDelete }: { note: Note; onDelete?: (id: number) => void; canDelete: boolean }) {
   return (
     <li className="animate-rise-in rounded-md border border-stone-200 bg-stone-50 p-3">
       <div className="flex items-baseline justify-between gap-2 text-xs">
@@ -300,16 +301,24 @@ function NoteEntry({ note, onDelete, canDelete }) {
 /**
  * The notes on a setting or policy, newest first. Staged changes used to
  * be mixed into this feed; they now show on the policy they change (see
- * PolicyValueCard in SettingDrawer.jsx), so this is notes only.
+ * PolicyValueCard in SettingDrawer.tsx), so this is notes only.
  */
-function NotesSection({ notes = [], onAdd, onDelete, readOnly = false, viewer }) {
+interface NotesSectionProps {
+  notes?: Note[];
+  onAdd: (text: string) => void;
+  onDelete?: (id: number) => void;
+  readOnly?: boolean;
+  viewer: Session | null;
+}
+
+function NotesSection({ notes = [], onAdd, onDelete, readOnly = false, viewer }: NotesSectionProps) {
   const [draft, setDraft] = useState("");
   // Whoever wrote a note can delete it themselves; an Admin can delete
   // any — mirrors the same author-or-admin check the server enforces
   // (src/auth/roles.ts's deleteNote capability).
-  const canDeleteNote = (note) => viewer?.role === "admin" || (Boolean(note.authorId) && note.authorId === viewer?.id);
+  const canDeleteNote = (note: Note) => viewer?.role === "admin" || (Boolean(note.authorId) && note.authorId === viewer?.id);
 
-  const entries = [...notes].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  const entries = [...notes].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
 
   function submit() {
     const text = draft.trim();
@@ -354,7 +363,7 @@ function NotesSection({ notes = [], onAdd, onDelete, readOnly = false, viewer })
   );
 }
 
-const HISTORY_TEXT = {
+const HISTORY_TEXT: Partial<Record<HistoryEntry["kind"], string>> = {
   added: "Started setting it",
   removed: "No longer sets it",
   assigned: "Now assigned",
@@ -370,7 +379,7 @@ const HISTORY_TEXT = {
  * while loading or where history isn't available — then there is no
  * section at all.
  */
-function HistoryList({ events }) {
+function HistoryList({ events }: { events: HistoryEntry[] | undefined }) {
   if (!events) return null;
   return (
     <section>
@@ -435,7 +444,7 @@ function HistoryList({ events }) {
  * front, both grey, and the number. No colour — the tiles say what is
  * counted, the list below says what needs attention.
  */
-function Stat({ label, value, sub, icon: Icon }) {
+function Stat({ label, value, sub, icon: Icon }: { label: string; value: number; sub?: string; icon?: ComponentType<{ weight?: "bold"; className?: string; "aria-hidden"?: "true" }> }) {
   return (
     <div className="rounded-lg border border-stone-200 bg-surface p-4">
       <div className="flex items-center gap-1.5 text-stone-500">
@@ -453,11 +462,11 @@ function Stat({ label, value, sub, icon: Icon }) {
  * no trace, so one stray click shouldn't do it. The first click turns the
  * button into the question; Escape or Keep takes it back.
  */
-function RevertButton({ onRevert, className = "", compact = false }) {
+function RevertButton({ onRevert, className = "", compact = false }: { onRevert: () => void; className?: string; compact?: boolean }) {
   const [asking, setAsking] = useState(false);
   useEffect(() => {
     if (!asking) return;
-    const onKey = (e) => e.key === "Escape" && setAsking(false);
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setAsking(false);
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [asking]);

@@ -1,6 +1,6 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import App from "./App.jsx";
+import App from "./App.js";
 import "./index.css";
 import "./lib/theme.js";
 
@@ -17,7 +17,7 @@ const report = window.__INTUNEATLAS_REPORT__ ?? null;
 // (`vite dev`) never gets it injected at all, hence the fallback.
 const session = window.__INTUNEATLAS_SESSION__ ?? null;
 
-createRoot(document.getElementById("root")).render(
+createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <App initialReport={report} session={session} />
   </StrictMode>,

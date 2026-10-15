@@ -1,13 +1,27 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { WarningCircle, CheckCircle, MinusCircle } from "@phosphor-icons/react";
-import { DrawerShell } from "./DrawerShell.jsx";
-import { RemindersSection } from "./Reminders.jsx";
-import { RevertButton, Chip, SeverityChip, Differences, RefPath, NotesSection, HistoryList, ValueDisplay, Empty } from "./bits.jsx";
+import { DrawerShell } from "./DrawerShell.js";
+import { RemindersSection, type ReminderInput } from "./Reminders.js";
+import { RevertButton, Chip, SeverityChip, Differences, RefPath, NotesSection, HistoryList, ValueDisplay, Empty } from "./bits.js";
 import { STATE_STYLE } from "../lib/styles.js";
 import { platformLabel, refLabel, isComplianceSetting, isCustomOmaSetting } from "../lib/format.js";
 import { rangeLabel } from "../lib/schema.js";
 import { renderNode, nodeFromText, validateNode, normalizeNode, applyExpected } from "../lib/settingValue.js";
-import { ValueEditor } from "./ValueEditor.jsx";
+import { ValueEditor } from "./ValueEditor.js";
+import type { BaselineCheck, Change, GroupDirectory, HistoryEntry, Note, Reminder, Session, SettingIndexEntry, SettingIndexSource, SettingSchema, SettingValueNode } from "../types.js";
+
+type Schemas = Record<string, SettingSchema> | undefined;
+
+/** What staging a value sends, besides which setting and policy — see stageChange in App.tsx. */
+export interface StageInput {
+  ruleId: string;
+  from: string;
+  to: string;
+  toStructured?: Change["toStructured"];
+  reason: string;
+  /** Staging into a policy that doesn't exist yet: the name to create it under. */
+  newPolicyName?: string;
+}
 
 
 const SECTION_HEADING = "font-sans text-xs font-semibold uppercase tracking-wide text-stone-500";
@@ -19,9 +33,18 @@ const SECTION_HEADING = "font-sans text-xs font-semibold uppercase tracking-wide
  * why. Shown for every baseline that covers the setting, passing ones
  * too. Several can coexist, and can disagree with each other.
  */
-const COMPARE_SUFFIX = { exact: "", atMost: " or less", atLeast: " or more" };
+const COMPARE_SUFFIX: Record<NonNullable<BaselineCheck["compare"]> | "exact", string> = { exact: "", atMost: " or less", atLeast: " or more" };
 
-function BaselineCheckCard({ check, canUse, isSelected, onUse, onStageNew, newPolicyPending }) {
+interface BaselineCheckCardProps {
+  check: BaselineCheck;
+  canUse: boolean;
+  isSelected: boolean;
+  onUse: () => void;
+  onStageNew?: () => void;
+  newPolicyPending: boolean;
+}
+
+function BaselineCheckCard({ check, canUse, isSelected, onUse, onStageNew, newPolicyPending }: BaselineCheckCardProps) {
   const failed = check.passed === false;
   const Icon = check.passed === true ? CheckCircle : failed ? WarningCircle : MinusCircle;
   const iconTone = check.passed === true ? "text-teal-600" : failed ? "text-amber-500" : "text-stone-400";
@@ -57,9 +80,9 @@ function BaselineCheckCard({ check, canUse, isSelected, onUse, onStageNew, newPo
         )}
       </div>
 
-      {check.alternatives?.length > 0 && (
+      {Boolean(check.alternatives?.length) && (
         <div className="mt-2 text-xs text-stone-500">
-          Also accepted by this baseline: {check.alternatives.map((a) => a.replace(/\n/g, ", ")).join(" · ")}
+          Also accepted by this baseline: {check.alternatives!.map((a) => a.replace(/\n/g, ", ")).join(" · ")}
         </div>
       )}
       {check.why && <p className="mt-2 text-xs leading-relaxed text-stone-600">{check.why}</p>}
@@ -120,9 +143,29 @@ function BaselineCheckCard({ check, canUse, isSelected, onUse, onStageNew, newPo
  * tenant's value, or the staged one while there is a staged change.
  */
 /** A staged change that takes the setting out of the policy instead of changing its value. */
-const isRemoval = (change) => change?.toStructured?.kind === "removed";
+const isRemoval = (change: Change | undefined) => change?.toStructured?.kind === "removed";
 
-function PolicyValueCard({ title, nameField, subtitle, isNew = false, alert = false, settled, tenantValue, schemas, canStage, change, canRevert, draft, setDraft, onReset, onStage, onRevert, onStageRemoval }) {
+interface PolicyValueCardProps {
+  title?: string;
+  nameField?: { value: string; onChange: (value: string) => void };
+  subtitle: ReactNode;
+  isNew?: boolean;
+  alert?: boolean;
+  settled: string;
+  tenantValue?: string;
+  schemas: Schemas;
+  canStage: boolean;
+  change?: Change;
+  canRevert?: boolean;
+  draft: SettingValueNode | null;
+  setDraft: (node: SettingValueNode) => void;
+  onReset: () => void;
+  onStage: (node: SettingValueNode, reason: string) => void;
+  onRevert?: (change: Change) => void;
+  onStageRemoval?: (reason: string) => void;
+}
+
+function PolicyValueCard({ title, nameField, subtitle, isNew = false, alert = false, settled, tenantValue, schemas, canStage, change, canRevert, draft, setDraft, onReset, onStage, onRevert, onStageRemoval }: PolicyValueCardProps) {
   const [reason, setReason] = useState(change?.reason ?? "");
   // Asked for, not yet staged: the card shows what staging it will do in place of the editor.
   const [removing, setRemoving] = useState(false);
@@ -132,7 +175,7 @@ function PolicyValueCard({ title, nameField, subtitle, isNew = false, alert = fa
   // A policy that isn't staged yet (it has a name field instead of a name) is unsaved by definition.
   const dirty = editable && (Boolean(nameField) || renderNode(draft) !== settled);
   const error = dirty ? (nameField && !nameField.value.trim() ? "Give the policy a name." : validateNode(draft, schemas)) : null;
-  const cardRef = useRef(null);
+  const cardRef = useRef<HTMLLIElement>(null);
   // A card that has just been added by a link further down the panel is brought into view.
   useEffect(() => {
     if (nameField) cardRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
@@ -180,7 +223,7 @@ function PolicyValueCard({ title, nameField, subtitle, isNew = false, alert = fa
               <button
                 type="button"
                 onClick={() => {
-                  onStageRemoval(reason);
+                  onStageRemoval?.(reason);
                   setRemoving(false);
                 }}
                 className="rounded-md bg-teal-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-teal-700 dark:hover:bg-teal-400 active:scale-[0.97] focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500"
@@ -198,7 +241,7 @@ function PolicyValueCard({ title, nameField, subtitle, isNew = false, alert = fa
           </div>
         ) : editable ? (
           <>
-            <ValueEditor node={draft} schemas={schemas} onChange={setDraft} />
+            <ValueEditor node={draft!} schemas={schemas} onChange={setDraft} />
             {error ? (
               <p className="mt-1.5 text-xs text-red-700">{error}</p>
             ) : range ? (
@@ -216,7 +259,7 @@ function PolicyValueCard({ title, nameField, subtitle, isNew = false, alert = fa
                 <div className="mt-2 flex items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => onStage(draft, reason)}
+                    onClick={() => onStage(draft!, reason)}
                     disabled={Boolean(error)}
                     className="rounded-md bg-teal-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-teal-700 dark:hover:bg-teal-400 active:scale-[0.97] focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500 disabled:bg-stone-200 disabled:text-stone-400"
                   >
@@ -260,7 +303,7 @@ function PolicyValueCard({ title, nameField, subtitle, isNew = false, alert = fa
               {change.ready ? "Staged · ready" : "Staged · needs review"}
             </Chip>
             {change.stagedByName && <span className="truncate">{change.stagedByName}</span>}
-            {canRevert && <RevertButton compact onRevert={() => onRevert(change)} className="ml-auto shrink-0" />}
+            {canRevert && onRevert && <RevertButton compact onRevert={() => onRevert(change)} className="ml-auto shrink-0" />}
           </div>
           {/* What the tenant has while the staged value sits in the editor above — for a new policy, there is nothing to note. */}
           {tenantValue !== undefined && (
@@ -281,9 +324,9 @@ function PolicyValueCard({ title, nameField, subtitle, isNew = false, alert = fa
  * them; otherwise the group's id stands in. A scan stored before targets
  * were kept only knows assigned-or-not.
  */
-function targetsLabel(source, groups) {
+function targetsLabel(source: SettingIndexSource, groups: GroupDirectory | undefined): string {
   if (!source.targets) return source.deployed ? "Assigned" : "Not assigned";
-  const name = (t) => (t.kind === "allDevices" ? "All devices" : t.kind === "allLicensedUsers" ? "All users" : (groups?.names?.[t.groupId] ?? t.groupId)) + (t.filtered ? " (filtered)" : "");
+  const name = (t: NonNullable<SettingIndexSource["targets"]>[number]) => (t.kind === "allDevices" ? "All devices" : t.kind === "allLicensedUsers" ? "All users" : (groups?.names?.[t.groupId] ?? t.groupId)) + (t.filtered ? " (filtered)" : "");
   const included = source.targets.filter((t) => t.kind !== "group" || !t.excluded).map(name);
   const excluded = source.targets.filter((t) => t.kind === "group" && t.excluded).map(name);
   if (included.length === 0) return "Not assigned";
@@ -291,14 +334,14 @@ function targetsLabel(source, groups) {
 }
 
 /** A value on one line, short enough to sit in a sentence. */
-function clipLine(value) {
+function clipLine(value: string): string {
   const line = String(value).replace(/\n/g, ", ");
   return line.length > 140 ? line.slice(0, 140) + "…" : line;
 }
 
 /** The value a staged change holds, as something the editor can open: its structure if it has one, else its text as one field. */
-function stagedDraft(change) {
-  return change.toStructured ?? nodeFromText(change.to);
+function stagedDraft(change: Change): SettingValueNode | null {
+  return change.toStructured && change.toStructured.kind !== "removed" ? change.toStructured : nodeFromText(change.to);
 }
 
 /**
@@ -307,7 +350,16 @@ function stagedDraft(change) {
  * again under the same name updates it — only dashed, since nothing in
  * the tenant sets it yet.
  */
-function NewPolicyCard({ change, schemas, canStage, canRevert, onStageNew, onRevert }) {
+interface NewPolicyCardProps {
+  change: Change;
+  schemas: Schemas;
+  canStage: boolean;
+  canRevert: boolean;
+  onStageNew?: (input: StageInput) => void;
+  onRevert: (change: Change) => void;
+}
+
+function NewPolicyCard({ change, schemas, canStage, canRevert, onStageNew, onRevert }: NewPolicyCardProps) {
   const [draft, setDraft] = useState(() => stagedDraft(change));
   return (
     <PolicyValueCard
@@ -324,7 +376,7 @@ function NewPolicyCard({ change, schemas, canStage, canRevert, onStageNew, onRev
       onReset={() => setDraft(stagedDraft(change))}
       onStage={(node, reason) => {
         const normalized = normalizeNode(node, schemas);
-        onStageNew({
+        onStageNew?.({
           newPolicyName: change.policyName,
           to: renderNode(normalized),
           ...(change.toStructured ? { toStructured: normalized } : {}),
@@ -343,9 +395,25 @@ function NewPolicyCard({ change, schemas, canStage, canRevert, onStageNew, onRev
  * named, adjusted, given a reason and staged right here. "Cancel" takes
  * it away again.
  */
-function PendingNewPolicyCard({ pending, schemas, onStageNew, onDiscard }) {
+/** A new policy added from a baseline card, not staged yet. */
+interface PendingNew {
+  id: string;
+  policyName: string;
+  node: SettingValueNode;
+  from: string;
+  ruleId: string;
+}
+
+interface PendingNewPolicyCardProps {
+  pending: PendingNew;
+  schemas: Schemas;
+  onStageNew?: (input: StageInput) => void;
+  onDiscard: () => void;
+}
+
+function PendingNewPolicyCard({ pending, schemas, onStageNew, onDiscard }: PendingNewPolicyCardProps) {
   const [name, setName] = useState(pending.policyName);
-  const [draft, setDraft] = useState(pending.node);
+  const [draft, setDraft] = useState<SettingValueNode | null>(pending.node);
   return (
     <PolicyValueCard
       nameField={{ value: name, onChange: setName }}
@@ -359,7 +427,7 @@ function PendingNewPolicyCard({ pending, schemas, onStageNew, onDiscard }) {
       onReset={onDiscard}
       onStage={(node, reason) => {
         const normalized = normalizeNode(node, schemas);
-        onStageNew({ newPolicyName: name.trim(), to: renderNode(normalized), toStructured: normalized, from: pending.from, reason, ruleId: pending.ruleId });
+        onStageNew?.({ newPolicyName: name.trim(), to: renderNode(normalized), toStructured: normalized, from: pending.from, reason, ruleId: pending.ruleId });
         onDiscard();
       }}
     />
@@ -367,7 +435,7 @@ function PendingNewPolicyCard({ pending, schemas, onStageNew, onDiscard }) {
 }
 
 /** The node a policy card starts editing from: the scanned structure, or the plain text as one field. */
-function initialDraft(source) {
+function initialDraft(source: SettingIndexSource): SettingValueNode | null {
   return source.structured ?? nodeFromText(source.value);
 }
 
@@ -378,18 +446,39 @@ function initialDraft(source) {
  * them differs. The state itself is the chip in the header — nothing
  * here restates it in a sentence.
  */
-function SettingDrawer({ entry, notes, reminders = [], onAddReminder, onCompleteReminder, onSnoozeReminder, onDeleteReminder, onAddNote, onDeleteNote, onClose, changes, groups, onStage, onStageNew, onRevert, viewer, scannedAt }) {
+interface SettingDrawerProps {
+  entry: SettingIndexEntry;
+  notes: Note[];
+  reminders?: Reminder[];
+  onAddReminder?: (input: ReminderInput) => Promise<boolean>;
+  onCompleteReminder: (id: number) => void;
+  onSnoozeReminder: (id: number) => void;
+  onDeleteReminder: (id: number) => void;
+  onAddNote: (text: string) => void;
+  onDeleteNote: (id: number) => void;
+  onClose: () => void;
+  /** The changes staged for this setting, in any policy. */
+  changes: Change[];
+  groups?: GroupDirectory;
+  onStage: (source: SettingIndexSource, input: StageInput) => void;
+  onStageNew?: (input: StageInput) => void;
+  onRevert: (change: Change) => void;
+  viewer: Session | null;
+  scannedAt: string;
+}
+
+function SettingDrawer({ entry, notes, reminders = [], onAddReminder, onCompleteReminder, onSnoozeReminder, onDeleteReminder, onAddNote, onDeleteNote, onClose, changes, groups, onStage, onStageNew, onRevert, viewer, scannedAt }: SettingDrawerProps) {
   // What scans have seen change in this setting — asked for when it is opened, and again after a new
   // scan. A setting no policy has any more (Missing) is asked for under the key it had while one did:
   // its history is how it came to be missing. With nothing recorded, a Missing setting shows no section.
-  const [history, setHistory] = useState(undefined);
+  const [history, setHistory] = useState<HistoryEntry[] | undefined>(undefined);
   useEffect(() => {
     setHistory(undefined);
     const missing = entry.state === "Missing";
     let stale = false;
     fetch("/api/history?key=" + encodeURIComponent(entry.key.replace(/^uncovered::/, "")))
       .then((res) => (res.ok ? res.json() : null))
-      .then((body) => {
+      .then((body: { events?: HistoryEntry[] } | null) => {
         if (stale || !body) return;
         const events = body.events ?? [];
         if (events.length > 0 || !missing) setHistory(events);
@@ -404,19 +493,19 @@ function SettingDrawer({ entry, notes, reminders = [], onAddReminder, onComplete
   const schemas = entry.schemas;
   const canNote = viewer?.role === "contributor" || viewer?.role === "admin";
   const canStage = (viewer?.role === "contributor" || viewer?.role === "admin") && !isCustomOmaSetting(entry);
-  const canRevert = (change) => viewer?.role === "admin" || (viewer?.role === "contributor" && change.stagedBy === viewer?.id);
+  const canRevert = (change: Change) => viewer?.role === "admin" || (viewer?.role === "contributor" && change.stagedBy === viewer?.id);
 
-  const setDraft = (n, value) => setDrafts((d) => d.map((v, i) => (i === n ? value : v)));
+  const setDraft = (n: number, value: SettingValueNode | null) => setDrafts((d) => d.map((v, i) => (i === n ? value : v)));
 
   // A change staged before changes were per-policy targets the setting as
   // a whole; it's shown on the first policy.
   const existingChanges = changes.filter((c) => c.targetKind !== "new");
-  const changeFor = (source, n) =>
+  const changeFor = (source: SettingIndexSource, n: number) =>
     existingChanges.find((c) => c.policyId === source.policyId) ?? (n === 0 ? existingChanges.find((c) => !c.policyId) : undefined);
   // The setting as staged into policies that don't exist yet — any number of them, one per policy name.
   const newPolicyChanges = changes.filter((c) => c.targetKind === "new");
   // New policies added from a baseline card that haven't been staged yet — only in this panel, gone if it's closed.
-  const [pendingNew, setPendingNew] = useState([]);
+  const [pendingNew, setPendingNew] = useState<PendingNew[]>([]);
 
   // One draft per policy card: its staged value if it has one, the policy's actual value otherwise.
   const [drafts, setDrafts] = useState(() =>
@@ -443,7 +532,7 @@ function SettingDrawer({ entry, notes, reminders = [], onAddReminder, onComplete
           <Chip className="bg-stone-100 text-stone-600 ring-stone-200">{platformLabel(entry.platform)}</Chip>
         </>
       }
-      detail={entry.cspPath ? <RefPath value={entry.cspPath} label={isComplianceSetting(entry) && !entry.definitionId.startsWith("compliance.catalog.") ? "Graph property" : refLabel(entry.platform)} /> : null}
+      detail={entry.cspPath ? <RefPath value={entry.cspPath} label={isComplianceSetting(entry) && !entry.definitionId?.startsWith("compliance.catalog.") ? "Graph property" : refLabel(entry.platform)} /> : null}
     >
       <section>
         <h3 className={SECTION_HEADING}>
@@ -551,7 +640,7 @@ function SettingDrawer({ entry, notes, reminders = [], onAddReminder, onComplete
                   key={check.ruleId}
                   check={check}
                   canUse={fills.length > 0}
-                  isSelected={fills.length > 0 && fills.every(({ n, next }) => renderNode(drafts[n]) === renderNode(next))}
+                  isSelected={fills.length > 0 && fills.every(({ n, next }) => drafts[n] !== null && renderNode(drafts[n]) === renderNode(next))}
                   onUse={() => setDrafts((d) => d.map((v, i) => fills.find(({ n }) => n === i)?.next ?? v))}
                   newPolicyPending={pendingNew.some((x) => x.id === check.ruleId)}
                   onStageNew={

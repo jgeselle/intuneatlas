@@ -1,6 +1,10 @@
 import { Plus, X } from "@phosphor-icons/react";
 import { defaultNode } from "../lib/settingValue.js";
-import { Dropdown } from "./Dropdown.jsx";
+import { Dropdown } from "./Dropdown.js";
+import type { SettingSchema, SettingValueNode } from "../types.js";
+
+type Schemas = Record<string, SettingSchema> | undefined;
+type Scalar = string | number | boolean;
 
 const FIELD =
   "w-full rounded-md border border-stone-300 bg-surface px-2.5 py-1.5 text-sm focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600";
@@ -10,7 +14,7 @@ const ICON_BUTTON =
   "shrink-0 rounded p-1 text-stone-400 hover:bg-stone-100 hover:text-stone-700 focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500";
 
 /** One number or piece of text, held to what the definition allows. */
-function ScalarField({ schema, value, onChange }) {
+function ScalarField({ schema, value, onChange }: { schema: SettingSchema | undefined; value: Scalar; onChange: (value: string) => void }) {
   if (schema?.valueType === "integer") {
     return (
       <input
@@ -19,7 +23,7 @@ function ScalarField({ schema, value, onChange }) {
         step={1}
         min={schema.min}
         max={schema.max}
-        value={value}
+        value={String(value)}
         onChange={(e) => onChange(e.target.value)}
         className={FIELD + " tabular-nums"}
       />
@@ -29,9 +33,9 @@ function ScalarField({ schema, value, onChange }) {
   // for a long single string value (confirmed live: a 2,300-character
   // base64 blob) — one value, just too long for one line.
   if (String(value).length > 100) {
-    return <textarea value={value} onChange={(e) => onChange(e.target.value)} rows={4} className={FIELD + " resize-y font-mono text-xs"} />;
+    return <textarea value={String(value)} onChange={(e) => onChange(e.target.value)} rows={4} className={FIELD + " resize-y font-mono text-xs"} />;
   }
-  return <input type="text" value={value} maxLength={schema?.maxLength} onChange={(e) => onChange(e.target.value)} className={FIELD} />;
+  return <input type="text" value={String(value)} maxLength={schema?.maxLength} onChange={(e) => onChange(e.target.value)} className={FIELD} />;
 }
 
 /**
@@ -40,9 +44,17 @@ function ScalarField({ schema, value, onChange }) {
  * some or none of what's declared), so each is either set — shown with
  * its own editor and a remove button — or offered in the "add" list.
  */
-function ChildrenEditor({ declaredIds, nodes, schemas, onChange }) {
+interface ChildrenEditorProps {
+  declaredIds: string[];
+  nodes: SettingValueNode[];
+  schemas: Schemas;
+  onChange: (nodes: SettingValueNode[]) => void;
+}
+
+function ChildrenEditor({ declaredIds, nodes, schemas, onChange }: ChildrenEditorProps) {
   const present = new Set(nodes.map((n) => n.definitionId));
-  const addable = declaredIds.filter((id) => !present.has(id) && schemas[id]);
+  const known = schemas ?? {};
+  const addable = declaredIds.filter((id) => !present.has(id) && known[id]);
 
   return (
     <div className="mt-2 space-y-2.5 border-l-2 border-stone-200 pl-3">
@@ -68,8 +80,8 @@ function ChildrenEditor({ declaredIds, nodes, schemas, onChange }) {
       {addable.length > 0 && (
         <Dropdown
           value={null}
-          options={addable.map((id) => ({ value: id, label: schemas[id].name }))}
-          onChange={(id) => onChange([...nodes, defaultNode(schemas[id])])}
+          options={addable.map((id) => ({ value: id, label: known[id].name }))}
+          onChange={(id) => onChange([...nodes, defaultNode(known[id])])}
           placeholder="Add a sub-setting…"
           ariaLabel="Add a sub-setting"
         />
@@ -86,7 +98,7 @@ function ChildrenEditor({ declaredIds, nodes, schemas, onChange }) {
  * repeatable instances for a group collection. Recursive — a sub-setting
  * is edited by the same component.
  */
-function ValueEditor({ node, schemas, onChange }) {
+function ValueEditor({ node, schemas, onChange }: { node: SettingValueNode; schemas: Schemas; onChange: (node: SettingValueNode) => void }) {
   const schema = schemas?.[node.definitionId];
 
   if (node.kind === "simple") {
@@ -109,7 +121,7 @@ function ValueEditor({ node, schemas, onChange }) {
           }}
           ariaLabel={node.name || "Value"}
         />
-        {(selected?.childIds?.length > 0 || node.children?.length > 0) && (
+        {(Boolean(selected?.childIds?.length) || Boolean(node.children?.length)) && (
           <ChildrenEditor
             declaredIds={selected?.childIds ?? []}
             nodes={node.children ?? []}
@@ -149,7 +161,7 @@ function ValueEditor({ node, schemas, onChange }) {
 
   if (node.kind === "choiceCollection") {
     const chosen = new Set(node.items.map((item) => item.optionId));
-    const options = schema?.options ?? node.items.map((item) => ({ id: item.optionId, label: item.label }));
+    const options: Array<{ id: string; label: string }> = schema?.options ?? node.items.map((item) => ({ id: item.optionId, label: item.label }));
     return (
       <ul className="space-y-1">
         {options.map((o) => (

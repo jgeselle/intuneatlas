@@ -110,8 +110,8 @@ export function definitionIdsIn(node: SettingValueNode): string[] {
  * into an unreadable blob — each of its lines gets the child's name
  * prefixed too.
  *
- * web/src/lib/settingValue.js carries a copy of this for the browser;
- * the two must stay identical.
+ * web/src/lib/settingValue.ts carries a copy of this for the browser;
+ * the two must stay identical (test/web/settingValue.test.ts holds them to it).
  */
 export function renderNode(node: SettingValueNode): string {
   switch (node.kind) {

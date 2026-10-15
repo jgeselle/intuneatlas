@@ -6,7 +6,7 @@
 @import "@fontsource/instrument-serif/latin-400.css";
 
 /* Dark mode is a `data-theme="dark"` on <html>, set from the viewer's
-   choice or their system's (see lib/theme.js). `dark:` utilities are for
+   choice or their system's (see lib/theme.ts). `dark:` utilities are for
    the few places the palette swap below can't get right on its own. */
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
@@ -48,7 +48,7 @@
   --animate-backdrop-in: fade-in 200ms ease-out backwards;
   --animate-backdrop-out: fade-out 160ms ease-in both;
   /* Whole lifetime in one animation, matched to the 2600ms the toast
-     stays mounted (App.jsx) — in, hold, out, no extra state needed. */
+     stays mounted (App.tsx) — in, hold, out, no extra state needed. */
   --animate-toast: toast 2600ms var(--ease-out-soft) both;
 
   @keyframes fade-in {

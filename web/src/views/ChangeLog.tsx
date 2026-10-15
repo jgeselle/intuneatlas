@@ -1,7 +1,15 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { Check, MagnifyingGlass, PaperPlaneTilt, PencilSimple } from "@phosphor-icons/react";
-import { Chip, Diff, PageSubtitle, Empty, RevertButton } from "../components/bits.jsx";
-import { heldHistoryLog, loadHistoryLog, loadMoreHistory } from "../lib/historyLog.js";
+import { Chip, Diff, PageSubtitle, Empty, RevertButton } from "../components/bits.js";
+import { heldHistoryLog, loadHistoryLog, loadMoreHistory, type LogFilter } from "../lib/historyLog.js";
+import type { Change, HistoryPage, LogEvent, Session } from "../types.js";
+
+/** The fields of a staged change that can be edited after staging. */
+export type ChangeField = "reason" | "reviewedBy" | "policyName";
+/** Pushes a change; resolves to nothing once pushed, or to why it wasn't. */
+export type PushChange = (change: Change) => Promise<string | undefined>;
+type UpdateField = (id: number, field: ChangeField, value: string) => Promise<void>;
+type Revert = (id: number, targetKey: string) => void;
 
 /**
  * The step that writes to the tenant, kept deliberate: the button asks
@@ -9,10 +17,18 @@ import { heldHistoryLog, loadHistoryLog, loadMoreHistory } from "../lib/historyL
  * A refusal — the tenant value changed since staging, the app has no
  * write permission — is shown right here, in full.
  */
-function PushButton({ label, confirmText, confirmLabel, onPush, full = false }) {
+interface PushButtonProps {
+  label: string;
+  confirmText: ReactNode;
+  confirmLabel: string;
+  onPush: () => Promise<string | undefined>;
+  full?: boolean;
+}
+
+function PushButton({ label, confirmText, confirmLabel, onPush, full = false }: PushButtonProps) {
   const [asking, setAsking] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
 
   async function push() {
     setBusy(true);
@@ -71,7 +87,7 @@ const quietButton =
   "inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium text-stone-600 hover:bg-stone-100 focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500 disabled:text-stone-300";
 
 /** A time as people say it: "today 14:05", "yesterday", or the date. */
-function when(iso) {
+function when(iso: string): string {
   const d = new Date(iso);
   const days = Math.round((new Date().setHours(0, 0, 0, 0) - new Date(d).setHours(0, 0, 0, 0)) / 86400000);
   const time = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -85,7 +101,7 @@ function when(iso) {
  * kept as soon as the field is left — no save button. Everyone else reads
  * it as text.
  */
-function Reason({ value, setValue, canEdit, onSave }) {
+function Reason({ value, setValue, canEdit, onSave }: { value: string; setValue: (value: string) => void; canEdit: boolean; onSave: () => void }) {
   if (!canEdit) {
     return value.trim() ? <p className="text-xs leading-relaxed text-stone-700 [overflow-wrap:anywhere]">{value}</p> : <p className="text-xs text-stone-400">No reason given yet</p>;
   }
@@ -109,15 +125,25 @@ function Reason({ value, setValue, canEdit, onSave }) {
  * why — then, in one row at the foot, its review, taking it back, and
  * pushing it once it's ready.
  */
-function ChangeCard({ change, onUpdateField, onRevert, onPush, viewer, inGroup = false, onOpen }) {
+interface ChangeCardProps {
+  change: Change;
+  onUpdateField: UpdateField;
+  onRevert: Revert;
+  onPush?: PushChange;
+  viewer: Session | null;
+  inGroup?: boolean;
+  onOpen?: () => void;
+}
+
+function ChangeCard({ change, onUpdateField, onRevert, onPush, viewer, inGroup = false, onOpen }: ChangeCardProps) {
   // Contributors can only touch changes they staged themselves; Admins can
   // touch any — mirrors the server-side editChange/revertChange check.
   // Compared by id (Entra object ID), not display name — names aren't
   // unique or stable.
-  const canEdit = viewer.role === "admin" || (viewer.role === "contributor" && change.stagedBy === viewer.id);
+  const canEdit = viewer?.role === "admin" || (viewer?.role === "contributor" && change.stagedBy === viewer?.id);
   // Someone else's review is the check: reviewing a change you staged yourself is an Admin's — mirrors the server.
-  const canReview = canEdit && (viewer.role === "admin" || change.stagedBy !== viewer.id);
-  const canPush = !inGroup && change.ready && onPush && viewer.role === "admin";
+  const canReview = canEdit && (viewer?.role === "admin" || change.stagedBy !== viewer?.id);
+  const canPush = !inGroup && change.ready && onPush && viewer?.role === "admin";
   // The reason as typed, before it's kept — so "Mark reviewed" can appear as soon as there is one.
   const [reason, setReason] = useState(change.reason);
   useEffect(() => setReason(change.reason), [change.reason]);
@@ -181,7 +207,8 @@ function ChangeCard({ change, onUpdateField, onRevert, onPush, viewer, inGroup =
               onMouseDown={(e) => e.preventDefault()}
               onClick={async () => {
                 await saveReason();
-                await onUpdateField(change.id, "reviewedBy", viewer.name);
+                // canReview is only true with someone signed in.
+                await onUpdateField(change.id, "reviewedBy", viewer!.name);
               }}
               className={quietButton + " ring-1 ring-inset ring-stone-300"}
             >
@@ -206,7 +233,7 @@ function ChangeCard({ change, onUpdateField, onRevert, onPush, viewer, inGroup =
                 )
               }
               confirmLabel="Push"
-              onPush={() => onPush(change)}
+              onPush={() => onPush!(change)}
             />
           )}
         </div>
@@ -220,13 +247,23 @@ function ChangeCard({ change, onUpdateField, onRevert, onPush, viewer, inGroup =
  * policy's name — together they are the policy to be created. Renaming it
  * renames it for all of them.
  */
-function NewPolicyGroup({ name, changes, onUpdateField, onRevert, onPush, viewer, openerFor }) {
+interface NewPolicyGroupProps {
+  name: string;
+  changes: Change[];
+  onUpdateField: UpdateField;
+  onRevert: Revert;
+  onPush?: PushChange;
+  viewer: Session | null;
+  openerFor: (change: Change) => (() => void) | undefined;
+}
+
+function NewPolicyGroup({ name, changes, onUpdateField, onRevert, onPush, viewer, openerFor }: NewPolicyGroupProps) {
   const [renaming, setRenaming] = useState(false);
   const [draft, setDraft] = useState(name);
   // Same rule as a single change: your own, unless you're an Admin — and a rename touches every change in the group.
-  const canRename = changes.every((c) => viewer.role === "admin" || (viewer.role === "contributor" && c.stagedBy === viewer.id));
+  const canRename = changes.every((c) => viewer?.role === "admin" || (viewer?.role === "contributor" && c.stagedBy === viewer?.id));
 
-  async function save(e) {
+  async function save(e: FormEvent) {
     e.preventDefault();
     const next = draft.trim();
     if (next && next !== name) {
@@ -282,7 +319,7 @@ function NewPolicyGroup({ name, changes, onUpdateField, onRevert, onPush, viewer
         ))}
       </ul>
       {/* The policy is created from all of its settings at once, so all of them have to be ready. */}
-      {onPush && viewer.role === "admin" && changes.every((c) => c.ready) && (
+      {onPush && viewer?.role === "admin" && changes.every((c) => c.ready) && (
         <div className="flex justify-end">
           <PushButton
             label="Create policy in tenant"
@@ -300,7 +337,7 @@ function NewPolicyGroup({ name, changes, onUpdateField, onRevert, onPush, viewer
   );
 }
 
-const SEEN_TEXT = {
+const SEEN_TEXT: Partial<Record<LogEvent["kind"], string>> = {
   added: "Now set by",
   removed: "No longer set by",
   changed: "Value changed in",
@@ -309,13 +346,13 @@ const SEEN_TEXT = {
 };
 
 /** A short value for a log row: its lines joined, cut down to something a row can hold. */
-const short = (value) => {
+const short = (value: unknown) => {
   const text = String(value ?? "").split("\n").filter(Boolean).join(", ");
   return text.length > 140 ? text.slice(0, 140) + "…" : text;
 };
 
 /** One thing that happened: pushed from here, or seen by a scan. */
-function LogRow({ event, onOpen }) {
+function LogRow({ event, onOpen }: { event: LogEvent; onOpen?: () => void }) {
   const pushed = event.kind === "pushed";
   return (
     <li className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-x-3 px-4 py-2.5 text-xs sm:grid-cols-[5.5rem_minmax(0,1fr)]">
@@ -365,15 +402,16 @@ function LogRow({ event, onOpen }) {
   );
 }
 
-const day = (iso) => new Date(iso).toDateString();
-function dayLabel(iso) {
+const day = (iso: string) => new Date(iso).toDateString();
+function dayLabel(iso: string): string {
   const days = Math.round((new Date().setHours(0, 0, 0, 0) - new Date(iso).setHours(0, 0, 0, 0)) / 86400000);
   if (days === 0) return "Today";
   if (days === 1) return "Yesterday";
   return new Date(iso).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short", year: "numeric" });
 }
 
-const FILTERS = ["All", "Staged", "Pushed", "Seen in scans"];
+const FILTERS = ["All", "Staged", "Pushed", "Seen in scans"] as const;
+type Filter = (typeof FILTERS)[number];
 
 /**
  * Everything that changes, in one place: what's staged and waiting —
@@ -381,8 +419,22 @@ const FILTERS = ["All", "Staged", "Pushed", "Seen in scans"];
  * newest first: changes pushed from here, and every change a scan saw,
  * wherever it was made. Filtered by kind and by words.
  */
-function ChangeLog({ changes, onUpdateField, onRevert, onPush, viewer, onOpen, canOpen, query = "", setQuery = () => {}, historyStamp }) {
-  const [filter, setFilter] = useState("All");
+interface ChangeLogProps {
+  changes: Record<string, Change>;
+  onUpdateField: UpdateField;
+  onRevert: Revert;
+  onPush?: PushChange;
+  viewer: Session | null;
+  onOpen?: (key: string) => void;
+  canOpen?: (key: string) => boolean;
+  query?: string;
+  setQuery?: (text: string) => void;
+  /** Names the scan and the pushes since — see lib/historyLog.ts. */
+  historyStamp: string;
+}
+
+function ChangeLog({ changes, onUpdateField, onRevert, onPush, viewer, onOpen, canOpen, query = "", setQuery = () => {}, historyStamp }: ChangeLogProps) {
+  const [filter, setFilter] = useState<Filter>("All");
   // The words, a moment after typing stops — each change of them is a question to the server.
   const [words, setWords] = useState(query.trim());
   useEffect(() => {
@@ -391,15 +443,15 @@ function ChangeLog({ changes, onUpdateField, onRevert, onPush, viewer, onOpen, c
   }, [query]);
   // What the server is asked for: the history narrowed to a kind and the words. "Staged" shows no history,
   // but its counts still come from the whole of it.
-  const logFilter = { kind: filter === "Pushed" ? "pushed" : filter === "Seen in scans" ? "seen" : undefined, q: words };
+  const logFilter: LogFilter = { kind: filter === "Pushed" ? "pushed" : filter === "Seen in scans" ? "seen" : undefined, q: words };
   const filterKey = logFilter.kind + "|" + words;
   // undefined while loading, null when it couldn't be loaded.
-  const [answer, setAnswer] = useState(() => heldHistoryLog(historyStamp, logFilter));
+  const [answer, setAnswer] = useState<HistoryPage | undefined>(() => heldHistoryLog(historyStamp, logFilter));
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [loadingMore, setLoadingMore] = useState(false);
 
-  // Kept per sync or push and per filter (lib/historyLog.js): a kept answer shows at once and is asked for
+  // Kept per sync or push and per filter (lib/historyLog.ts): a kept answer shows at once and is asked for
   // again underneath, quietly — on a shared instance someone else may have pushed since. On a shared
   // instance the first request after a while also asks Intune what this viewer may see, which takes a
   // few seconds — hence a visible "loading" when nothing is kept, and a way to try again if it fails.
@@ -417,21 +469,21 @@ function ChangeLog({ changes, onUpdateField, onRevert, onPush, viewer, onOpen, c
   }, [historyStamp, filterKey, attempt]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // A change made before changes recorded their setting is keyed by the setting itself.
-  const settingKeyOf = (change) => change.settingKey || change.targetKey;
+  const settingKeyOf = (change: Change) => change.settingKey || change.targetKey;
   // Only where there is a setting to open: one that has since left the tenant has no panel.
-  const openerFor = (key) => (onOpen && canOpen?.(key) ? () => onOpen(key) : undefined);
+  const openerFor = (key: string) => (onOpen && canOpen?.(key) ? () => onOpen(key) : undefined);
 
   // Staged changes are all here already, so they're searched here; the history on the server.
   const typed = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  const matches = (...texts) => typed.every((w) => texts.some((t) => String(t ?? "").toLowerCase().includes(w)));
+  const matches = (...texts: unknown[]) => typed.every((w) => texts.some((t) => String(t ?? "").toLowerCase().includes(w)));
 
   const staged = Object.values(changes)
     .filter((c) => matches(c.targetName, c.policyName, c.from, c.to, c.reason, c.stagedByName))
-    .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+    .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
   const ready = Object.values(changes).filter((c) => c.ready).length;
   const toExisting = staged.filter((c) => c.targetKind !== "new");
   // Settings staged into policies that don't exist yet, grouped into those policies by name.
-  const newPolicies = [];
+  const newPolicies: Array<[string, Change[]]> = [];
   for (const change of staged.filter((c) => c.targetKind === "new")) {
     const group = newPolicies.find(([name]) => name === change.policyName);
     if (group) group[1].push(change);
@@ -441,16 +493,16 @@ function ChangeLog({ changes, onUpdateField, onRevert, onPush, viewer, onOpen, c
   const log = filter === "Staged" ? [] : answer?.events ?? [];
   const next = answer?.next ?? null;
   // A day's heading counts that day's entries loaded so far; the oldest day loaded is marked as possibly going on.
-  const perDay = new Map();
+  const perDay = new Map<string, number>();
   for (const event of log) perDay.set(day(event.at), (perDay.get(day(event.at)) ?? 0) + 1);
-  const days = [];
+  const days: Array<{ key: string; label: string; total: number; events: LogEvent[] }> = [];
   for (const event of log) {
     const last = days[days.length - 1];
     if (last && last.key === day(event.at)) last.events.push(event);
-    else days.push({ key: day(event.at), label: dayLabel(event.at), total: perDay.get(day(event.at)), events: [event] });
+    else days.push({ key: day(event.at), label: dayLabel(event.at), total: perDay.get(day(event.at)) ?? 0, events: [event] });
   }
 
-  const counts = {
+  const counts: Record<Filter, number | undefined> = {
     All: undefined,
     Staged: Object.keys(changes).length,
     Pushed: answer?.counts.pushed,

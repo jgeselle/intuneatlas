@@ -1,7 +1,23 @@
-import { useRef, useState } from "react";
+import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { FolderOpen, PencilSimple, Plus, Trash } from "@phosphor-icons/react";
-import { PageSubtitle, Empty } from "../components/bits.jsx";
+import { PageSubtitle, Empty } from "../components/bits.js";
 import { platformLabel } from "../lib/format.js";
+import type { BaselinePack, Scope, Session, SettingIndexEntry } from "../types.js";
+
+/** A baseline being added, with its files read — see AddPackInput in src/baselines/manage.ts. */
+export interface NewBaseline {
+  source: string;
+  version: string;
+  name: string;
+  files: Array<{ path: string; contentBase64: string }>;
+}
+
+interface Standing {
+  meets: number;
+  below: number;
+  missing: number;
+  unjudged: number;
+}
 
 const FIELD =
   "w-full rounded-md border border-stone-300 bg-surface px-2.5 py-1.5 text-sm placeholder-stone-400 focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600";
@@ -11,7 +27,7 @@ const PRIMARY =
   "inline-flex items-center gap-1.5 rounded-md bg-teal-800 px-3 py-1.5 text-xs font-medium text-white hover:bg-teal-700 dark:hover:bg-teal-400 active:scale-[0.97] focus:outline-none focus-visible:ring-1 focus-visible:ring-teal-500 disabled:bg-stone-200 disabled:text-stone-400";
 
 /** How the tenant stands against one baseline, counted from the checks each setting carries for it. */
-function standing(settingIndex, packPath) {
+function standing(settingIndex: SettingIndexEntry[], packPath: string): Standing {
   const counts = { meets: 0, below: 0, missing: 0, unjudged: 0 };
   for (const entry of settingIndex) {
     const check = (entry.checks ?? []).find((c) => c.pack === packPath);
@@ -24,7 +40,7 @@ function standing(settingIndex, packPath) {
   return counts;
 }
 
-function readAsBase64(file) {
+function readAsBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onerror = () => reject(reader.error);
@@ -40,15 +56,15 @@ function readAsBase64(file) {
  * at the top, if there is one. Scripts, docs and everything else stay on
  * the user's disk — the server would only discard them.
  */
-function AddBaseline({ onAdd }) {
+function AddBaseline({ onAdd }: { onAdd: (input: NewBaseline) => Promise<boolean> }) {
   const [source, setSource] = useState("");
   const [version, setVersion] = useState("");
   const [name, setName] = useState("");
-  const [picked, setPicked] = useState(null);
+  const [picked, setPicked] = useState<{ folder: string; files: Array<{ file: File; path: string }>; skipped: number } | null>(null);
   const [busy, setBusy] = useState(false);
-  const inputRef = useRef(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  function onPick(e) {
+  function onPick(e: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []).map((file) => {
       // "ChosenFolder/sub/x.json" -> "sub/x.json": the chosen folder itself is the pack.
       const path = (file.webkitRelativePath || file.name).split("/").slice(file.webkitRelativePath ? 1 : 0).join("/");
@@ -60,8 +76,9 @@ function AddBaseline({ onAdd }) {
     if (!version && folder) setVersion(folder);
   }
 
-  async function submit(e) {
+  async function submit(e: FormEvent) {
     e.preventDefault();
+    if (!picked) return;
     setBusy(true);
     try {
       const files = await Promise.all(picked.files.map(async ({ file, path }) => ({ path, contentBase64: await readAsBase64(file) })));
@@ -87,7 +104,7 @@ function AddBaseline({ onAdd }) {
 
       <div className="mt-3 flex flex-wrap items-center gap-3">
         {/* webkitdirectory isn't a prop React knows; set as an attribute it picks a whole folder in every current browser. */}
-        <input ref={inputRef} type="file" multiple webkitdirectory="" directory="" onChange={onPick} className="hidden" id="baseline-folder" />
+        <input ref={inputRef} type="file" multiple {...{ webkitdirectory: "", directory: "" }} onChange={onPick} className="hidden" id="baseline-folder" />
         <label htmlFor="baseline-folder" className={BUTTON + " cursor-pointer"}>
           <FolderOpen className="h-3.5 w-3.5" />
           Choose folder
@@ -125,13 +142,23 @@ function AddBaseline({ onAdd }) {
   );
 }
 
-function PackCard({ pack, active, counts, canManage, onToggle, onRename, onRemove }) {
+interface PackCardProps {
+  pack: BaselinePack;
+  active: boolean;
+  counts: Standing;
+  canManage: boolean;
+  onToggle: (pack: BaselinePack) => void;
+  onRename: (pack: string, name: string) => Promise<boolean>;
+  onRemove: (pack: string) => Promise<boolean>;
+}
+
+function PackCard({ pack, active, counts, canManage, onToggle, onRename, onRemove }: PackCardProps) {
   const [renaming, setRenaming] = useState(false);
   const [draft, setDraft] = useState(pack.name);
   const [confirming, setConfirming] = useState(false);
   const manageable = canManage && pack.editable;
 
-  async function saveName(e) {
+  async function saveName(e: FormEvent) {
     e.preventDefault();
     if (draft.trim() && draft.trim() !== pack.name) await onRename(pack.path, draft.trim());
     setRenaming(false);
@@ -186,12 +213,14 @@ function PackCard({ pack, active, counts, canManage, onToggle, onRename, onRemov
 
           {active ? (
             <dl className="mt-3 flex flex-wrap gap-x-6 gap-y-2 text-xs">
-              {[
+              {(
+                [
                 ["Meets", counts.meets, "text-teal-700"],
                 ["Below", counts.below, counts.below ? "text-amber-700" : "text-stone-700"],
                 ["Missing", counts.missing, counts.missing ? "text-purple-700" : "text-stone-700"],
                 ["Not judged", counts.unjudged, "text-stone-700"],
-              ].map(([label, value, tone]) => (
+                ] as Array<[string, number, string]>
+              ).map(([label, value, tone]) => (
                 <div key={label}>
                   <dt className="text-stone-500">{label}</dt>
                   <dd className={"mt-0.5 font-heading text-lg font-semibold tabular-nums leading-none " + tone}>{value}</dd>
@@ -245,13 +274,28 @@ function PackCard({ pack, active, counts, canManage, onToggle, onRename, onRemov
  * for this viewer, how the tenant stands against it, and — for an Admin,
  * for baselines in the user's own folder — adding, renaming and removing.
  */
-function Baselines({ packs, activePacks, settingIndex, folder, viewer, onUpdateSelection, onAdd, onRename, onRemove, scope }) {
+interface BaselinesProps {
+  packs: BaselinePack[];
+  /** The paths of the active packs, or null for all of them. */
+  activePacks: string[] | null;
+  settingIndex: SettingIndexEntry[];
+  folder?: string;
+  viewer: Session | null;
+  onUpdateSelection: (packs: string[] | null) => void;
+  /** Absent where the baselines aren't the app's to manage. */
+  onAdd?: (input: NewBaseline) => Promise<boolean>;
+  onRename: (pack: string, name: string) => Promise<boolean>;
+  onRemove: (pack: string) => Promise<boolean>;
+  scope?: Scope;
+}
+
+function Baselines({ packs, activePacks, settingIndex, folder, viewer, onUpdateSelection, onAdd, onRename, onRemove, scope }: BaselinesProps) {
   const canManage = viewer?.role === "admin" && Boolean(onAdd);
-  const isActive = (pack) => activePacks === null || activePacks.includes(pack.path);
+  const isActive = (pack: BaselinePack) => activePacks === null || activePacks.includes(pack.path);
   // A baseline added since the last sync can expect settings the scan never looked up — they show by their raw id until it does.
   const unnamed = settingIndex.filter((e) => e.state === "Missing" && e.name === e.definitionId).length;
 
-  function toggle(pack) {
+  function toggle(pack: BaselinePack) {
     const next = packs.filter((p) => (p.path === pack.path ? !isActive(pack) : isActive(p))).map((p) => p.path);
     onUpdateSelection(next.length === packs.length ? null : next);
   }
@@ -269,7 +313,7 @@ function Baselines({ packs, activePacks, settingIndex, folder, viewer, onUpdateS
         </PageSubtitle>
       </header>
 
-      {canManage && <AddBaseline onAdd={onAdd} />}
+      {canManage && onAdd && <AddBaseline onAdd={onAdd} />}
 
       {unnamed > 0 && (
         <p className="rounded-md border border-stone-200 bg-stone-50 p-3 text-xs leading-relaxed text-stone-600">

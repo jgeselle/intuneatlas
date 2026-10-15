@@ -1,8 +1,19 @@
-import { DrawerShell } from "./DrawerShell.jsx";
-import { Chip, NotesSection } from "./bits.jsx";
+import { DrawerShell } from "./DrawerShell.js";
+import { Chip, NotesSection } from "./bits.js";
 import { platformLabel } from "../lib/format.js";
+import type { Note, RawSimplePolicy, Session } from "../types.js";
 
-function SimplePolicyDrawer({ item, kindLabel, notes, onAddNote, onDeleteNote, onClose, viewer }) {
+interface SimplePolicyDrawerProps {
+  item: RawSimplePolicy;
+  kindLabel: string;
+  notes: Note[];
+  onAddNote: (text: string) => void;
+  onDeleteNote: (id: number) => void;
+  onClose: () => void;
+  viewer: Session | null;
+}
+
+function SimplePolicyDrawer({ item, kindLabel, notes, onAddNote, onDeleteNote, onClose, viewer }: SimplePolicyDrawerProps) {
   const canNote = viewer?.role === "contributor" || viewer?.role === "admin";
   return (
     <DrawerShell

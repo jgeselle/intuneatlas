@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ComponentType } from "react";
 import {
   SquaresFour,
   Sliders,
@@ -8,23 +8,33 @@ import {
   Stack,
   CaretDoubleLeft,
 } from "@phosphor-icons/react";
-import { ConnectScreen } from "./ConnectScreen.jsx";
-import { NoRoleScreen } from "./NoRoleScreen.jsx";
-import { SyncControl } from "./components/SyncControl.jsx";
-import { AccountMenu } from "./components/AccountMenu.jsx";
-import { SettingDrawer } from "./components/SettingDrawer.jsx";
-import { SimplePolicyDrawer } from "./components/SimplePolicyDrawer.jsx";
+import { ConnectScreen } from "./ConnectScreen.js";
+import { NoRoleScreen } from "./NoRoleScreen.js";
+import { SyncControl } from "./components/SyncControl.js";
+import { AccountMenu } from "./components/AccountMenu.js";
+import { SettingDrawer } from "./components/SettingDrawer.js";
+import { SimplePolicyDrawer } from "./components/SimplePolicyDrawer.js";
 import { isComplianceSetting } from "./lib/format.js";
 import { runScan } from "./lib/scan.js";
-import { readRoute, routeSearch } from "./lib/route.js";
+import { readRoute, routeSearch, type Open, type View } from "./lib/route.js";
 import { loadHistoryLog } from "./lib/historyLog.js";
-import { ReminderBell } from "./components/Reminders.jsx";
+import { ReminderBell, type ReminderInput } from "./components/Reminders.js";
 import { isDue } from "./lib/reminders.js";
-import { Overview } from "./views/Overview.jsx";
-import { SettingsView } from "./views/SettingsView.jsx";
-import { SimplePolicyList } from "./views/SimplePolicyList.jsx";
-import { ChangeLog } from "./views/ChangeLog.jsx";
-import { Baselines } from "./views/Baselines.jsx";
+import { Overview } from "./views/Overview.js";
+import { SettingsView } from "./views/SettingsView.js";
+import { SimplePolicyList } from "./views/SimplePolicyList.js";
+import { ChangeLog, type ChangeField } from "./views/ChangeLog.js";
+import { Baselines } from "./views/Baselines.js";
+import type { StageInput } from "./components/SettingDrawer.js";
+import type { ApiError, Change, GroupDirectory, Note, RawSimplePolicy, Reminder, Report, Scope, Session, SettingIndexEntry, SettingIndexSource, VerdictPatch } from "./types.js";
+
+/** The settings and policies as one group gets them — see /api/scope. */
+interface Scoped {
+  group: string;
+  settings: SettingIndexEntry[];
+  compliancePolicies: RawSimplePolicy[];
+  enrollmentConfigurations: RawSimplePolicy[];
+}
 
 const RAIL_COLLAPSE_KEY = "intuneatlas.rail-collapsed";
 /** The "no group chosen" entry of the group chooser — a value no group id can be. */
@@ -32,7 +42,7 @@ const ALL_POLICIES = "::all";
 const SCOPE_KEY = "intuneatlas.scope-group";
 
 /** The group chosen last time in this browser, if it was chosen for this same tenant. */
-function readStoredScope(tenant) {
+function readStoredScope(tenant: string | undefined): string | null {
   try {
     const stored = JSON.parse(window.localStorage.getItem(SCOPE_KEY) ?? "null");
     return stored && stored.tenant === tenant && typeof stored.group === "string" ? stored.group : null;
@@ -53,9 +63,9 @@ function readStoredScope(tenant) {
  * the scan could read names (it needs Group.Read.All for that), by id
  * otherwise.
  */
-function groupChoices(report, groups) {
-  const ids = new Set();
-  const note = (targets) => {
+function groupChoices(report: Report, groups: GroupDirectory | undefined) {
+  const ids = new Set<string>();
+  const note = (targets: SettingIndexSource["targets"]) => {
     for (const target of targets ?? []) {
       if (target.kind === "group" && target.groupId) ids.add(target.groupId);
     }
@@ -68,7 +78,7 @@ function groupChoices(report, groups) {
     .sort((a, b) => a.label.localeCompare(b.label));
 }
 
-function withBaselineVerdicts(report, patch) {
+function withBaselineVerdicts(report: Report, patch: VerdictPatch | undefined): Report {
   if (!patch) return report;
   const settings = report.settings
     .filter((e) => e.state !== "Missing")
@@ -90,27 +100,27 @@ function withBaselineVerdicts(report, patch) {
  * a report has arrived (the first scan finishing used to blank the page
  * for exactly that reason).
  */
-export default function App({ initialReport, session }) {
+export default function App({ initialReport, session }: { initialReport: Report | null; session: Session | null }) {
   const [report, setReport] = useState(initialReport);
   if (session && !session.role) return <NoRoleScreen session={session} />;
   if (!report) return <ConnectScreen onConnected={setReport} session={session} />;
   return <Dashboard initialReport={report} session={session} />;
 }
 
-function Dashboard({ initialReport, session }) {
+function Dashboard({ initialReport, session }: { initialReport: Report; session: Session | null }) {
   const [report, setReport] = useState(initialReport);
   // Where the page was opened — a reload, or a link someone shared — names the page, panel and group to start on.
-  const [initialRoute] = useState(() => readRoute());
-  const [view, setView] = useState(initialRoute.view);
+  const [initialRoute] = useState(() => readRoute(window.location.search));
+  const [view, setView] = useState<View>(initialRoute.view);
   // A page can be opened already filtered — the Overview's shortcut into the Settings list. Any other way there starts unfiltered.
-  const [arriveWith, setArriveWith] = useState(undefined);
-  function go(page, state) {
+  const [arriveWith, setArriveWith] = useState<string | undefined>(undefined);
+  function go(page: View, state?: string) {
     setArriveWith(state);
     setView(page);
   }
   // Each page with a search field keeps its own text: what was typed on Settings means nothing on Enrollment.
-  const [queries, setQueries] = useState({});
-  const searchOf = (page) => ({ query: queries[page] ?? "", setQuery: (text) => setQueries((all) => ({ ...all, [page]: text })) });
+  const [queries, setQueries] = useState<Partial<Record<View, string>>>({});
+  const searchOf = (page: View) => ({ query: queries[page] ?? "", setQuery: (text: string) => setQueries((all) => ({ ...all, [page]: text })) });
   const [platform, setPlatform] = useState("All");
   const [compliancePlatform, setCompliancePlatform] = useState("All");
   // Everything can be narrowed to what one group gets, chosen once (in any
@@ -120,9 +130,9 @@ function Dashboard({ initialReport, session }) {
   // tenant-wide list). Every page reads from it while a group is chosen.
   // Remembered across reloads, per tenant — a group id means nothing in another tenant.
   // A link that names a place also names its group (or none): it shows what was shared, not whatever group the reader last chose.
-  const [scopeGroup, setScopeGroupState] = useState(() => (initialRoute.named ? initialRoute.group : readStoredScope(initialReport?.tenant)));
-  const [scoped, setScoped] = useState(null);
-  function setScopeGroup(group) {
+  const [scopeGroup, setScopeGroupState] = useState<string | null>(() => (initialRoute.named ? initialRoute.group : readStoredScope(initialReport?.tenant)));
+  const [scoped, setScoped] = useState<Scoped | null>(null);
+  function setScopeGroup(group: string | null) {
     setScopeGroupState(group);
     try {
       if (group) window.localStorage.setItem(SCOPE_KEY, JSON.stringify({ tenant: report.tenant, group }));
@@ -131,9 +141,9 @@ function Dashboard({ initialReport, session }) {
       // Storage unavailable (private mode, blocked): the choice just won't outlive the page.
     }
   }
-  const [notes, setNotes] = useState(initialReport?.notes ?? {});
-  const [changes, setChanges] = useState(initialReport?.changes ?? {});
-  const [open, setOpen] = useState(initialRoute.open);
+  const [notes, setNotes] = useState<Record<string, Note[]>>(initialReport?.notes ?? {});
+  const [changes, setChanges] = useState<Record<string, Change>>((initialReport?.changes ?? {}) as Record<string, Change>);
+  const [open, setOpen] = useState<Open>(initialRoute.open);
 
   // The address follows the page, the open panel and the group. Each move is a step back can undo;
   // going back (or forward) puts the app where that address says, without adding another step.
@@ -147,7 +157,7 @@ function Dashboard({ initialReport, session }) {
   }, [view, open, scopeGroup]);
   useEffect(() => {
     const onPop = () => {
-      const route = readRoute();
+      const route = readRoute(window.location.search);
       setView(route.view);
       setOpen(route.open);
       setScopeGroupState(route.group);
@@ -155,9 +165,9 @@ function Dashboard({ initialReport, session }) {
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, []);
-  const [reminders, setReminders] = useState([]);
+  const [reminders, setReminders] = useState<Reminder[]>([]);
   // The tenant-wide history changes only with a sync or a push: loaded once in the background
-  // when the app opens, so the Changes page has it to hand (see lib/historyLog.js).
+  // when the app opens, so the Changes page has it to hand (see lib/historyLog.ts).
   const [pushes, setPushes] = useState(0);
   const historyStamp = report.scannedAt + "#" + pushes;
   useEffect(() => {
@@ -165,7 +175,7 @@ function Dashboard({ initialReport, session }) {
   }, [historyStamp]);
   const canNote = session?.role === "contributor" || session?.role === "admin";
   const dueReminders = reminders.filter((r) => isDue(r)).length;
-  const [toast, setToast] = useState(null);
+  const [toast, setToast] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [, forceTick] = useState(0);
 
@@ -178,7 +188,7 @@ function Dashboard({ initialReport, session }) {
     () => typeof window !== "undefined" && window.localStorage.getItem(RAIL_COLLAPSE_KEY) === "1",
   );
   const [menuPinned, setMenuPinned] = useState(false);
-  const railRef = useRef(null);
+  const railRef = useRef<HTMLElement>(null);
 
   // The rail's hover-to-flyout width used to be plain CSS (`lg:hover:w-60`
   // with a `lg:delay-200` on the resting state, so a quick pass-over
@@ -196,8 +206,8 @@ function Dashboard({ initialReport, session }) {
   // from wherever it currently is.
   const [railHoverOpen, setRailHoverOpen] = useState(false);
   const [railSettled, setRailSettled] = useState(false);
-  const railSettleTimer = useRef(null);
-  const railCloseTimer = useRef(null);
+  const railSettleTimer = useRef<number | undefined>(undefined);
+  const railCloseTimer = useRef<number | undefined>(undefined);
   const railWide = railHoverOpen || menuPinned;
 
   // Opacity for text that should hide in the icon-only strip but reveal
@@ -232,7 +242,7 @@ function Dashboard({ initialReport, session }) {
   // that first real paint, then flips the opacity class on its own — now
   // there's a rendered "before" state, so it genuinely fades in.
   const [syncStatusFaded, setSyncStatusFaded] = useState(false);
-  const syncRevealTimer = useRef(null);
+  const syncRevealTimer = useRef<number | undefined>(undefined);
 
   function onRailMouseEnter() {
     if (!railCollapsed) return;
@@ -281,7 +291,7 @@ function Dashboard({ initialReport, session }) {
   // A menu opened from the rail (the account menu, the group chooser) keeps the collapsed rail
   // expanded for as long as it's open. Unpinning waits out the menu's own closing animation, so
   // the rail doesn't snap shut under it.
-  function pinRailWhileOpen(isOpen) {
+  function pinRailWhileOpen(isOpen: boolean) {
     if (isOpen) {
       setMenuPinned(true);
       return;
@@ -312,7 +322,7 @@ function Dashboard({ initialReport, session }) {
   // connecting a tenant).
   useEffect(() => {
     if (report?.notes) setNotes(report.notes);
-    if (report?.changes) setChanges(report.changes);
+    if (report?.changes) setChanges(report.changes as Record<string, Change>);
   }, [report]);
 
   // The "synced N minutes ago" label ages whether or not anyone's looking —
@@ -334,19 +344,19 @@ function Dashboard({ initialReport, session }) {
     let stale = false;
     fetch("/api/scope?group=" + encodeURIComponent(scopeGroup))
       .then(async (res) => {
-        const body = await res.json();
+        const body = (await res.json()) as Partial<Scoped> & ApiError;
         if (stale) return;
         if (!res.ok) throw new Error(body.error || "Couldn't load that group's settings");
         setScoped({
           group: scopeGroup,
-          settings: body.settings,
+          settings: body.settings ?? [],
           compliancePolicies: body.compliancePolicies ?? [],
           enrollmentConfigurations: body.enrollmentConfigurations ?? [],
         });
       })
       .catch((err) => {
         if (stale) return;
-        flash(err.message);
+        flash((err as Error).message);
         setScopeGroup(null);
       });
     return () => {
@@ -355,11 +365,11 @@ function Dashboard({ initialReport, session }) {
   }, [scopeStamp]);
   // What every page shows: the chosen group's view once it has loaded, the whole tenant otherwise.
   const inScope = Boolean(scopeGroup) && scoped?.group === scopeGroup;
-  const settingIndex = inScope ? scoped.settings : wholeTenant;
+  const settingIndex = inScope && scoped ? scoped.settings : wholeTenant;
   // Every group a policy names (or that sits inside one that is named), by name where the scan could read names.
   const groupOptions = useMemo(() => groupChoices(report, report.groups), [report.settings, report.compliancePolicies, report.enrollmentConfigurations, report.groups]);
   // The chooser itself, shown in each page's subtitle. Absent when the tenant has no groups to choose from.
-  const scope =
+  const scope: Scope | undefined =
     groupOptions.length > 0
       ? {
           value: scopeGroup ?? ALL_POLICIES,
@@ -374,11 +384,11 @@ function Dashboard({ initialReport, session }) {
   // One list, two pages: what configuration policies set, and what compliance policies demand.
   const configurationSettings = useMemo(() => settingIndex.filter((e) => !isComplianceSetting(e)), [settingIndex]);
   const complianceSettings = useMemo(() => settingIndex.filter(isComplianceSetting), [settingIndex]);
-  const compliancePolicies = (inScope ? scoped.compliancePolicies : report.compliancePolicies) ?? [];
-  const enrollmentConfigurations = (inScope ? scoped.enrollmentConfigurations : report.enrollmentConfigurations) ?? [];
+  const compliancePolicies = (inScope && scoped ? scoped.compliancePolicies : report.compliancePolicies) ?? [];
+  const enrollmentConfigurations = (inScope && scoped ? scoped.enrollmentConfigurations : report.enrollmentConfigurations) ?? [];
   const syncedAgo = report.scannedAt ? Math.max(0, Math.round((Date.now() - new Date(report.scannedAt).getTime()) / 60000)) : 0;
 
-  const flash = (msg) => {
+  const flash = (msg: string) => {
     setToast(msg);
     window.setTimeout(() => setToast(null), 2600);
   };
@@ -391,7 +401,7 @@ function Dashboard({ initialReport, session }) {
       setReport(body);
       flash("Re-indexed " + (body.policyCount ?? 0) + " policies · " + (body.settingCount ?? 0) + " settings");
     } catch (err) {
-      flash(err.message);
+      flash((err as Error).message);
     } finally {
       setSyncing(false);
     }
@@ -401,18 +411,18 @@ function Dashboard({ initialReport, session }) {
   // "every pack" (the default before this viewer ever customized it).
   // Personal to the signed-in viewer — doesn't touch the tenant, doesn't
   // need a rescan, and never affects anyone else's own selection.
-  async function updateBaselineSelection(packs) {
+  async function updateBaselineSelection(packs: string[] | null) {
     try {
       const res = await fetch("/api/baseline-selection", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ packs }),
       });
-      const body = await res.json();
+      const body = (await res.json()) as VerdictPatch & ApiError;
       if (!res.ok) throw new Error(body.error || "Couldn't update baseline selection");
       setReport((current) => withBaselineVerdicts(current, body));
     } catch (err) {
-      flash(err.message);
+      flash((err as Error).message);
     }
   }
 
@@ -420,20 +430,20 @@ function Dashboard({ initialReport, session }) {
   // running the server (Admin only, enforced there). Each answers with
   // fresh verdicts, since what the report is judged against just changed.
   // Returns whether it worked, so a form knows whether to clear itself.
-  async function manageBaselines(method, payload, done) {
+  async function manageBaselines(method: "POST" | "PATCH" | "DELETE", payload: object, done: string): Promise<boolean> {
     try {
       const res = await fetch("/api/baselines", {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const body = await res.json();
+      const body = (await res.json()) as VerdictPatch & ApiError;
       if (!res.ok) throw new Error(body.error || "Couldn't update the baselines");
       setReport((current) => withBaselineVerdicts(current, body));
       flash(done);
       return true;
     } catch (err) {
-      flash(err.message);
+      flash((err as Error).message);
       return false;
     }
   }
@@ -446,52 +456,52 @@ function Dashboard({ initialReport, session }) {
       .catch(() => {});
   }, []);
 
-  async function reminderRequest(method, path, body, done) {
+  async function reminderRequest(method: "POST" | "DELETE", path: string, body: object | null, done?: string): Promise<boolean> {
     try {
       const res = await fetch("/api/reminders" + path, {
         method,
         ...(body ? { headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) } : {}),
       });
-      const updated = await res.json();
+      const updated = (await res.json()) as Reminder[] & ApiError;
       if (!res.ok) throw new Error(updated.error || "Couldn't update the reminder");
       setReminders(updated);
       if (done) flash(done);
       return true;
     } catch (err) {
-      flash(err.message);
+      flash((err as Error).message);
       return false;
     }
   }
-  const addReminder = (entry, input) => reminderRequest("POST", "", { targetKey: entry.key, targetName: entry.name, ...input }, "Reminder added");
-  const completeReminder = (id) => reminderRequest("POST", `/${id}/done`, null, "Reminder done");
-  const snoozeReminder = (id) => reminderRequest("POST", `/${id}/snooze`, null, "Snoozed for a week");
-  const deleteReminder = (id) => reminderRequest("DELETE", `/${id}`, null, "Reminder deleted");
+  const addReminder = (entry: SettingIndexEntry, input: ReminderInput) => reminderRequest("POST", "", { targetKey: entry.key, targetName: entry.name, ...input }, "Reminder added");
+  const completeReminder = (id: number) => reminderRequest("POST", `/${id}/done`, null, "Reminder done");
+  const snoozeReminder = (id: number) => reminderRequest("POST", `/${id}/snooze`, null, "Snoozed for a week");
+  const deleteReminder = (id: number) => reminderRequest("DELETE", `/${id}`, null, "Reminder deleted");
 
-  async function addNote(key, text) {
+  async function addNote(key: string, text: string) {
     try {
       const res = await fetch("/api/notes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ targetKey: key, text }),
       });
-      const updated = await res.json();
+      const updated = (await res.json()) as Note[] & ApiError;
       if (!res.ok) throw new Error(updated.error || "Couldn't save the note");
       setNotes((n) => ({ ...n, [key]: updated }));
       flash("Note added");
     } catch (err) {
-      flash(err.message);
+      flash((err as Error).message);
     }
   }
 
-  async function deleteNote(key, id) {
+  async function deleteNote(key: string, id: number) {
     try {
       const res = await fetch("/api/notes/" + id, { method: "DELETE" });
-      const updated = await res.json();
+      const updated = (await res.json()) as Note[] & ApiError;
       if (!res.ok) throw new Error(updated.error || "Couldn't delete the note");
       setNotes((n) => ({ ...n, [key]: updated }));
       flash("Note deleted");
     } catch (err) {
-      flash(err.message);
+      flash((err as Error).message);
     }
   }
 
@@ -507,7 +517,7 @@ function Dashboard({ initialReport, session }) {
   // assigned to different groups). Each such staging has its own key,
   // which doesn't contain the name — so renaming the policy never changes
   // it — and staging again for the same name replaces that one.
-  async function stageChange(entry, source, { ruleId, from, to, toStructured, reason, newPolicyName }) {
+  async function stageChange(entry: SettingIndexEntry, source: SettingIndexSource | null, { ruleId, from, to, toStructured, reason, newPolicyName }: StageInput) {
     const sameNewPolicy = Object.values(changes).find(
       (c) => c.targetKind === "new" && c.settingKey === entry.key && c.policyName === newPolicyName,
     );
@@ -530,55 +540,56 @@ function Dashboard({ initialReport, session }) {
           reason,
         }),
       });
-      const change = await res.json();
+      const change = (await res.json()) as Change & ApiError;
       if (!res.ok) throw new Error(change.error || "Couldn't stage the change");
       setChanges((c) => ({ ...c, [change.targetKey]: change }));
       flash("Change staged");
     } catch (err) {
-      flash(err.message);
+      flash((err as Error).message);
     }
   }
 
-  async function updateChangeField(id, field, value) {
+  async function updateChangeField(id: number, field: ChangeField, value: string) {
     try {
       const res = await fetch("/api/changes/" + id, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ [field]: value }),
       });
-      const change = await res.json();
+      const change = (await res.json()) as Change & ApiError;
       if (!res.ok) throw new Error(change.error || "Couldn't update the change");
       setChanges((c) => ({ ...c, [change.targetKey]: change }));
     } catch (err) {
-      flash(err.message);
+      flash((err as Error).message);
     }
   }
 
   // Writes a staged change to the tenant. Resolves to nothing on success, or to the reason it wasn't
   // pushed — shown where the button is, since a refusal can take a sentence to explain.
-  async function pushChange(change) {
+  async function pushChange(change: Change): Promise<string | undefined> {
     try {
       const res = await fetch("/api/changes/" + change.id + "/push", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
-      const body = await res.json();
+      const body = (await res.json()) as { closed?: string[]; report?: Report; created?: boolean; policyName?: string } & ApiError;
       if (!res.ok) return body.error || "Couldn't push the change";
       setChanges((current) => {
         const next = { ...current };
         for (const key of body.closed ?? []) delete next[key];
         return next;
       });
-      if (body.report) setReport(body.report);
+      const pushed = body.report;
+      if (pushed) setReport(pushed);
       setPushes((n) => n + 1);
       flash(body.created ? "Created " + body.policyName + " · not assigned" : "Pushed to " + body.policyName);
       return undefined;
     } catch (err) {
-      return err.message;
+      return (err as Error).message;
     }
   }
 
-  async function revertEntryChange(id, targetKey) {
+  async function revertEntryChange(id: number, targetKey: string) {
     try {
       const res = await fetch("/api/changes/" + id, { method: "DELETE" });
-      const body = await res.json();
+      const body = (await res.json()) as ApiError;
       if (!res.ok) throw new Error(body.error || "Couldn't revert the change");
       setChanges((c) => {
         const next = { ...c };
@@ -587,11 +598,11 @@ function Dashboard({ initialReport, session }) {
       });
       flash("Change reverted");
     } catch (err) {
-      flash(err.message);
+      flash((err as Error).message);
     }
   }
 
-  const nav = [
+  const nav: Array<{ id: View; label: string; icon: ComponentType<{ weight?: "bold"; className?: string }>; count?: number }> = [
     { id: "overview", label: "Overview", icon: SquaresFour },
     { id: "configuration", label: "Settings", icon: Sliders, count: configurationSettings.length },
     { id: "compliance", label: "Compliance", icon: ShieldCheck, count: complianceSettings.length },
@@ -602,7 +613,7 @@ function Dashboard({ initialReport, session }) {
 
   // A setting is opened from what the current page shows; one opened from the change log may not be
   // part of the chosen group's view at all (the change log isn't narrowed), so the whole tenant backs it up.
-  const findSetting = (key) => settingIndex.find((e) => e.key === key) ?? wholeTenant.find((e) => e.key === key);
+  const findSetting = (key: string) => settingIndex.find((e) => e.key === key) ?? wholeTenant.find((e) => e.key === key);
   const openSetting = open?.type === "setting" ? findSetting(open.key) : null;
   const openEnrollment = open?.type === "enrollment" ? enrollmentConfigurations.find((p) => p.id === open.id) : null;
 

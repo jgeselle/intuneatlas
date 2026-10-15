@@ -1,12 +1,13 @@
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { runScan } from "./lib/scan.js";
+import type { Report, Session } from "./types.js";
 
-function ConnectScreen({ onConnected, session }) {
+function ConnectScreen({ onConnected, session }: { onConnected: (report: Report) => void; session: Session | null }) {
   const [scanning, setScanning] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
   const canScan = session?.role === "admin";
 
-  async function submit(e) {
+  async function submit(e: FormEvent) {
     e.preventDefault();
     if (scanning) return;
     setScanning(true);
@@ -14,7 +15,7 @@ function ConnectScreen({ onConnected, session }) {
     try {
       onConnected(await runScan("Scan failed"));
     } catch (err) {
-      setError(err.message);
+      setError((err as Error).message);
       setScanning(false);
     }
   }

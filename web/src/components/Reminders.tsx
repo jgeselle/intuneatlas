@@ -1,7 +1,15 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { Bell } from "@phosphor-icons/react";
 import { addMonths, dueLabel, formatDate, isDue, localToday, repeatLabel } from "../lib/reminders.js";
+import type { Reminder, Session } from "../types.js";
+
+/** What the form sends; the server adds the setting and who made it. */
+export interface ReminderInput {
+  dueOn: string;
+  repeatMonths: number | null;
+  note: string;
+}
 
 const control =
   "rounded-md border border-stone-300 bg-surface px-2 py-1.5 text-xs focus:border-teal-600 focus:outline-none focus:ring-1 focus:ring-teal-600";
@@ -24,7 +32,17 @@ const REPEAT = [
 ];
 
 /** One reminder: when, how often, the note, and what can be done with it. */
-function ReminderItem({ reminder, canEdit, canDelete, onDone, onSnooze, onDelete, onOpen }) {
+interface ReminderItemProps {
+  reminder: Reminder;
+  canEdit: boolean;
+  canDelete: boolean;
+  onDone: () => void;
+  onSnooze: () => void;
+  onDelete?: () => void;
+  onOpen?: () => void;
+}
+
+function ReminderItem({ reminder, canEdit, canDelete, onDone, onSnooze, onDelete, onOpen }: ReminderItemProps) {
   const due = isDue(reminder);
   return (
     <li className="rounded-md border border-stone-200 bg-surface p-2.5 text-xs">
@@ -63,21 +81,33 @@ function ReminderItem({ reminder, canEdit, canDelete, onDone, onSnooze, onDelete
 }
 
 /** Where "Done" moves a repeating reminder — the server's rule, shown before it's clicked. */
-function nextDue(reminder) {
+function nextDue(reminder: Reminder): string {
   const today = localToday();
-  let next = addMonths(reminder.dueOn, reminder.repeatMonths);
-  while (next <= today) next = addMonths(next, reminder.repeatMonths);
+  const months = reminder.repeatMonths ?? 0;
+  let next = addMonths(reminder.dueOn, months);
+  while (next <= today) next = addMonths(next, months);
   return next;
 }
 
 /** A setting's reminders in its drawer, and the form to add one. */
-function RemindersSection({ reminders, canEdit, viewer, onAdd, onDone, onSnooze, onDelete }) {
+interface RemindersSectionProps {
+  reminders: Reminder[];
+  canEdit: boolean;
+  viewer: Session | null;
+  /** Resolves to whether it was kept, so the form knows whether to clear itself. */
+  onAdd: (input: ReminderInput) => Promise<boolean>;
+  onDone: (id: number) => void;
+  onSnooze: (id: number) => void;
+  onDelete: (id: number) => void;
+}
+
+function RemindersSection({ reminders, canEdit, viewer, onAdd, onDone, onSnooze, onDelete }: RemindersSectionProps) {
   const [adding, setAdding] = useState(false);
   const [when, setWhen] = useState("12");
   const [date, setDate] = useState(() => addMonths(localToday(), 1));
   const [repeat, setRepeat] = useState("");
   const [note, setNote] = useState("");
-  const canDelete = (r) => viewer?.role === "admin" || (canEdit && Boolean(r.createdById) && r.createdById === viewer?.id);
+  const canDelete = (r: Reminder) => viewer?.role === "admin" || (canEdit && Boolean(r.createdById) && r.createdById === viewer?.id);
   const dueOn = when === "date" ? date : addMonths(localToday(), Number(when));
 
   async function submit() {
@@ -168,10 +198,22 @@ function RemindersSection({ reminders, canEdit, viewer, onAdd, onDone, onSnooze,
  * collapsed sidebar open while it's up (`onOpenChange`), and on a narrow
  * screen hangs below the top bar instead (`bar`).
  */
-function ReminderBell({ reminders, canEdit, onOpen, onDone, onSnooze, onOpenChange, placement = "rail", className = "" }) {
+interface ReminderBellProps {
+  reminders: Reminder[];
+  canEdit: boolean;
+  /** Opens the setting a reminder is on, by its key. */
+  onOpen: (key: string) => void;
+  onDone: (id: number) => void;
+  onSnooze: (id: number) => void;
+  onOpenChange?: (open: boolean) => void;
+  placement?: "rail" | "bar";
+  className?: string;
+}
+
+function ReminderBell({ reminders, canEdit, onOpen, onDone, onSnooze, onOpenChange, placement = "rail", className = "" }: ReminderBellProps) {
   const [open, setOpen] = useState(false);
-  const [place, setPlace] = useState(null);
-  const button = useRef(null);
+  const [place, setPlace] = useState<CSSProperties | null>(null);
+  const button = useRef<HTMLButtonElement>(null);
   const today = localToday();
   const due = reminders.filter((r) => isDue(r, today));
   const upcoming = reminders.filter((r) => !isDue(r, today));
@@ -197,12 +239,12 @@ function ReminderBell({ reminders, canEdit, onOpen, onDone, onSnooze, onOpenChan
 
   useEffect(() => {
     if (!open) return;
-    const onKey = (e) => e.key === "Escape" && setOpen(false);
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
 
-  const list = (title, items) =>
+  const list = (title: string, items: Reminder[]) =>
     items.length > 0 && (
       <div>
         <h4 className="px-0.5 font-sans text-[11px] font-semibold uppercase tracking-wide text-stone-500">
@@ -282,7 +324,7 @@ function ReminderBell({ reminders, canEdit, onOpen, onDone, onSnooze, onOpenChan
 }
 
 /** A reminder in the bell's panel — compact: the panel is only as wide as the sidebar. */
-function PanelItem({ reminder, canEdit, onOpen, onDone, onSnooze }) {
+function PanelItem({ reminder, canEdit, onOpen, onDone, onSnooze }: Omit<ReminderItemProps, "canDelete" | "onDelete" | "onOpen"> & { onOpen: () => void }) {
   const due = isDue(reminder);
   return (
     <li className="rounded-md border border-stone-200 bg-stone-50 p-2 text-xs">

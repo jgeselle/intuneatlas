@@ -2,10 +2,12 @@
 // else whatever their system is set to (and following it when it changes).
 // index.html applies the same rule before the page first paints, so a dark
 // page never flashes white on load.
+export type ThemeChoice = "system" | "light" | "dark";
+
 const KEY = "intuneatlas-theme";
 const query = window.matchMedia("(prefers-color-scheme: dark)");
 
-export function themeChoice() {
+export function themeChoice(): ThemeChoice {
   try {
     const stored = window.localStorage.getItem(KEY);
     return stored === "light" || stored === "dark" ? stored : "system";
@@ -20,7 +22,7 @@ function apply() {
   document.documentElement.dataset.theme = dark ? "dark" : "light";
 }
 
-export function setThemeChoice(choice) {
+export function setThemeChoice(choice: ThemeChoice): void {
   try {
     if (choice === "system") window.localStorage.removeItem(KEY);
     else window.localStorage.setItem(KEY, choice);
