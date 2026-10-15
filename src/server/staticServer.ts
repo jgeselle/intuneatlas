@@ -3,7 +3,7 @@ import type { ViewerIdentity } from "../auth/webSession.js";
 import { appPath, handleCallback } from "./auth.js";
 import { handleManageBaselines, handleSetBaselineSelection } from "./baselines.js";
 import { handlePushChange, handleRevertChange, handleStageChange, handleUpdateChange } from "./changes.js";
-import { fromThisOrigin, logRequestError, READ_METHODS } from "./http.js";
+import { fromThisOrigin, isLoopbackHostHeader, logRequestError, READ_METHODS } from "./http.js";
 import { handleDeleteNote, handleNoteRequest } from "./notes.js";
 import { handleReminders, settingVisible } from "./reminders.js";
 import { createScanJobs, handleHistory, handleScanRequest, handleScanStatus, handleScope } from "./scans.js";
@@ -77,6 +77,13 @@ export async function startServer(options: StartServerOptions): Promise<{ url: s
 
   const server = createServer(async (req, res) => {
     try {
+      // Before anything else, sign-in included: on loopback, the silent sign-in below would otherwise
+      // hand the operator's session to whatever site had its name pointed here.
+      if (LOOPBACK_HOSTS.has(host) && !isLoopbackHostHeader(req.headers.host)) {
+        res.writeHead(403, { "Content-Type": "text/plain" });
+        res.end("IntuneAtlas only answers at localhost here.");
+        return;
+      }
       if (req.method === "GET" && (req.url === "/auth/login" || req.url?.startsWith("/auth/login?"))) {
         const returnTo = appPath(new URL(req.url, "http://x").searchParams.get("return"));
         const url = await session.loginRedirectUrl(`${requestOrigin(req)}/auth/callback`, returnTo);

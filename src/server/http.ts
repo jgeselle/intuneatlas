@@ -16,6 +16,18 @@ export function fromThisOrigin(headers: IncomingHttpHeaders, origin: string): bo
   return true;
 }
 
+/**
+ * Whether a request's `Host` names this machine's loopback address. A server
+ * listening only on loopback is reached by name only through localhost; any
+ * other name in `Host` is a page whose DNS was pointed at 127.0.0.1 after it
+ * loaded, and its origin would otherwise pass for this app's own.
+ */
+export function isLoopbackHostHeader(hostHeader: string | undefined): boolean {
+  if (!hostHeader) return false;
+  const name = hostHeader.startsWith("[") ? hostHeader.slice(0, hostHeader.indexOf("]") + 1) : hostHeader.split(":")[0];
+  return ["localhost", "127.0.0.1", "[::1]"].includes(name.toLowerCase());
+}
+
 // Same INTUNEATLAS_DEBUG convention cli.ts's own error handling uses.
 // PayloadTooLargeError isn't logged — that one's an expected, correctly-
 // handled condition (see readRequestBody), not a bug to go looking for.

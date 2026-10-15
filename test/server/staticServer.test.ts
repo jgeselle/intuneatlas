@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
+import { request } from "node:http";
 import { test } from "node:test";
 import { appPath } from "../../src/server/auth.js";
 import { baselineVerdicts } from "../../src/server/baselines.js";
-import { fromThisOrigin } from "../../src/server/http.js";
+import { fromThisOrigin, isLoopbackHostHeader } from "../../src/server/http.js";
 import { resolveStaticPath } from "../../src/server/static.js";
 import { startServer } from "../../src/server/staticServer.js";
 import type { StartServerOptions } from "../../src/server/types.js";
@@ -124,6 +125,49 @@ test("silent login DOES fire on a loopback host — an unauthenticated GET is si
     assert.equal(res.status, 302);
     assert.equal(res.headers.get("location"), "/");
     assert.match(res.headers.get("set-cookie") ?? "", /^intuneatlas_session=fake-session-id/);
+  } finally {
+    server.close();
+  }
+});
+
+test("isLoopbackHostHeader: localhost by any of its names, with or without a port — nothing else", () => {
+  for (const ok of ["localhost:7878", "LOCALHOST:7878", "127.0.0.1:7878", "[::1]:7878", "localhost", "[::1]"]) assert.equal(isLoopbackHostHeader(ok), true, ok);
+  for (const bad of ["evil.example:7878", "localhost.evil.example:7878", "127.0.0.1.nip.io:7878", "", undefined]) assert.equal(isLoopbackHostHeader(bad), false, String(bad));
+});
+
+/** A GET with a `Host` of our choosing — fetch won't send one. */
+function getWithHost(port: number, hostHeader: string): Promise<{ status: number; setCookie: string[] | undefined }> {
+  return new Promise((resolve, reject) => {
+    request({ host: "127.0.0.1", port, path: "/", headers: { Host: hostHeader } }, (res) => {
+      res.resume();
+      resolve({ status: res.statusCode ?? 0, setCookie: res.headers["set-cookie"] });
+    })
+      .on("error", reject)
+      .end();
+  });
+}
+
+test("on loopback, a request naming another host — a page whose DNS now points here — is refused before silent sign-in", async () => {
+  const session = mockSession();
+  const server = await startTestServer("127.0.0.1", 18783, session);
+  try {
+    const rebound = await getWithHost(18783, "evil.example:18783");
+    assert.equal(rebound.status, 403);
+    assert.equal(rebound.setCookie, undefined);
+    assert.equal(session.silentLoginCalls, 0);
+
+    assert.equal((await getWithHost(18783, "localhost:18783")).status, 302);
+    assert.equal(session.silentLoginCalls, 1);
+  } finally {
+    server.close();
+  }
+});
+
+test("off loopback, any host name is answered — a shared instance is reached by whatever name its proxy gives it", async () => {
+  const session = mockSession();
+  const server = await startTestServer("0.0.0.0", 18784, session);
+  try {
+    assert.equal((await getWithHost(18784, "atlas.contoso.com")).status, 302);
   } finally {
     server.close();
   }
