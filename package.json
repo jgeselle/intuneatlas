@@ -17,7 +17,7 @@
     "package": "node scripts/bundle.mjs && node scripts/build-sea.mjs",
     "dev": "tsx src/cli.ts",
     "start": "node dist/cli.js",
-    "test": "tsx --test \"test/**/*.test.ts\"",
+    "test": "tsx --test \"test/**/*.test.ts\" && tsx --tsconfig web/tsconfig.json --test \"web/test/**/*.test.tsx\"",
     "typecheck:test": "tsc --noEmit -p test/tsconfig.json"
   },
   "dependencies": {
