@@ -234,7 +234,7 @@
             <b>App roles</b> → <b>Create app role</b>, three times, one for each of:
             <code>viewer</code> (browse only), <code>contributor</code> (+ notes, staging and
             managing your own changes), and <code>admin</code> (+ triggering scans, managing
-            everyone's changes, adding and removing baselines, pushing changes to Intune). For each: <b>Allowed member types</b> → <b>Users/Groups</b>,
+            and reviewing everyone's changes, their own included, adding and removing baselines, pushing changes to Intune). For each: <b>Allowed member types</b> → <b>Users/Groups</b>,
             <b>Value</b> exactly the lowercase name above.
           </li>
           <li>
@@ -340,7 +340,7 @@
           On your own machine IntuneAtlas is yours alone. Shared, everyone who connects signs in with their
           own Microsoft account, and what they can do follows the App Role you assigned them
           (<a href="#register-app">above</a>): Viewers can browse, Contributors can also add notes and manage
-          their own staged changes, and only Admins can trigger a new scan, manage anyone's changes, add and
+          their own staged changes, and only Admins can trigger a new scan, manage and review anyone's changes, add and
           remove baselines, or push a change to Intune. Reviews, notes and history are then the team's, not
           one person's.
         </p>
@@ -422,7 +422,7 @@
         <p>
           A staged change can be written to Intune from the <b>Change log</b>. It needs three things: the
           optional write permission on the app registration (<a href="#register-app">above</a>), a reason and
-          a reviewer on the change, and the Admin role.
+          an Admin's review on the change, and the Admin role.
         </p>
         <ul>
           <li>

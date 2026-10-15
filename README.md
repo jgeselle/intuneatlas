@@ -97,9 +97,10 @@ Around that:
   same options, ranges, lists and sub-settings the portal offers.
 - **Staged, reviewed, then pushed.** A changed value is staged in the policy
   that holds it or in a new policy you name, and needs a reason and a
-  reviewer. An Admin can then push it to Intune — one change at a time, after
-  a check that the tenant still holds the value the change was staged from.
-  Pushing needs a write permission the app doesn't have unless you add it.
+  reviewer — an Admin, who may be the one who staged it. An Admin can then
+  push it to Intune — one change at a time, after a check that the tenant
+  still holds the value the change was staged from. Pushing needs a write
+  permission the app doesn't have unless you add it.
 - **A history per setting.** Every scan is compared with the one before, and
   what changed — a value, a policy starting or no longer setting it, an
   assignment — is kept on the setting, whoever made the change and wherever.
