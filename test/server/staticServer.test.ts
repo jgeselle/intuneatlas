@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { appPath, baselineVerdicts, resolveStaticPath, startServer, type StartServerOptions } from "../../src/server/staticServer.js";
+import { appPath, baselineVerdicts, fromThisOrigin, resolveStaticPath, startServer, type StartServerOptions } from "../../src/server/staticServer.js";
 import type { ViewerIdentity, WebSessionManager } from "../../src/auth/webSession.js";
 
 // ------------------------------------------------------------------------
@@ -702,6 +702,47 @@ test("changes: a contributor can't mark their own change reviewed, but can take 
     role = "admin";
     assert.equal((await patch({ reviewedBy: "Alex" })).status, 200);
     assert.deepEqual(updates, [{ reviewedBy: "" }, { reason: "Why" }, { reviewedBy: "Alex" }]);
+  } finally {
+    server.close();
+  }
+});
+
+test("fromThisOrigin: only the app's own page, or something that isn't a browser", () => {
+  const origin = "https://atlas.contoso.com";
+  assert.equal(fromThisOrigin({ origin }, origin), true);
+  assert.equal(fromThisOrigin({ origin: "https://wiki.contoso.com" }, origin), false);
+  assert.equal(fromThisOrigin({ origin: "null" }, origin), false);
+  assert.equal(fromThisOrigin({ origin: "http://atlas.contoso.com" }, origin), false);
+  assert.equal(fromThisOrigin({ "sec-fetch-site": "same-origin" }, origin), true);
+  assert.equal(fromThisOrigin({ "sec-fetch-site": "same-site" }, origin), false);
+  assert.equal(fromThisOrigin({ "sec-fetch-site": "cross-site" }, origin), false);
+  assert.equal(fromThisOrigin({}, origin), true);
+});
+
+test("requests: a change sent from another page is refused before it reaches any handler", async () => {
+  const port = 18897;
+  const staged: unknown[] = [];
+  const { server } = await startServer({
+    report: null,
+    host: "127.0.0.1",
+    startPort: port,
+    session: mockSession({ getSession: async () => ({ id: "oid", name: "Alex", email: "a@x.com", role: "contributor" }) }),
+    onStageChange: (body) => {
+      staged.push(body);
+      return { targetKey: body.targetKey };
+    },
+  });
+  const body = JSON.stringify({ targetKey: "k", targetName: "K", ruleId: "r", from: "a", to: "b" });
+  const post = (headers: Record<string, string>) =>
+    fetch(`http://127.0.0.1:${port}/api/changes`, { method: "POST", headers: { "Content-Type": "application/json", ...headers }, body });
+  try {
+    const foreign = await post({ Origin: "https://wiki.contoso.com" });
+    assert.equal(foreign.status, 403);
+    assert.equal((await post({ "Sec-Fetch-Site": "same-site" })).status, 403);
+    assert.equal(staged.length, 0);
+
+    assert.equal((await post({ Origin: `http://127.0.0.1:${port}` })).status, 200);
+    assert.equal(staged.length, 1);
   } finally {
     server.close();
   }

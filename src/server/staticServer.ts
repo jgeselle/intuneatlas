@@ -1,5 +1,5 @@
 import { PushRefused } from "../push/values.js";
-import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import { createServer, type IncomingHttpHeaders, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { readFile } from "node:fs/promises";
 import { extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { resolveAppPath } from "../packagedPaths.js";
@@ -234,6 +234,14 @@ export async function startServer(options: StartServerOptions): Promise<{ url: s
         return;
       }
 
+      // Anything that changes something must come from this app's own page. The SameSite=Lax cookie
+      // already keeps other sites out; this keeps out a neighbour on the same parent domain too.
+      if (!READ_METHODS.has(req.method ?? "GET") && !fromThisOrigin(req.headers, requestOrigin(req))) {
+        res.writeHead(403, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "This request didn't come from IntuneAtlas's own page." }));
+        return;
+      }
+
       let viewer = await session.getSession(req.headers.cookie);
       if (!viewer && req.method === "GET" && LOOPBACK_HOSTS.has(host)) {
         // A returning solo user shouldn't have to click through a visible
@@ -448,6 +456,22 @@ export function resolveStaticPath(dist: string, requestPath: string): string {
 
   const isAsset = extname(filePath) !== "" && !escapesDist;
   return isAsset ? fullPath : join(dist, "index.html");
+}
+
+const READ_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+
+/**
+ * Whether a request was sent from a page on `origin` itself. Browsers name
+ * the page a fetch came from in `Origin` (and, where they send it,
+ * `Sec-Fetch-Site`) on every request that isn't a plain read; a script on
+ * another site can't change either. A request with neither isn't from a
+ * browser at all, so no one's cookie came with it by surprise.
+ */
+export function fromThisOrigin(headers: IncomingHttpHeaders, origin: string): boolean {
+  if (headers.origin !== undefined) return headers.origin === origin;
+  const site = headers["sec-fetch-site"];
+  if (site !== undefined) return site === "same-origin" || site === "none";
+  return true;
 }
 
 /**
