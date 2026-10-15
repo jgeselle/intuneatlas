@@ -27,6 +27,7 @@ import { ChangeLog, type ChangeField } from "./views/ChangeLog.js";
 import { Baselines } from "./views/Baselines.js";
 import type { StageInput } from "./components/SettingDrawer.js";
 import type { ApiError, Change, GroupDirectory, Note, RawSimplePolicy, Reminder, Report, Scope, Session, SettingIndexEntry, SettingIndexSource, VerdictPatch } from "./types.js";
+import { allows } from "./lib/permissions.js";
 
 /** The settings and policies as one group gets them — see /api/scope. */
 interface Scoped {
@@ -173,7 +174,8 @@ function Dashboard({ initialReport, session }: { initialReport: Report; session:
   useEffect(() => {
     loadHistoryLog(historyStamp, {}).catch(() => {});
   }, [historyStamp]);
-  const canNote = session?.role === "contributor" || session?.role === "admin";
+  const canNote = allows(session, "note");
+  const canScan = allows(session, "scan");
   const dueReminders = reminders.filter((r) => isDue(r)).length;
   const [toast, setToast] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
@@ -684,7 +686,7 @@ function Dashboard({ initialReport, session }: { initialReport: Report; session:
           {session && (
             <div className="ml-auto flex shrink-0 items-center gap-1 lg:hidden">
               <ReminderBell reminders={reminders} canEdit={canNote} onOpen={(key) => setOpen({ type: "setting", key })} onDone={completeReminder} onSnooze={snoozeReminder} placement="bar" />
-              <SyncControl syncing={syncing} syncedAgo={syncedAgo} onSync={resync} canSync={session?.role === "admin"} compact />
+              <SyncControl syncing={syncing} syncedAgo={syncedAgo} onSync={resync} canSync={canScan} compact />
               <AccountMenu session={session} tenant={report.tenantName || report.tenant} />
             </div>
           )}
@@ -744,10 +746,10 @@ function Dashboard({ initialReport, session }: { initialReport: Report; session:
         {/* wide layouts: sync and identity settle at the foot of the rail */}
         <div className="mt-auto hidden border-t border-teal-800 px-3 py-3 lg:block">
           <div className={"justify-center " + (railCollapsed && !syncFullShown ? "flex" : "hidden")}>
-            <SyncControl syncing={syncing} syncedAgo={syncedAgo} onSync={resync} canSync={session?.role === "admin"} compact />
+            <SyncControl syncing={syncing} syncedAgo={syncedAgo} onSync={resync} canSync={canScan} compact />
           </div>
           <div className={railCollapsed && !syncFullShown ? "hidden" : ""}>
-            <SyncControl syncing={syncing} syncedAgo={syncedAgo} onSync={resync} statusVisible={syncStatusVisible} canSync={session?.role === "admin"} />
+            <SyncControl syncing={syncing} syncedAgo={syncedAgo} onSync={resync} statusVisible={syncStatusVisible} canSync={canScan} />
           </div>
           {session && (
             <div className="mt-3 border-t border-teal-800 pt-3">

@@ -2,6 +2,7 @@ import { DrawerShell } from "./DrawerShell.js";
 import { Chip, NotesSection } from "./bits.js";
 import { platformLabel } from "../lib/format.js";
 import type { Note, RawSimplePolicy, Session } from "../types.js";
+import { allows } from "../lib/permissions.js";
 
 interface SimplePolicyDrawerProps {
   item: RawSimplePolicy;
@@ -14,7 +15,7 @@ interface SimplePolicyDrawerProps {
 }
 
 function SimplePolicyDrawer({ item, kindLabel, notes, onAddNote, onDeleteNote, onClose, viewer }: SimplePolicyDrawerProps) {
-  const canNote = viewer?.role === "contributor" || viewer?.role === "admin";
+  const canNote = allows(viewer, "note");
   return (
     <DrawerShell
       eyebrow={kindLabel}

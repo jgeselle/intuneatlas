@@ -1,11 +1,12 @@
 import { useState, type FormEvent } from "react";
 import { runScan } from "./lib/scan.js";
 import type { Report, Session } from "./types.js";
+import { allows } from "./lib/permissions.js";
 
 function ConnectScreen({ onConnected, session }: { onConnected: (report: Report) => void; session: Session | null }) {
   const [scanning, setScanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const canScan = session?.role === "admin";
+  const canScan = allows(session, "scan");
 
   async function submit(e: FormEvent) {
     e.preventDefault();

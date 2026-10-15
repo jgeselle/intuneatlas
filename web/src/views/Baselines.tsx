@@ -3,6 +3,7 @@ import { FolderOpen, PencilSimple, Plus, Trash } from "@phosphor-icons/react";
 import { PageSubtitle, Empty } from "../components/bits.js";
 import { platformLabel } from "../lib/format.js";
 import type { BaselinePack, Scope, Session, SettingIndexEntry } from "../types.js";
+import { allows } from "../lib/permissions.js";
 
 /** A baseline being added, with its files read — see AddPackInput in src/baselines/manage.ts. */
 export interface NewBaseline {
@@ -290,7 +291,7 @@ interface BaselinesProps {
 }
 
 function Baselines({ packs, activePacks, settingIndex, folder, viewer, onUpdateSelection, onAdd, onRename, onRemove, scope }: BaselinesProps) {
-  const canManage = viewer?.role === "admin" && Boolean(onAdd);
+  const canManage = allows(viewer, "manageBaselines") && Boolean(onAdd);
   const isActive = (pack: BaselinePack) => activePacks === null || activePacks.includes(pack.path);
   // A baseline added since the last sync can expect settings the scan never looked up — they show by their raw id until it does.
   const unnamed = settingIndex.filter((e) => e.state === "Missing" && e.name === e.definitionId).length;

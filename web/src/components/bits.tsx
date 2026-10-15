@@ -3,6 +3,7 @@ import { Dropdown } from "./Dropdown.js";
 import { ArrowCounterClockwise, Check, CaretRight, Copy, Trash } from "@phosphor-icons/react";
 import { SEVERITY_STYLE } from "../lib/styles.js";
 import type { HistoryEntry, Note, Scope, Session, SettingRecommendation, ValueDifference } from "../types.js";
+import { allows } from "../lib/permissions.js";
 
 function Chip({ className = "", children }: { className?: string; children: ReactNode }) {
   return (
@@ -313,10 +314,8 @@ interface NotesSectionProps {
 
 function NotesSection({ notes = [], onAdd, onDelete, readOnly = false, viewer }: NotesSectionProps) {
   const [draft, setDraft] = useState("");
-  // Whoever wrote a note can delete it themselves; an Admin can delete
-  // any — mirrors the same author-or-admin check the server enforces
-  // (src/auth/roles.ts's deleteNote capability).
-  const canDeleteNote = (note: Note) => viewer?.role === "admin" || (Boolean(note.authorId) && note.authorId === viewer?.id);
+  // Whoever wrote a note can delete it themselves, while their role still allows deleting notes; an Admin can delete any.
+  const canDeleteNote = (note: Note) => allows(viewer, "deleteNote", note.authorId);
 
   const entries = [...notes].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
 

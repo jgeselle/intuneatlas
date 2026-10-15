@@ -9,6 +9,7 @@ import { rangeLabel } from "../lib/schema.js";
 import { renderNode, nodeFromText, validateNode, normalizeNode, applyExpected } from "../lib/settingValue.js";
 import { ValueEditor } from "./ValueEditor.js";
 import type { BaselineCheck, Change, GroupDirectory, HistoryEntry, Note, Reminder, Session, SettingIndexEntry, SettingIndexSource, SettingSchema, SettingValueNode } from "../types.js";
+import { allows } from "../lib/permissions.js";
 
 type Schemas = Record<string, SettingSchema> | undefined;
 
@@ -491,9 +492,9 @@ function SettingDrawer({ entry, notes, reminders = [], onAddReminder, onComplete
   const recs = entry.recs;
   const checks = entry.checks ?? [];
   const schemas = entry.schemas;
-  const canNote = viewer?.role === "contributor" || viewer?.role === "admin";
-  const canStage = (viewer?.role === "contributor" || viewer?.role === "admin") && !isCustomOmaSetting(entry);
-  const canRevert = (change: Change) => viewer?.role === "admin" || (viewer?.role === "contributor" && change.stagedBy === viewer?.id);
+  const canNote = allows(viewer, "note");
+  const canStage = allows(viewer, "stage") && !isCustomOmaSetting(entry);
+  const canRevert = (change: Change) => allows(viewer, "revertChange", change.stagedBy);
 
   const setDraft = (n: number, value: SettingValueNode | null) => setDrafts((d) => d.map((v, i) => (i === n ? value : v)));
 

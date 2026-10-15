@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { Bell } from "@phosphor-icons/react";
 import { addMonths, dueLabel, formatDate, isDue, localToday, repeatLabel } from "../lib/reminders.js";
 import type { Reminder, Session } from "../types.js";
+import { allows } from "../lib/permissions.js";
 
 /** What the form sends; the server adds the setting and who made it. */
 export interface ReminderInput {
@@ -107,7 +108,7 @@ function RemindersSection({ reminders, canEdit, viewer, onAdd, onDone, onSnooze,
   const [date, setDate] = useState(() => addMonths(localToday(), 1));
   const [repeat, setRepeat] = useState("");
   const [note, setNote] = useState("");
-  const canDelete = (r: Reminder) => viewer?.role === "admin" || (canEdit && Boolean(r.createdById) && r.createdById === viewer?.id);
+  const canDelete = (r: Reminder) => allows(viewer, "deleteNote", r.createdById);
   const dueOn = when === "date" ? date : addMonths(localToday(), Number(when));
 
   async function submit() {

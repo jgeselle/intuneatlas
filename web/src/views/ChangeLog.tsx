@@ -3,6 +3,7 @@ import { Check, MagnifyingGlass, PaperPlaneTilt, PencilSimple } from "@phosphor-
 import { Chip, Diff, PageSubtitle, Empty, RevertButton } from "../components/bits.js";
 import { heldHistoryLog, loadHistoryLog, loadMoreHistory, type LogFilter } from "../lib/historyLog.js";
 import type { Change, HistoryPage, LogEvent, Session } from "../types.js";
+import { allows, mayReview } from "../lib/permissions.js";
 
 /** The fields of a staged change that can be edited after staging. */
 export type ChangeField = "reason" | "reviewedBy" | "policyName";
@@ -136,14 +137,12 @@ interface ChangeCardProps {
 }
 
 function ChangeCard({ change, onUpdateField, onRevert, onPush, viewer, inGroup = false, onOpen }: ChangeCardProps) {
-  // Contributors can only touch changes they staged themselves; Admins can
-  // touch any — mirrors the server-side editChange/revertChange check.
-  // Compared by id (Entra object ID), not display name — names aren't
-  // unique or stable.
-  const canEdit = viewer?.role === "admin" || (viewer?.role === "contributor" && change.stagedBy === viewer?.id);
-  // Someone else's review is the check: reviewing a change you staged yourself is an Admin's — mirrors the server.
-  const canReview = canEdit && (viewer?.role === "admin" || change.stagedBy !== viewer?.id);
-  const canPush = !inGroup && change.ready && onPush && viewer?.role === "admin";
+  // Contributors can only touch changes they staged themselves; Admins can touch any. Compared by id
+  // (Entra object ID), not display name — names aren't unique or stable.
+  const canEdit = allows(viewer, "editChange", change.stagedBy);
+  // Someone else's review is the check: reviewing a change you staged yourself is an Admin's.
+  const canReview = mayReview(viewer, change);
+  const canPush = !inGroup && change.ready && onPush && allows(viewer, "push");
   // The reason as typed, before it's kept — so "Mark reviewed" can appear as soon as there is one.
   const [reason, setReason] = useState(change.reason);
   useEffect(() => setReason(change.reason), [change.reason]);
@@ -218,7 +217,7 @@ function ChangeCard({ change, onUpdateField, onRevert, onPush, viewer, inGroup =
           )
         )}
         <div className="ml-auto flex flex-wrap items-center gap-1.5">
-          {canEdit && <RevertButton onRevert={() => onRevert(change.id, change.targetKey)} className="text-xs" />}
+          {allows(viewer, "revertChange", change.stagedBy) && <RevertButton onRevert={() => onRevert(change.id, change.targetKey)} className="text-xs" />}
           {/* A change to an existing policy is pushed on its own; one of a new policy's settings goes with the policy (see NewPolicyGroup). */}
           {canPush && (
             <PushButton
@@ -261,7 +260,7 @@ function NewPolicyGroup({ name, changes, onUpdateField, onRevert, onPush, viewer
   const [renaming, setRenaming] = useState(false);
   const [draft, setDraft] = useState(name);
   // Same rule as a single change: your own, unless you're an Admin — and a rename touches every change in the group.
-  const canRename = changes.every((c) => viewer?.role === "admin" || (viewer?.role === "contributor" && c.stagedBy === viewer?.id));
+  const canRename = changes.every((c) => allows(viewer, "editChange", c.stagedBy));
 
   async function save(e: FormEvent) {
     e.preventDefault();
@@ -319,7 +318,7 @@ function NewPolicyGroup({ name, changes, onUpdateField, onRevert, onPush, viewer
         ))}
       </ul>
       {/* The policy is created from all of its settings at once, so all of them have to be ready. */}
-      {onPush && viewer?.role === "admin" && changes.every((c) => c.ready) && (
+      {onPush && allows(viewer, "push") && changes.every((c) => c.ready) && (
         <div className="flex justify-end">
           <PushButton
             label="Create policy in tenant"
