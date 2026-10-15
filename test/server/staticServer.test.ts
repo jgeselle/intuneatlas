@@ -673,6 +673,40 @@ test("changes: a rule of review comes back as a refusal with its reason, not a s
   }
 });
 
+test("changes: a contributor can't mark their own change reviewed, but can take a review back; an Admin can review their own", async () => {
+  const port = 18895;
+  let role: "contributor" | "admin" = "contributor";
+  const updates: unknown[] = [];
+  const { server } = await startServer({
+    report: null,
+    host: "127.0.0.1",
+    startPort: port,
+    session: mockSession({ getSession: async () => ({ id: "oid", name: "Alex", email: "a@x.com", role }) }),
+    getChangeById: () => ({ stagedBy: "oid" }),
+    onUpdateChange: (_id, body) => {
+      updates.push(body);
+      return { targetKey: "k" };
+    },
+  });
+  const patch = (body: unknown) =>
+    fetch(`http://127.0.0.1:${port}/api/changes/5`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  try {
+    const own = await patch({ reviewedBy: "Alex" });
+    assert.equal(own.status, 403);
+    assert.deepEqual(await own.json(), { error: "A change you staged yourself needs someone else to review it, unless you're an Admin." });
+    assert.equal(updates.length, 0);
+
+    assert.equal((await patch({ reviewedBy: "" })).status, 200);
+    assert.equal((await patch({ reason: "Why" })).status, 200);
+
+    role = "admin";
+    assert.equal((await patch({ reviewedBy: "Alex" })).status, 200);
+    assert.deepEqual(updates, [{ reviewedBy: "" }, { reason: "Why" }, { reviewedBy: "Alex" }]);
+  } finally {
+    server.close();
+  }
+});
+
 // ------------------------------------------------------------------------
 // A shared link survives signing in
 // ------------------------------------------------------------------------

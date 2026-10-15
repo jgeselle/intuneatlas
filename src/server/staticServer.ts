@@ -1072,6 +1072,13 @@ async function handleUpdateChange(
       res.end(JSON.stringify({ error: "reason, reviewedBy or policyName is required" }));
       return;
     }
+    // Any value but "" marks it reviewed (see UpdateChangeRequestBody); taking a review back is always allowed.
+    const reviewing = body.reviewedBy !== undefined && body.reviewedBy !== "";
+    if (reviewing && existing.stagedBy === viewer.id && !can(viewer.role, "reviewOwnChange")) {
+      res.writeHead(403, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "A change you staged yourself needs someone else to review it, unless you're an Admin." }));
+      return;
+    }
 
     const change = onUpdateChange(id, body, viewer);
     onSaved(change);

@@ -82,6 +82,14 @@ test("can: admin -> everything, including any change or note regardless of who c
   assert.equal(can("admin", "deleteNote"), true);
 });
 
+test("roles: marking your own staged change reviewed is the Admin's alone", () => {
+  assert.equal(can("admin", "reviewOwnChange"), true);
+  assert.equal(can("contributor", "reviewOwnChange"), false);
+  assert.equal(can("contributor", "reviewOwnChange", { ownerId: "alice", viewerId: "alice" }), false);
+  assert.equal(can("viewer", "reviewOwnChange"), false);
+  assert.equal(can(null, "reviewOwnChange"), false);
+});
+
 test("can: managing baselines (writing and deleting files on the server) is Admin only", () => {
   assert.equal(can("admin", "manageBaselines"), true);
   assert.equal(can("contributor", "manageBaselines"), false);

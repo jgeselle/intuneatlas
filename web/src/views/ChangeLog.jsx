@@ -115,6 +115,8 @@ function ChangeCard({ change, onUpdateField, onRevert, onPush, viewer, inGroup =
   // Compared by id (Entra object ID), not display name — names aren't
   // unique or stable.
   const canEdit = viewer.role === "admin" || (viewer.role === "contributor" && change.stagedBy === viewer.id);
+  // Someone else's review is the check: reviewing a change you staged yourself is an Admin's — mirrors the server.
+  const canReview = canEdit && (viewer.role === "admin" || change.stagedBy !== viewer.id);
   const canPush = !inGroup && change.ready && onPush && viewer.role === "admin";
   // The reason as typed, before it's kept — so "Mark reviewed" can appear as soon as there is one.
   const [reason, setReason] = useState(change.reason);
@@ -173,7 +175,7 @@ function ChangeCard({ change, onUpdateField, onRevert, onPush, viewer, inGroup =
         ) : (
           // A change is reviewed with its reason, so the button is there once one is written — kept first if it's still being typed.
           reason.trim() &&
-          canEdit && (
+          canReview && (
             <button
               type="button"
               onMouseDown={(e) => e.preventDefault()}
